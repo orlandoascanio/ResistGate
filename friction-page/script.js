@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (originalUrl) {
         document.getElementById('blocked-site').textContent = new URL(originalUrl).hostname;
     } else {
-        document.getElementById('blocked-site').textContent = 'Unknown site';
+        document.getElementById('blocked-site').textContent = 'Unknown destination';
     }
 
     // Track when the challenge starts
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up the single challenge button
     document.getElementById('start-unlock-challenge').addEventListener('click', function() {
         // Show confirmation modal
-        if (confirm('Are you sure you want to proceed with the typing challenge? This will require typing 5 randomly selected productivity-focused paragraphs accurately.')) {
+        if (confirm('Ready to earn access with FocusGate? You will complete 5 productivity-focused paragraphs with full accuracy.')) {
             startTime = Date.now(); // Record start time when challenge begins
             startTypingChallenge(originalUrl);
         }
@@ -130,7 +130,7 @@ const productivityTexts = [
         challengeDiv.innerHTML = `
             <div style="text-align: center; margin-bottom: 20px;">
                 <span class="step-badge">Level ${currentParagraphIndex + 1} of 5</span>
-                <p class="instruction-text">Type the text below exactly to unlock your focus.</p>
+                <p class="instruction-text">Type the text below exactly to earn access.</p>
             </div>
 
             <div class="quote-box">
@@ -174,7 +174,7 @@ const productivityTexts = [
         typingInput.addEventListener('contextmenu', e => e.preventDefault());
         typingInput.addEventListener('paste', e => {
             e.preventDefault();
-            alert("No shortcuts. Focus on the words.");
+            alert("No shortcuts in FocusGate. Earn it.");
         });
 
         // Block Shortcuts
@@ -274,16 +274,16 @@ function completeChallenge(duration, originalUrl) {
             // Show success message
             document.querySelector('.content').innerHTML = `
                 <div class="success-message">
-                    <h2>Challenge Complete!</h2>
-                    <p>You've successfully completed all 5 typing challenges.</p>
-                    <p>You now have access to this site for 24 hours.</p>
-                    <p>Time spent: ${formatTime(timeSpent)}</p>
-                    <p>Click below to continue to your destination:</p>
-                    <a href="${originalUrl}" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">Go to Site</a>
+                    <h2>Access Earned</h2>
+                    <p>You completed all 5 FocusGate typing rounds.</p>
+                    <p>Temporary access is now active for 24 hours.</p>
+                    <p>Time invested: ${formatTime(timeSpent)}</p>
+                    <p>Continue when you're ready:</p>
+                    <a href="${originalUrl}" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">Continue to Site</a>
                 </div>
             `;
         } else {
-            alert('There was an error unlocking the site. Please try again.');
+            alert('FocusGate could not grant access. Please try again.');
             // Re-show challenge selection after error
             document.querySelector('.challenge-container').remove();
             document.querySelector('.challenge-selection').style.display = 'block';
