@@ -107,7 +107,13 @@ function loadBlockedSites() {
         preview.forEach(entry => {
             const li = document.createElement('li');
             li.className = 'blocked-site-item';
-            li.innerHTML = `<span class="blocked-site-domain" title="${entry.urlPattern}">${entry.urlPattern}</span>`;
+
+            const domainSpan = document.createElement('span');
+            domainSpan.className = 'blocked-site-domain';
+            domainSpan.textContent = entry.urlPattern;
+            domainSpan.setAttribute('title', entry.urlPattern);
+
+            li.appendChild(domainSpan);
             listElement.appendChild(li);
         });
 

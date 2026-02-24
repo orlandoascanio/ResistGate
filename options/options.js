@@ -108,10 +108,18 @@ function loadBlockedSites(blocklist = []) {
         const li = document.createElement('li');
         li.className = 'blocked-site-item';
 
-        li.innerHTML = `
-            <span class="site-domain" title="${entry.urlPattern}">${entry.urlPattern}</span>
-            <button class="btn btn-danger delete-btn" data-id="${entry.id}">Remove</button>
-        `;
+        const siteDomain = document.createElement('span');
+        siteDomain.className = 'site-domain';
+        siteDomain.textContent = entry.urlPattern;
+        siteDomain.setAttribute('title', entry.urlPattern);
+
+        const removeButton = document.createElement('button');
+        removeButton.className = 'btn btn-danger delete-btn';
+        removeButton.setAttribute('data-id', entry.id);
+        removeButton.textContent = 'Remove';
+
+        li.appendChild(siteDomain);
+        li.appendChild(removeButton);
 
         listElement.appendChild(li);
     });

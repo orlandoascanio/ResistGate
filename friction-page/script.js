@@ -188,24 +188,54 @@ function showTypingChallenge(originalUrl) {
 
 function completeChallenge(duration, originalUrl) {
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    const safeTargetUrl = getSafeTargetUrl(originalUrl);
+    if (!safeTargetUrl) {
+        alert('Invalid destination URL.');
+        return;
+    }
 
     chrome.runtime.sendMessage({
         action: 'grantTemporaryAccess',
-        urlPattern: new URL(originalUrl).hostname,
+        urlPattern: new URL(safeTargetUrl).hostname,
         duration: parseInt(duration, 10),
         timeSpent: timeSpent
     }, function (response) {
         if (response && response.success) {
-            document.querySelector('.content').innerHTML = `
-                <div class="success-message">
-                    <h2>Access Earned</h2>
-                    <p>You completed all 5 typing challenges.</p>
-                    <p>Temporary access is now active for ${duration} minutes.</p>
-                    <p>Time invested: ${formatTime(timeSpent)}</p>
-                    <p>Continue when you are ready:</p>
-                    <a href="${originalUrl}" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">Continue to Site</a>
-                </div>
-            `;
+            const content = document.querySelector('.content');
+            content.innerHTML = '';
+
+            const successMessage = document.createElement('div');
+            successMessage.className = 'success-message';
+
+            const title = document.createElement('h2');
+            title.textContent = 'Access Earned';
+            successMessage.appendChild(title);
+
+            const completedText = document.createElement('p');
+            completedText.textContent = 'You completed all 5 typing challenges.';
+            successMessage.appendChild(completedText);
+
+            const durationText = document.createElement('p');
+            durationText.textContent = `Temporary access is now active for ${duration} minutes.`;
+            successMessage.appendChild(durationText);
+
+            const timeText = document.createElement('p');
+            timeText.textContent = `Time invested: ${formatTime(timeSpent)}`;
+            successMessage.appendChild(timeText);
+
+            const promptText = document.createElement('p');
+            promptText.textContent = 'Continue when you are ready:';
+            successMessage.appendChild(promptText);
+
+            const continueLink = document.createElement('a');
+            continueLink.className = 'btn btn-primary';
+            continueLink.style.display = 'inline-block';
+            continueLink.style.marginTop = '20px';
+            continueLink.href = safeTargetUrl;
+            continueLink.textContent = 'Continue to Site';
+            successMessage.appendChild(continueLink);
+
+            content.appendChild(successMessage);
         } else {
             alert('FocusGate could not grant access. Please try again.');
             document.querySelector('.challenge-container').remove();
@@ -218,4 +248,17 @@ function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getSafeTargetUrl(originalUrl) {
+    try {
+        const parsed = new URL(originalUrl);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+            return null;
+        }
+
+        return parsed.href;
+    } catch {
+        return null;
+    }
 }
