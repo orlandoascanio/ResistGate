@@ -1,27 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Blocker</title>
+    <title>FocusGate</title>
     <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>App Blocker</h1>
-            <p class="subtitle">Stay focused. Stay intentional.</p>
+            <h1>FocusGate</h1>
+            <p class="subtitle">You don’t unblock distractions. You earn access.</p>
         </div>
         <div class="form-group">
             <label for="new-blocked-site">Add Site to Block</label>
 
-            <div class="input-group">
-                <input 
-                    type="text" 
-                    id="new-blocked-site" 
-                    placeholder="e.g., facebook.com"
-                >
-                <button id="add-site-btn" class="btn btn-primary">Add</button>
+            <div class="input-row">
+                <input type="text" id="new-blocked-site" placeholder="e.g., facebook.com">
+            </div>
+            <div class="controls-row">
+                <select id="block-duration" class="duration-select">
+                    <option value="forever">Forever</option>
+                    <option value="1">1 Minute</option>
+                    <option value="15">15 Minutes</option>
+                    <option value="30">30 Minutes</option>
+                    <option value="60">1 Hour</option>
+                    <option value="120">2 Hours</option>
+                    <option value="240">4 Hours</option>
+                    <option value="480">8 Hours</option>
+                    <option value="1440">24 Hours</option>
+                </select>
+                <button id="add-site-btn" class="btn btn-primary">Add Site</button>
             </div>
 
             <p class="helper-text">Only enter the domain (no https:// needed).</p>
@@ -38,7 +49,7 @@
         </div>
         <div class="settings-section">
             <button id="open-options-btn" class="btn btn-secondary full-width">
-                Open Settings
+                Open FocusGate Settings
             </button>
         </div>
 
@@ -46,4 +57,5 @@
 
     <script src="popup.js"></script>
 </body>
+
 </html>
