@@ -1,4 +1,4 @@
-// App Blocker Extension - Background Service Worker
+// FocusGate - Background Service Worker
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -26,7 +26,7 @@ async function initializeExtension() {
   // Load blocking rules
   await updateBlockingRules();
 
-  console.log('App Blocker Extension initialized');
+  console.log('FocusGate initialized');
 }
 
 // Get current settings
@@ -47,10 +47,39 @@ async function saveSettings(settings) {
   });
 }
 
+// Schedule alarms for upcoming expirations
+async function scheduleCleanupAlarms(blocklist) {
+  // Clear existing alarms to avoid duplicates
+  await chrome.alarms.clearAll();
+
+  const now = Date.now();
+  blocklist.forEach(entry => {
+    if (entry.unblockAt && entry.unblockAt > now) {
+      // Create an alarm with the entry ID to fire at the unblock time
+      chrome.alarms.create(`expire-${entry.id}`, {
+        when: entry.unblockAt
+      });
+    }
+  });
+}
+
+// Listen for alarms to trigger cleanup
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name.startsWith('expire-')) {
+    console.log(`Alarm fired: ${alarm.name}, updating rules...`);
+    updateBlockingRules();
+  }
+});
+
 // Update blocking rules based on current blocklist
 async function updateBlockingRules() {
+  await cleanupExpiredBlocks(); // Clean up expired limits before generating rules
+
   const settings = await getSettings();
   const { blocklist = [] } = settings;
+
+  // Schedule alarms for remaining blocks
+  await scheduleCleanupAlarms(blocklist);
 
   // Get current session rules to remove them all before adding new ones
   const existingRules = await chrome.declarativeNetRequest.getSessionRules();
@@ -93,6 +122,26 @@ async function updateBlockingRules() {
     console.log(`${rulesToAdd.length} blocking rules updated, ${removeRuleIds.length} rules removed.`);
   } catch (error) {
     console.error('Error updating blocking rules:', error);
+  }
+}
+
+// Remove blocks that have expired
+async function cleanupExpiredBlocks() {
+  const settings = await getSettings();
+  if (!settings.blocklist) return;
+
+  const initialLength = settings.blocklist.length;
+  const now = Date.now();
+
+  settings.blocklist = settings.blocklist.filter(entry => {
+    // Keep indefinite blocks (no unblockAt) or blocks that haven't expired yet
+    if (!entry.unblockAt) return true;
+    return entry.unblockAt > now;
+  });
+
+  if (settings.blocklist.length !== initialLength) {
+    await saveSettings(settings);
+    console.log(`Cleaned up ${initialLength - settings.blocklist.length} expired blocks`);
   }
 }
 
