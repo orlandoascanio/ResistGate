@@ -1,59 +1,57 @@
-# App Blocker - Focus Through Friction
+# FocusGate
 
-A Chrome extension built to eliminate digital distractions by blocking time-wasting websites and requiring the user to complete a focused typing challenge before gaining temporary access. Designed for people who want tighter discipline, less impulse browsing, and a cleaner mental environment.
+FocusGate is a Chrome extension for intentional browsing.
+It blocks distracting sites and requires a full-accuracy typing challenge before granting temporary access.
 
-## Overview
+## Tagline
 
-App Blocker interrupts autopilot browsing.
-When you try to open a distracting site, you must complete a series of productivity-themed typing paragraphs—designed to slow you down, build intention, and reinforce your goals. Only after completing all challenges do you earn limited-time access.
+**You don’t unblock distractions. You earn access.**
 
-## Features
+## What it does
 
-- **Website Blocking**: Block specific domains that typically drain your attention.
-- **Challenge-Based Access**: To unlock a site, you must type 5 randomly selected motivational paragraphs with full accuracy.
-- **Anti-Cheat Controls**: Copy-paste disabled, shortcuts blocked, text dimming applied as soon as you begin typing.
-- **Time-Based Access**: Completing all 5 paragraphs grants 24 hours of access to the blocked site.
+- Block domains you choose (for example, `youtube.com`, `reddit.com`).
+- Redirect blocked visits to a friction page.
+- Require 5 typing rounds with full accuracy to unlock.
+- Grant time-limited access after completion.
+- Re-block automatically when the access window expires.
 
-## How it works
+## Current behavior
 
-### Blocking a Site
-1. Click the extension icon.
-2. Enter a domain (e.g., facebook.com).
-3. Click "Add" to add it to your blocklist.
+- Default temporary access window: **15 minutes**.
+- Access window is configurable in **Options**.
+- Challenge flow includes anti-shortcut controls (for example, paste disabled).
 
-### Unlocking a Blocked Site
-1. Visit a blocked domain.
-2. A challenge page appears.
-3. Click Start Typing Challenge.
-4. Type all 5 randomly selected paragraphs without mistakes.
-5. Unlocks page.
+## Project structure
 
-### Managing Configuration
-1. Click the extension icon in your toolbar.
-2. Click "Open Settings" to access the full options page.
-3. Add/remove blocked sites as needed.
+- `manifest.json` - Manifest V3 config and permissions.
+- `background.js` - service worker for rules, storage, alarms, and unlock/re-block logic.
+- `popup/` - quick add + blocked-site preview UI.
+- `options/` - full settings and blocklist management.
+- `friction-page/` - challenge UI and unlock flow.
+- `icons/` - extension icons.
 
-## Challenge Details
+## Local development
 
-The extension displays 5 short paragraphs focused on discipline, goals, and intentional habits.
-You must:
-- Type each paragraph accurately.
-- Avoid errors.
-- Resist shortcuts (paste, selection, text copying are disabled).
-- Complete all 5 to earn access.
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select this folder.
+4. Click **Reload** after code changes.
 
-## Configuration
+## Permissions (why)
 
-- **Blocked Sites**: Add/remove websites to block
-
-## Technologies Used
-
-- JavaScript
-- HTML/CSS
-- Chrome Extension APIs
+- `declarativeNetRequest` - block/redirect configured domains.
+- `storage` - save settings and temporary access locally.
+- `alarms` - expire unlock windows and timed blocks reliably.
+- `host_permissions: <all_urls>` - apply rules to user-selected domains.
 
 ## Privacy
 
-- All data is stored locally in your browser.
-- No external connections or data transmission.
-- No tracking or analytics.
+- All data stays in `chrome.storage.local`.
+- No remote servers, analytics, or tracking.
+- No external network calls for extension functionality.
+
+## Tech
+
+- JavaScript
+- HTML/CSS
+- Chrome Extension APIs (Manifest V3)
