@@ -1,286 +1,208 @@
-/* * FocusGate - macOS Inspired Theme 
- * STRICT MODE: Targets original HTML classes only.
- */
-
 :root {
-  /* Restored Purple Brand Color */
-  --primary-color: #8B5CF6; /* A rich, modern purple */
-  --primary-hover: #7C3AED;
-  
-  /* System Colors */
-  --bg-light: #f5f5f7; /* macOS window background */
-  --bg-card: #ffffff;
-  --text-primary: #1d1d1f;
-  --text-secondary: #86868b;
-  --border-color: #e5e5ea;
-  --danger-color: #ff3b30;
-
-  /* Spacing */
-  --radius-card: 16px;
-  --radius-btn: 10px;
+  --bg: #f5f2fb;
+  --card: #ffffff;
+  --text: #121016;
+  --muted: #5f596b;
+  --line: #e6deef;
+  --primary: #4a1d96;
+  --primary-hover: #3d167d;
+  --lavender: #efe7fb;
+  --ok: #0f766e;
+  --err: #b42318;
+  --radius: 14px;
 }
 
 * {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: linear-gradient(
-    145deg,
-    rgba(139, 92, 246, 0.1),
-    rgba(255, 255, 255, 0.5)
-  );
-  color: var(--text-primary);
-  line-height: 1.5;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   padding: 20px;
+  background: linear-gradient(180deg, #faf8ff 0%, #f5f2fb 100%);
+  color: var(--text);
+  font: 16px/1.5 "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
 }
 
 .container {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  /* The "Floating Modal" Shadow */
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
   width: 100%;
-  max-width: 480px; 
-  padding: 40px;
-  text-align: center;
+  max-width: 720px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  text-align: center;
 }
 
 .header h1 {
-  font-size: 26px; 
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-  line-height: 1.2;
+  font-size: 28px;
+  margin-bottom: 6px;
 }
 
 .message {
-  font-size: 17px;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-bottom: 8px;
-  font-weight: 400;
 }
 
 .site-info {
-  font-size: 15px;
-  color: var(--text-secondary);
-  background: var(--bg-light);
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 20px;
-  margin-bottom: 32px;
-  font-weight: 500;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 #blocked-site {
-  color: var(--text-primary);
-  font-weight: 600;
+  color: var(--text);
+  font-weight: 700;
 }
 
-/* 4. Challenge Section */
-.challenge-selection {
-  border-top: 1px solid var(--border-color); 
-  padding-top: 32px;
-  margin-bottom: 32px;
-}
-
-.challenge-selection h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: var(--text-primary);
-}
-
-.challenge-description {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 24px;
-  line-height: 1.4;
-  padding: 0 10px;
-}
-
-/* 5. Primary Button (The Purple One) */
-.unlock-btn {
-  background-color: var(--primary-color);
-  color: white;
-  width: 100%;
-  padding: 14px 20px;
-  border: none;
-  border-radius: var(--radius-btn);
-  font-size: 16px;
+.unlock-btn,
+.btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font: inherit;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25); /* Purple glow */
+  text-decoration: none;
+}
+
+.unlock-btn {
+  width: 100%;
+  background: var(--primary);
+  color: #fff;
 }
 
 .unlock-btn:hover {
-  background-color: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 15px rgba(139, 92, 246, 0.35);
+  background: var(--primary-hover);
 }
 
-.unlock-btn:active {
-  transform: scale(0.98);
+.unlock-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 .alternative-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .btn-secondary {
-  background: transparent;
-  color: var(--text-secondary);
-  border: none; 
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+  background: var(--lavender);
+  color: #2a2333;
+  border: 1px solid var(--line);
   text-decoration: none;
-  border-radius: 8px;
-  width: 100%;
-  transition: all 0.2s ease;
-  font-family: inherit; 
+  text-align: center;
 }
 
-.btn-secondary:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: var(--text-primary);
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
 }
 
-/* Specific red hover for Close Tab */
-#close-tab-btn:hover {
-  color: var(--danger-color);
-  background-color: rgba(255, 59, 48, 0.08);
+.btn-primary:hover {
+  background: var(--primary-hover);
 }
 
 .challenge-container {
-  text-align: left; /* Align text naturally for typing */
-  animation: fadeIn 0.3s ease;
+  margin-top: 4px;
 }
 
 .step-badge {
   display: inline-block;
-  background: rgba(139, 92, 246, 0.1); /* Light purple background */
-  color: var(--primary-color);
+  margin-bottom: 10px;
   font-size: 12px;
-  font-weight: 600;
+  letter-spacing: .04em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  margin-bottom: 12px;
+  color: #4a1d96;
+  background: #efe7fb;
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 .instruction-text {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 16px;
+  color: var(--muted);
+  margin-bottom: 12px;
 }
 
-/* The Quote Box */
 .quote-box {
-  background: var(--bg-light);
-  border-left: 4px solid var(--primary-color);
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  transition: opacity 0.3s ease;
+  background: var(--lavender);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
 }
 
 .quote-text {
-  font-family: 'Georgia', serif; /* Serif for better reading flow */
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1.6;
-  color: var(--text-primary);
-  font-style: italic;
 }
 
-.quote-box.dimmed {
-  opacity: 0.4; /* Fades out when user starts typing */
-}
-
-/* The Input Area */
 .typing-input {
   width: 100%;
-  height: 120px;
-  padding: 16px;
-  font-family: 'Georgia', serif; /* Match the quote font */
-  font-size: 16px;
-  line-height: 1.6;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  resize: none; /* Disable manual resize */
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  background: #fff;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  font: inherit;
 }
 
 .typing-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1); /* Purple focus ring */
+  outline: 2px solid rgba(74, 29, 150, .2);
+  border-color: var(--primary);
 }
 
-/* Stats Row */
+.typing-input.has-error {
+  border-color: #e9a6a1;
+  background: #fff7f6;
+}
+
+.error-text {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--err);
+  min-height: 18px;
+}
+
 .stats-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-top: 12px;
-  margin-bottom: 24px;
+  margin-top: 10px;
+  color: var(--muted);
   font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .stat-value {
-  color: var(--text-primary);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums; /* Monospaced numbers prevent jumping */
+  color: var(--text);
+  font-weight: 700;
 }
 
-/* Button Row in Challenge */
 .challenge-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.challenge-actions .unlock-btn {
-  flex: 2; /* Submit button takes more space */
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .challenge-actions .btn-secondary {
-  flex: 1; /* Reset/Cancel take less space */
+  flex: 1;
 }
 
-/* Success Message */
+.challenge-actions .unlock-btn {
+  flex: 2;
+}
+
 .success-message h2 {
-    color: #10b981; /* Green for success */
-    margin-bottom: 16px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  color: var(--ok);
+  margin-bottom: 8px;
 }

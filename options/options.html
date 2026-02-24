@@ -1,76 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusGate Settings</title>
-    <link rel="stylesheet" href="options.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FocusGate Settings</title>
+  <link rel="stylesheet" href="options.css" />
 </head>
-
 <body>
-    <div class="container">
+  <main class="container">
+    <header class="header">
+      <h1>FocusGate Settings</h1>
+      <p>Configure your blocklist and access rules for intentional browsing.</p>
+    </header>
 
-        <!-- Header -->
-        <div class="header">
-            <h1>FocusGate Settings</h1>
-            <p class="subtitle">Shape your discipline system and browsing boundaries.</p>
-        </div>
+    <section class="panel">
+      <h2>Blocklist</h2>
+      <div class="input-group">
+        <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com" />
+        <button id="add-site-btn" class="btn btn-primary">Add</button>
+      </div>
+      <ul id="blocked-sites-list"></ul>
+    </section>
 
-        <!-- Blocked Sites Section -->
-        <div class="section">
-            <h2>Blocked Sites</h2>
-            <p class="section-desc">
-                Add or remove websites you want FocusGate to gate.
-                Type a domain and click "Add".
-            </p>
+    <section class="panel">
+      <h2>Access Window (Minutes)</h2>
+      <label for="access-window-minutes">Temporary access duration</label>
+      <input id="access-window-minutes" type="number" min="1" step="1" />
+      <p class="helper">How long you can access a site after completing the challenge.</p>
+    </section>
 
-            <div class="form-group">
-                <label for="new-blocked-site">Add Site to Block</label>
-                <div class="input-group">
-                    <input type="text" id="new-blocked-site" placeholder="e.g., facebook.com">
-                    <select id="block-duration" class="duration-select">
-                        <option value="forever">Forever</option>
-                        <option value="1">1 Minute</option>
-                        <option value="15">15 Minutes</option>
-                        <option value="30">30 Minutes</option>
-                        <option value="60">1 Hour</option>
-                        <option value="120">2 Hours</option>
-                        <option value="240">4 Hours</option>
-                        <option value="480">8 Hours</option>
-                        <option value="1440">24 Hours</option>
-                    </select>
-                    <button id="add-site-btn" class="btn btn-primary">Add</button>
-                </div>
-            </div>
+    <section class="panel hint">
+      <h3>Discipline Mode</h3>
+      <p>FocusGate is built to create pause before impulse. The goal is deliberate action, not perfect streaks.</p>
+    </section>
 
-            <div class="blocked-sites-section">
-                <ul id="blocked-sites-list">
-                    <!-- Populated dynamically -->
-                </ul>
-            </div>
-        </div>
+    <button id="save-settings-btn" class="btn btn-primary full">Save Settings</button>
+  </main>
 
-        <!-- General Settings Section -->
-        <div class="section">
-            <h2>General Settings</h2>
-            <p class="section-desc">
-                These settings control how FocusGate enforces intentional browsing.
-            </p>
-
-            <button id="save-settings-btn" class="btn btn-primary">
-                Save FocusGate Settings
-            </button>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <p>FocusGate • You don’t unblock distractions. You earn access.</p>
-        </div>
-
-    </div>
-
-    <script src="options.js"></script>
+  <script src="options.js"></script>
 </body>
-
 </html>

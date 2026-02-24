@@ -1,61 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusGate</title>
-    <link rel="stylesheet" href="popup.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FocusGate</title>
+  <link rel="stylesheet" href="popup.css" />
 </head>
-
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>FocusGate</h1>
-            <p class="subtitle">You don’t unblock distractions. You earn access.</p>
+  <div class="popup-shell">
+    <main class="popup-card container">
+      <header class="header">
+        <h1>FocusGate</h1>
+        <p class="subtitle">Quickly block or unblock distracting sites.</p>
+      </header>
+
+      <section class="section">
+        <label for="new-blocked-site">Domain</label>
+        <div class="input-row">
+          <input id="new-blocked-site" type="text" placeholder="e.g., youtube.com" />
+          <button id="add-site-btn" class="btn btn-primary">Add to blocklist</button>
         </div>
-        <div class="form-group">
-            <label for="new-blocked-site">Add Site to Block</label>
+      </section>
 
-            <div class="input-row">
-                <input type="text" id="new-blocked-site" placeholder="e.g., facebook.com">
-            </div>
-            <div class="controls-row">
-                <select id="block-duration" class="duration-select">
-                    <option value="forever">Forever</option>
-                    <option value="1">1 Minute</option>
-                    <option value="15">15 Minutes</option>
-                    <option value="30">30 Minutes</option>
-                    <option value="60">1 Hour</option>
-                    <option value="120">2 Hours</option>
-                    <option value="240">4 Hours</option>
-                    <option value="480">8 Hours</option>
-                    <option value="1440">24 Hours</option>
-                </select>
-                <button id="add-site-btn" class="btn btn-primary">Add Site</button>
-            </div>
-
-            <p class="helper-text">Only enter the domain (no https:// needed).</p>
+      <section class="section blocked-sites-section">
+        <div class="section-head">
+          <h2>Blocked now</h2>
+          <a href="#" id="open-options-btn" class="manage-link">Manage all</a>
         </div>
-
-        <div class="blocked-sites-section">
-            <h2>Blocked Sites</h2>
-            <ul id="blocked-sites-list">
-            </ul>
-
-            <p class="empty-state" id="empty-blocklist-msg">
-                No sites blocked yet. Add one above to get started.
-            </p>
-        </div>
-        <div class="settings-section">
-            <button id="open-options-btn" class="btn btn-secondary full-width">
-                Open FocusGate Settings
-            </button>
-        </div>
-
-    </div>
-
-    <script src="popup.js"></script>
+        <ul id="blocked-sites-list"></ul>
+        <p class="empty-state" id="empty-blocklist-msg">No blocked sites yet.</p>
+      </section>
+    </main>
+  </div>
+  <script src="popup.js"></script>
 </body>
-
 </html>

@@ -1,35 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusGate - Access Required</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FocusGate - Typing Challenge</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>FocusGate paused this destination</h1>
-        </div>
+  <div class="container">
+    <header class="header">
+      <h1>Typing Challenge</h1>
+      <p class="message">To access this site, you must complete this typing challenge with full accuracy.</p>
+      <p class="site-info">Blocked site: <span id="blocked-site">Loading...</span></p>
+    </header>
 
-        <div class="content">
-            <p class="message">You don’t unblock distractions. You earn access.</p>
-            <p class="site-info">Blocked site: <span id="blocked-site">Loading...</span></p>
+    <div class="content">
+      <div class="challenge-selection">
+        <button id="start-unlock-challenge" class="unlock-btn">Start Challenge</button>
+      </div>
 
-            <div class="challenge-selection">
-                <h2>Earn Access</h2>
-                <p class="challenge-description">Complete 5 focused typing rounds with full accuracy to unlock temporary access.</p>
-
-                <button id="start-unlock-challenge" class="unlock-btn">Start Focus Challenge</button>
-            </div>
-
-            <div class="alternative-actions">
-                <a href="https://www.google.com" class="btn btn-secondary">Go to Google</a>
-                <button id="close-tab-btn" class="btn btn-secondary">Close Tab</button>
-            </div>
-        </div>
+      <div class="alternative-actions">
+        <a href="https://www.google.com" class="btn btn-secondary">Go to Google</a>
+        <button id="close-tab-btn" class="btn btn-secondary">Close Tab</button>
+      </div>
     </div>
+  </div>
 
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

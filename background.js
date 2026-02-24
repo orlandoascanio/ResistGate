@@ -6,7 +6,7 @@ const DEFAULT_SETTINGS = {
   defaultAccessDuration: 15, // minutes
   blocklist: [],
   challengeTypes: {
-    'typing': { difficulty: 3, duration: 1440 }
+    'typing': { difficulty: 3, duration: 15 }
   }
 };
 
