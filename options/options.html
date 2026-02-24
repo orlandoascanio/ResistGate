@@ -1,36 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Blocker Settings</title>
+    <title>FocusGate Settings</title>
     <link rel="stylesheet" href="options.css">
 </head>
+
 <body>
     <div class="container">
 
         <!-- Header -->
         <div class="header">
-            <h1>App Blocker Settings</h1>
-            <p class="subtitle">Customize your blocking rules and behavior</p>
+            <h1>FocusGate Settings</h1>
+            <p class="subtitle">Shape your discipline system and browsing boundaries.</p>
         </div>
 
         <!-- Blocked Sites Section -->
         <div class="section">
             <h2>Blocked Sites</h2>
             <p class="section-desc">
-                Add or remove websites you want the extension to block.  
+                Add or remove websites you want FocusGate to gate.
                 Type a domain and click "Add".
             </p>
 
             <div class="form-group">
                 <label for="new-blocked-site">Add Site to Block</label>
                 <div class="input-group">
-                    <input 
-                        type="text" 
-                        id="new-blocked-site" 
-                        placeholder="e.g., facebook.com"
-                    >
+                    <input type="text" id="new-blocked-site" placeholder="e.g., facebook.com">
+                    <select id="block-duration" class="duration-select">
+                        <option value="forever">Forever</option>
+                        <option value="1">1 Minute</option>
+                        <option value="15">15 Minutes</option>
+                        <option value="30">30 Minutes</option>
+                        <option value="60">1 Hour</option>
+                        <option value="120">2 Hours</option>
+                        <option value="240">4 Hours</option>
+                        <option value="480">8 Hours</option>
+                        <option value="1440">24 Hours</option>
+                    </select>
                     <button id="add-site-btn" class="btn btn-primary">Add</button>
                 </div>
             </div>
@@ -46,21 +55,22 @@
         <div class="section">
             <h2>General Settings</h2>
             <p class="section-desc">
-                These settings let you configure how the blocker behaves.
+                These settings control how FocusGate enforces intentional browsing.
             </p>
 
             <button id="save-settings-btn" class="btn btn-primary">
-                Save Settings
+                Save FocusGate Settings
             </button>
         </div>
 
         <!-- Footer -->
         <div class="footer">
-            <p>App Blocker • Stay focused. Stay sharp.</p>
+            <p>FocusGate • You don’t unblock distractions. You earn access.</p>
         </div>
-        
+
     </div>
 
     <script src="options.js"></script>
 </body>
+
 </html>
