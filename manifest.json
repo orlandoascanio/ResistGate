@@ -1,29 +1,27 @@
 {
-    "manifest_version": 3,
-    "name": "FocusGate",
-    "version": "1.0",
-    "description": "Intentional browsing with built-in friction. Block distractions and earn temporary access through focused typing challenges.",
-     "icons": {
+  "manifest_version": 3,
+  "name": "FocusGate",
+  "version": "1.0",
+  "description": "Intentional browsing with built-in friction. Block distractions and earn temporary access through focused typing challenges.",
+  "icons": {
     "16": "icons/16x16.png",
     "48": "icons/48x48.png",
     "128": "icons/128x128.png"
   },
-    "permissions": [
-      "declarativeNetRequest",
-      "storage",
-      "alarms",
-      "webNavigation"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "action": {
-      "default_popup": "popup/popup.html",
-      "default_title": "FocusGate"
-    },
-    "options_page": "options/options.html",
-    "host_permissions": [
-      "<all_urls>"
-    ]
-  }
-  
+  "permissions": [
+    "declarativeNetRequest",
+    "storage",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "FocusGate"
+  },
+  "options_page": "options/options.html",
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}
