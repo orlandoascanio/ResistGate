@@ -1,6 +1,6 @@
-# FocusGate
+# ResistGate
 
-FocusGate is a Chrome extension for intentional browsing.
+ResistGate is a Chrome extension for intentional browsing.
 It blocks distracting sites and requires a full-accuracy typing challenge before granting temporary access.
 
 ## Tagline

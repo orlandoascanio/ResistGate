@@ -1,10 +1,13 @@
-// FocusGate - Background Service Worker
+// ResistGate - Background Service Worker
 
 const SETTINGS_KEY = 'settings';
 const TEMP_ACCESS_KEY = 'temporaryAccess';
+const ANALYTICS_KEY = 'analytics';
+const OVERRIDE_STATE_KEY = 'overrideState';
 
-const BLOCK_ALARM_PREFIX = 'focusgate-block-expire-';
-const ACCESS_ALARM_PREFIX = 'focusgate-access-expire-';
+const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
+const ACCESS_ALARM_PREFIX = 'resistgate-access-expire-';
+const MAX_ANALYTICS_EVENTS = 3000;
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -12,6 +15,43 @@ const DEFAULT_SETTINGS = {
   blocklist: [],
   challengeTypes: {
     typing: { difficulty: 3, duration: 15 }
+  },
+  freeExperience: {
+    manualOverrideDelaySeconds: 12,
+    schedule: {
+      enabled: false,
+      days: [1, 2, 3, 4, 5],
+      startTime: '09:00',
+      endTime: '17:00'
+    }
+  },
+  subscription: {
+    tier: 'free',
+    billingCycle: null,
+    upgradedAt: null
+  },
+  proFeatures: {
+    accountabilityPreset: 'balanced',
+    strictModeEnabled: false,
+    strictModeDisableDelaySeconds: 30,
+    strictModeDisableRequestedAt: null,
+    behavioralFriction: {
+      enabled: false,
+      requireTaskIntent: true,
+      customChallengePrompt: '',
+      timedWaitEnabled: false,
+      timedWaitSeconds: 20,
+      earnAccessEnabled: true,
+      earnAccessMinChallengeSeconds: 90
+    },
+    overrideCooldown: {
+      enabled: true,
+      thresholdCount: 3,
+      windowHours: 6,
+      delayStepSeconds: 10,
+      maxDelaySeconds: 90,
+      lockMinutes: 30
+    }
   }
 };
 
@@ -64,31 +104,115 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
       await initializeExtension('message');
 
-      if (request.action === 'grantTemporaryAccess') {
-        const result = await grantTemporaryAccess(
-          request.urlPattern,
-          request.duration,
-          request.timeSpent || 0
-        );
-        sendResponse({ success: true, access: result });
-        return;
-      }
+      switch (request.action) {
+        case 'grantTemporaryAccess': {
+          const result = await grantTemporaryAccess(
+            request.urlPattern,
+            request.duration,
+            request.timeSpent || 0,
+            request.meta || {}
+          );
+          sendResponse({ success: true, access: result });
+          return;
+        }
 
-      if (request.action === 'getSettings') {
-        const settings = await getSettings();
-        sendResponse({ success: true, settings });
-        return;
-      }
+        case 'recordBlockedVisit': {
+          await recordBlockedVisit(request.urlPattern || request.domain);
+          sendResponse({ success: true });
+          return;
+        }
 
-      if (request.action === 'updateSettings') {
-        const nextSettings = sanitizeSettings(request.settings || {});
-        await saveSettings(nextSettings);
-        await queueRulesUpdate('updateSettings');
-        sendResponse({ success: true });
-        return;
-      }
+        case 'recordAnalyticsEvent': {
+          await recordAnalyticsEvent(request.type, request.domain);
+          sendResponse({ success: true });
+          return;
+        }
 
-      sendResponse({ success: false, error: 'Unknown action' });
+        case 'getSettings': {
+          const settings = await getSettings();
+          sendResponse({ success: true, settings });
+          return;
+        }
+
+        case 'getManualOverrideStatus': {
+          const settings = await getSettings();
+          const status = await getManualOverrideStatus(settings, Date.now());
+          sendResponse({ success: true, status });
+          return;
+        }
+
+        case 'updateSettings': {
+          const currentSettings = await getSettings();
+          if (isConfigurationLocked(currentSettings, Date.now())) {
+            throw new Error('Strict Mode is active. Configuration is locked during this focus window.');
+          }
+
+          const nextSettings = sanitizeSettings(request.settings || {});
+          const transition = applyStrictModeUpdate(currentSettings, nextSettings, Date.now());
+          await saveSettings(transition.settings);
+          if (transition.justDisabled && hasProAccess(transition.settings)) {
+            await appendAnalyticsEvent({
+              type: 'manual_disable',
+              timestamp: Date.now(),
+              domain: 'settings'
+            });
+          }
+          await queueRulesUpdate('updateSettings');
+
+          if (transition.pending) {
+            sendResponse({
+              success: false,
+              cooldownPending: true,
+              remainingSeconds: transition.remainingSeconds,
+              error: `Strict Mode disable is cooling down. Wait ${transition.remainingSeconds}s, then save again to confirm.`
+            });
+            return;
+          }
+
+          sendResponse({ success: true });
+          return;
+        }
+
+        case 'activateProPlan': {
+          const cycle = request.billingCycle === 'monthly' ? 'monthly' : 'yearly';
+          const settings = await getSettings();
+          settings.subscription = {
+            tier: 'pro',
+            billingCycle: cycle,
+            upgradedAt: Date.now()
+          };
+          await saveSettings(settings);
+          sendResponse({ success: true, subscription: settings.subscription });
+          return;
+        }
+
+        case 'getAnalyticsDashboard': {
+          const settings = await getSettings();
+          if (!hasProAccess(settings)) {
+            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
+            return;
+          }
+
+          const dashboard = await getAnalyticsDashboard();
+          sendResponse({ success: true, dashboard });
+          return;
+        }
+
+        case 'getWeeklyReport': {
+          const settings = await getSettings();
+          if (!hasProAccess(settings)) {
+            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
+            return;
+          }
+
+          const report = await getWeeklyReport();
+          sendResponse({ success: true, report });
+          return;
+        }
+
+        default:
+          sendResponse({ success: false, error: 'Unknown action' });
+      }
     } catch (error) {
       console.error('Message handling failed:', error);
       sendResponse({ success: false, error: error?.message || 'Unexpected error' });
@@ -110,7 +234,6 @@ async function initializeExtension(reason) {
     const existingSettings = await getSettingsRaw();
     const normalizedSettings = sanitizeSettings(existingSettings || {});
 
-    // Merge defaults for first run or when schema evolves.
     if (!existingSettings || JSON.stringify(existingSettings) !== JSON.stringify(normalizedSettings)) {
       await saveSettings(normalizedSettings);
     }
@@ -121,9 +244,21 @@ async function initializeExtension(reason) {
       await saveTemporaryAccess(normalizedAccess);
     }
 
+    const existingAnalytics = await getAnalyticsRaw();
+    const normalizedAnalytics = sanitizeAnalytics(existingAnalytics || {});
+    if (JSON.stringify(existingAnalytics || {}) !== JSON.stringify(normalizedAnalytics)) {
+      await saveAnalytics(normalizedAnalytics);
+    }
+
+    const existingOverrideState = await getOverrideStateRaw();
+    const normalizedOverrideState = sanitizeOverrideState(existingOverrideState || {});
+    if (JSON.stringify(existingOverrideState || {}) !== JSON.stringify(normalizedOverrideState)) {
+      await saveOverrideState(normalizedOverrideState);
+    }
+
     initialized = true;
     await queueRulesUpdate(`initialize:${reason}`);
-    console.log(`FocusGate initialized (${reason})`);
+    console.log(`ResistGate initialized (${reason})`);
   })();
 
   try {
@@ -162,7 +297,7 @@ async function updateBlockingRules(reason) {
 
   await syncExpiryAlarms(cleanedBlocklist.value, cleanedAccess.value, now);
 
-  const rulesToAdd = buildBlockingRules(cleanedBlocklist.value, cleanedAccess.value, now);
+  const rulesToAdd = buildBlockingRules(settings, cleanedBlocklist.value, cleanedAccess.value, now);
 
   const existingRules = await chrome.declarativeNetRequest.getSessionRules();
   const removeRuleIds = existingRules.map((rule) => rule.id);
@@ -177,7 +312,16 @@ async function updateBlockingRules(reason) {
   );
 }
 
-function buildBlockingRules(blocklist, temporaryAccess, now) {
+function buildBlockingRules(settings, blocklist, temporaryAccess, now) {
+  if (!settings.enabled) {
+    return [];
+  }
+
+  const schedule = settings.freeExperience?.schedule;
+  if (schedule?.enabled && !isWithinSimpleSchedule(schedule, now)) {
+    return [];
+  }
+
   const rules = [];
   let ruleId = 1;
   const seenDomains = new Set();
@@ -215,7 +359,7 @@ function buildBlockingRules(blocklist, temporaryAccess, now) {
   return rules;
 }
 
-async function grantTemporaryAccess(urlPattern, durationMinutes, _timeSpentOnChallenge = 0) {
+async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChallenge = 0, meta = {}) {
   const domain = normalizeDomain(urlPattern);
   if (!domain) {
     throw new Error('Invalid domain for temporary access');
@@ -227,12 +371,50 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, _timeSpentOnCha
     throw new Error('Domain is not in blocklist');
   }
 
+  const parsedMeta = sanitizeAccessMeta(meta);
+  const now = Date.now();
+
+  if (parsedMeta.method === 'manualOverride' && isStrictFocusActive(settings, now)) {
+    throw new Error('Strict Mode is active. Manual override is disabled during this focus window.');
+  }
+
+  const earnAccessActive = isEarnAccessActive(settings);
+  const earnAccessMinSeconds = getEarnAccessMinChallengeSeconds(settings);
+
+  if (parsedMeta.method === 'manualOverride' && earnAccessActive) {
+    throw new Error('Earn-Access is active. Complete the challenge to unlock access.');
+  }
+
+  if (parsedMeta.method === 'manualOverride') {
+    const overrideStatus = await getManualOverrideStatus(settings, now);
+    if (overrideStatus.locked) {
+      throw new Error(
+        `Manual override is temporarily locked. Try again in ${overrideStatus.remainingSeconds}s.`
+      );
+    }
+
+    if (parsedMeta.waitedSeconds < overrideStatus.requiredDelaySeconds) {
+      throw new Error(
+        `Manual override requires a ${overrideStatus.requiredDelaySeconds}s delay right now.`
+      );
+    }
+  }
+
+  if (
+    parsedMeta.method === 'challenge'
+    && earnAccessActive
+    && positiveInt(timeSpentOnChallenge, 0) < earnAccessMinSeconds
+  ) {
+    throw new Error(
+      `Earn-Access requires at least ${earnAccessMinSeconds}s of challenge time before access can be granted.`
+    );
+  }
+
   const parsedDuration = Number(durationMinutes);
   const duration = Number.isFinite(parsedDuration) && parsedDuration > 0
     ? parsedDuration
     : settings.defaultAccessDuration;
 
-  const now = Date.now();
   const expiresAt = now + duration * 60 * 1000;
 
   const temporaryAccess = await getTemporaryAccess();
@@ -245,7 +427,81 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, _timeSpentOnCha
   await saveTemporaryAccess(temporaryAccess);
   await queueRulesUpdate(`grant:${domain}`);
 
+  if (hasProAccess(settings)) {
+    await appendAnalyticsEvent({
+      type: 'access_granted',
+      timestamp: now,
+      domain,
+      method: parsedMeta.method,
+      durationMinutes: duration,
+      strictSessionActive: isStrictFocusActive(settings, now),
+      timeSpentSeconds: positiveInt(timeSpentOnChallenge, 0),
+      taskIntentLength: parsedMeta.taskIntentLength,
+      customChallengeAnswered: parsedMeta.customChallengeAnswered,
+      earnAccessEnabled: parsedMeta.earnAccessEnabled
+    });
+  }
+
+  if (parsedMeta.method === 'manualOverride' && hasProAccess(settings)) {
+    await recordManualOverride(settings, now, domain);
+  }
+
   return { domain, duration, expiresAt };
+}
+
+async function recordBlockedVisit(urlPattern) {
+  const settings = await getSettings();
+  if (!hasProAccess(settings)) {
+    return;
+  }
+
+  const domain = normalizeDomain(urlPattern);
+  if (!domain) {
+    return;
+  }
+
+  await appendAnalyticsEvent({
+    type: 'blocked_visit',
+    timestamp: Date.now(),
+    domain
+  });
+}
+
+async function recordAnalyticsEvent(type, domain) {
+  const settings = await getSettings();
+  if (!hasProAccess(settings)) {
+    return;
+  }
+
+  const allowedTypes = new Set([
+    'override_triggered',
+    'challenge_failed',
+    'challenge_completed'
+  ]);
+
+  if (!allowedTypes.has(type)) {
+    return;
+  }
+
+  await appendAnalyticsEvent({
+    type,
+    timestamp: Date.now(),
+    domain: normalizeDomain(domain) || 'system'
+  });
+}
+
+function sanitizeAccessMeta(meta) {
+  const incoming = meta && typeof meta === 'object' ? meta : {};
+  const method = incoming.method === 'manualOverride' ? 'manualOverride' : 'challenge';
+  const taskIntent = typeof incoming.taskIntent === 'string' ? incoming.taskIntent.trim() : '';
+
+  return {
+    method,
+    taskIntentLength: Math.min(taskIntent.length, 180),
+    waitedSeconds: positiveInt(incoming.waitedSeconds, 0),
+    customChallengeAnswered: incoming.customChallengeAnswered === true,
+    earnAccessEnabled: incoming.earnAccessEnabled !== false
+  };
 }
 
 function isDomainTemporarilyAccessible(domain, temporaryAccess, now) {
@@ -366,11 +622,78 @@ function sanitizeSettings(settings) {
     }
   };
 
+  const schedule = incoming.freeExperience?.schedule || {};
+  const freeExperience = {
+    manualOverrideDelaySeconds: clamp(
+      positiveInt(incoming.freeExperience?.manualOverrideDelaySeconds, 12),
+      10,
+      15
+    ),
+    schedule: {
+      enabled: schedule.enabled === true,
+      days: sanitizeScheduleDays(schedule.days),
+      startTime: sanitizeTimeString(schedule.startTime, DEFAULT_SETTINGS.freeExperience.schedule.startTime),
+      endTime: sanitizeTimeString(schedule.endTime, DEFAULT_SETTINGS.freeExperience.schedule.endTime)
+    }
+  };
+
+  const incomingSubscription = incoming.subscription || {};
+  const tier = incomingSubscription.tier === 'pro' ? 'pro' : 'free';
+  const billingCycle = tier === 'pro'
+    ? (incomingSubscription.billingCycle === 'monthly' ? 'monthly' : 'yearly')
+    : null;
+
+  const subscription = {
+    tier,
+    billingCycle,
+    upgradedAt: tier === 'pro' ? Number(incomingSubscription.upgradedAt) || null : null
+  };
+
+  const incomingBehavioral = incoming.proFeatures?.behavioralFriction || {};
+  const incomingOverrideCooldown = incoming.proFeatures?.overrideCooldown || {};
+  const proFeatures = {
+    accountabilityPreset: sanitizeAccountabilityPreset(incoming.proFeatures?.accountabilityPreset),
+    strictModeEnabled: incoming.proFeatures?.strictModeEnabled === true,
+    strictModeDisableDelaySeconds: clamp(
+      positiveInt(
+        incoming.proFeatures?.strictModeDisableDelaySeconds,
+        DEFAULT_SETTINGS.proFeatures.strictModeDisableDelaySeconds
+      ),
+      10,
+      300
+    ),
+    strictModeDisableRequestedAt: sanitizeTimestamp(incoming.proFeatures?.strictModeDisableRequestedAt),
+    behavioralFriction: {
+      enabled: incomingBehavioral.enabled === true,
+      requireTaskIntent: incomingBehavioral.requireTaskIntent !== false,
+      customChallengePrompt: sanitizeChallengePrompt(incomingBehavioral.customChallengePrompt),
+      timedWaitEnabled: incomingBehavioral.timedWaitEnabled === true,
+      timedWaitSeconds: clamp(positiveInt(incomingBehavioral.timedWaitSeconds, 20), 5, 90),
+      earnAccessEnabled: incomingBehavioral.earnAccessEnabled !== false,
+      earnAccessMinChallengeSeconds: clamp(
+        positiveInt(incomingBehavioral.earnAccessMinChallengeSeconds, 90),
+        30,
+        900
+      )
+    },
+    overrideCooldown: {
+      enabled: incomingOverrideCooldown.enabled !== false,
+      thresholdCount: clamp(positiveInt(incomingOverrideCooldown.thresholdCount, 3), 2, 12),
+      windowHours: clamp(positiveInt(incomingOverrideCooldown.windowHours, 6), 1, 24),
+      delayStepSeconds: clamp(positiveInt(incomingOverrideCooldown.delayStepSeconds, 10), 5, 45),
+      maxDelaySeconds: clamp(positiveInt(incomingOverrideCooldown.maxDelaySeconds, 90), 15, 180),
+      lockMinutes: clamp(positiveInt(incomingOverrideCooldown.lockMinutes, 30), 5, 180)
+    }
+  };
+
   return {
     enabled: incoming.enabled !== false,
     defaultAccessDuration,
     blocklist,
-    challengeTypes
+    challengeTypes,
+    freeExperience,
+    subscription,
+    proFeatures
   };
 }
 
@@ -398,6 +721,65 @@ function sanitizeTemporaryAccess(temporaryAccess) {
   }
 
   return sanitized;
+}
+
+function sanitizeAnalytics(analytics) {
+  const incoming = analytics && typeof analytics === 'object' ? analytics : {};
+  const events = Array.isArray(incoming.events) ? incoming.events : [];
+  const cleaned = events
+    .filter((event) => event && typeof event === 'object')
+    .map((event) => {
+      const allowedTypes = new Set([
+        'blocked_visit',
+        'access_granted',
+        'override_triggered',
+        'manual_disable',
+        'challenge_failed',
+        'challenge_completed'
+      ]);
+      const type = allowedTypes.has(event.type) ? event.type : 'access_granted';
+      const timestamp = Number(event.timestamp) || Date.now();
+      const domain = normalizeDomain(event.domain) || 'unknown.com';
+
+      if (type !== 'access_granted') {
+        const safeDomain = typeof event.domain === 'string' && event.domain.trim()
+          ? event.domain.trim().toLowerCase().slice(0, 120)
+          : 'system';
+        return { type, timestamp, domain: safeDomain };
+      }
+
+      return {
+        type,
+        timestamp,
+        domain,
+        method: event.method === 'manualOverride' ? 'manualOverride' : 'challenge',
+        durationMinutes: positiveInt(event.durationMinutes, DEFAULT_SETTINGS.defaultAccessDuration),
+        strictSessionActive: event.strictSessionActive === true,
+        timeSpentSeconds: positiveInt(event.timeSpentSeconds, 0),
+        taskIntentLength: positiveInt(event.taskIntentLength, 0),
+        customChallengeAnswered: event.customChallengeAnswered === true,
+        earnAccessEnabled: event.earnAccessEnabled !== false
+      };
+    })
+    .slice(-MAX_ANALYTICS_EVENTS);
+
+  return { events: cleaned };
+}
+
+function sanitizeOverrideState(state) {
+  const incoming = state && typeof state === 'object' ? state : {};
+  const timestamps = Array.isArray(incoming.timestamps)
+    ? incoming.timestamps
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((a, b) => a - b)
+      .slice(-500)
+    : [];
+
+  return {
+    timestamps,
+    lockUntil: sanitizeTimestamp(incoming.lockUntil)
+  };
 }
 
 function sanitizeBlocklist(blocklist) {
@@ -441,9 +823,265 @@ function sanitizeBlocklist(blocklist) {
   return deduped;
 }
 
+function hasProAccess(settings) {
+  return settings?.subscription?.tier === 'pro';
+}
+
+function isStrictFocusActive(settings, now) {
+  if (!settings?.proFeatures?.strictModeEnabled) {
+    return false;
+  }
+
+  const schedule = settings?.freeExperience?.schedule;
+  if (!schedule?.enabled) {
+    return false;
+  }
+
+  return isWithinSimpleSchedule(schedule, now);
+}
+
+function isConfigurationLocked(settings, now) {
+  return isStrictFocusActive(settings, now);
+}
+
+function isEarnAccessActive(settings) {
+  if (!hasProAccess(settings)) {
+    return false;
+  }
+
+  const behavior = settings?.proFeatures?.behavioralFriction || {};
+  return behavior.enabled === true && behavior.earnAccessEnabled !== false;
+}
+
+function getEarnAccessMinChallengeSeconds(settings) {
+  return clamp(
+    positiveInt(settings?.proFeatures?.behavioralFriction?.earnAccessMinChallengeSeconds, 90),
+    30,
+    900
+  );
+}
+
+function applyStrictModeUpdate(currentSettings, nextSettings, now) {
+  const currentPro = currentSettings.proFeatures || {};
+  const nextPro = nextSettings.proFeatures || {};
+  const strictCurrentlyEnabled = currentPro.strictModeEnabled === true;
+  const strictRequestedEnabled = nextPro.strictModeEnabled === true;
+  const cooldownDelay = clamp(
+    positiveInt(
+      currentPro.strictModeDisableDelaySeconds,
+      DEFAULT_SETTINGS.proFeatures.strictModeDisableDelaySeconds
+    ),
+    10,
+    300
+  );
+  const existingRequestAt = sanitizeTimestamp(currentPro.strictModeDisableRequestedAt);
+
+  if (!strictCurrentlyEnabled) {
+    nextPro.strictModeDisableRequestedAt = null;
+    nextSettings.proFeatures = nextPro;
+    return { settings: nextSettings, pending: false, remainingSeconds: 0, justDisabled: false };
+  }
+
+  if (strictRequestedEnabled) {
+    nextPro.strictModeDisableRequestedAt = null;
+    nextSettings.proFeatures = nextPro;
+    return { settings: nextSettings, pending: false, remainingSeconds: 0, justDisabled: false };
+  }
+
+  if (!existingRequestAt) {
+    nextPro.strictModeEnabled = true;
+    nextPro.strictModeDisableRequestedAt = now;
+    nextSettings.proFeatures = nextPro;
+    return { settings: nextSettings, pending: true, remainingSeconds: cooldownDelay, justDisabled: false };
+  }
+
+  const elapsedSeconds = Math.floor((now - existingRequestAt) / 1000);
+  const remainingSeconds = Math.max(0, cooldownDelay - elapsedSeconds);
+  if (remainingSeconds > 0) {
+    nextPro.strictModeEnabled = true;
+    nextPro.strictModeDisableRequestedAt = existingRequestAt;
+    nextSettings.proFeatures = nextPro;
+    return { settings: nextSettings, pending: true, remainingSeconds, justDisabled: false };
+  }
+
+  nextPro.strictModeEnabled = false;
+  nextPro.strictModeDisableRequestedAt = null;
+  nextSettings.proFeatures = nextPro;
+  return { settings: nextSettings, pending: false, remainingSeconds: 0, justDisabled: true };
+}
+
+async function getManualOverrideStatus(settings, now) {
+  const baseDelay = clamp(
+    positiveInt(settings?.freeExperience?.manualOverrideDelaySeconds, 12),
+    10,
+    15
+  );
+  const isPro = hasProAccess(settings);
+  const policy = settings?.proFeatures?.overrideCooldown || {};
+  if (!isPro || policy.enabled === false) {
+    return {
+      requiredDelaySeconds: baseDelay,
+      locked: false,
+      remainingSeconds: 0,
+      recentOverrides: 0
+    };
+  }
+
+  const windowMs = clamp(positiveInt(policy.windowHours, 6), 1, 24) * 60 * 60 * 1000;
+  const thresholdCount = clamp(positiveInt(policy.thresholdCount, 3), 2, 12);
+  const delayStepSeconds = clamp(positiveInt(policy.delayStepSeconds, 10), 5, 45);
+  const maxDelaySeconds = clamp(positiveInt(policy.maxDelaySeconds, 90), 15, 180);
+  const state = await getOverrideState();
+  const recentTimestamps = state.timestamps.filter((timestamp) => timestamp >= (now - windowMs));
+
+  const nextState = {
+    timestamps: recentTimestamps,
+    lockUntil: state.lockUntil
+  };
+  if (Number.isFinite(nextState.lockUntil) && nextState.lockUntil <= now) {
+    nextState.lockUntil = null;
+  }
+
+  if (
+    recentTimestamps.length !== state.timestamps.length
+    || nextState.lockUntil !== state.lockUntil
+  ) {
+    await saveOverrideState(nextState);
+  }
+
+  const remainingSeconds = Number.isFinite(nextState.lockUntil) && nextState.lockUntil > now
+    ? Math.max(1, Math.ceil((nextState.lockUntil - now) / 1000))
+    : 0;
+
+  return {
+    requiredDelaySeconds: Math.min(maxDelaySeconds, baseDelay + (recentTimestamps.length * delayStepSeconds)),
+    locked: remainingSeconds > 0,
+    remainingSeconds,
+    recentOverrides: recentTimestamps.length,
+    thresholdCount
+  };
+}
+
+async function recordManualOverride(settings, now, domain) {
+  if (!hasProAccess(settings)) {
+    return;
+  }
+
+  await appendAnalyticsEvent({
+    type: 'override_triggered',
+    timestamp: now,
+    domain: normalizeDomain(domain) || 'manual-override'
+  });
+
+  const policy = settings?.proFeatures?.overrideCooldown || {};
+  if (policy.enabled === false) {
+    return;
+  }
+
+  const thresholdCount = clamp(positiveInt(policy.thresholdCount, 3), 2, 12);
+  const windowMs = clamp(positiveInt(policy.windowHours, 6), 1, 24) * 60 * 60 * 1000;
+  const lockMinutes = clamp(positiveInt(policy.lockMinutes, 30), 5, 180);
+  const lockDurationMs = lockMinutes * 60 * 1000;
+
+  const state = await getOverrideState();
+  const recent = state.timestamps.filter((timestamp) => timestamp >= (now - windowMs));
+  recent.push(now);
+
+  const nextState = {
+    timestamps: recent.slice(-500),
+    lockUntil: state.lockUntil
+  };
+
+  if (recent.length > thresholdCount) {
+    nextState.lockUntil = now + lockDurationMs;
+  }
+
+  await saveOverrideState(nextState);
+}
+
+function isWithinSimpleSchedule(schedule, timestamp) {
+  if (!schedule || schedule.enabled !== true) {
+    return true;
+  }
+
+  const days = sanitizeScheduleDays(schedule.days);
+  const local = new Date(timestamp);
+  const day = local.getDay();
+  if (!days.includes(day)) {
+    return false;
+  }
+
+  const minutes = local.getHours() * 60 + local.getMinutes();
+  const startMinutes = timeToMinutes(schedule.startTime);
+  const endMinutes = timeToMinutes(schedule.endTime);
+
+  if (startMinutes === endMinutes) {
+    return true;
+  }
+
+  if (startMinutes < endMinutes) {
+    return minutes >= startMinutes && minutes < endMinutes;
+  }
+
+  return minutes >= startMinutes || minutes < endMinutes;
+}
+
+function sanitizeScheduleDays(days) {
+  const fallback = DEFAULT_SETTINGS.freeExperience.schedule.days;
+  if (!Array.isArray(days)) {
+    return [...fallback];
+  }
+
+  const unique = [...new Set(days.map((day) => Number(day)).filter((day) => day >= 0 && day <= 6))];
+  return unique.length > 0 ? unique.sort((a, b) => a - b) : [...fallback];
+}
+
+function sanitizeTimeString(value, fallback) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed)) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function timeToMinutes(timeString) {
+  const safeTime = sanitizeTimeString(timeString, '00:00');
+  const [hours, minutes] = safeTime.split(':').map((part) => Number(part));
+  return (hours * 60) + minutes;
+}
+
+function sanitizeChallengePrompt(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().slice(0, 120);
+}
+
+function sanitizeAccountabilityPreset(value) {
+  if (value === 'light' || value === 'strict') {
+    return value;
+  }
+  return 'balanced';
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function positiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sanitizeTimestamp(value) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
 }
 
 function normalizeDomain(value) {
@@ -503,6 +1141,246 @@ async function saveTemporaryAccess(temporaryAccess) {
   await setInStorage({ [TEMP_ACCESS_KEY]: sanitizeTemporaryAccess(temporaryAccess) });
 }
 
+async function getAnalyticsRaw() {
+  const result = await getFromStorage([ANALYTICS_KEY]);
+  return result[ANALYTICS_KEY] || {};
+}
+
+async function getAnalytics() {
+  return sanitizeAnalytics(await getAnalyticsRaw());
+}
+
+async function saveAnalytics(analytics) {
+  await setInStorage({ [ANALYTICS_KEY]: sanitizeAnalytics(analytics) });
+}
+
+async function getOverrideStateRaw() {
+  const result = await getFromStorage([OVERRIDE_STATE_KEY]);
+  return result[OVERRIDE_STATE_KEY] || {};
+}
+
+async function getOverrideState() {
+  return sanitizeOverrideState(await getOverrideStateRaw());
+}
+
+async function saveOverrideState(state) {
+  await setInStorage({ [OVERRIDE_STATE_KEY]: sanitizeOverrideState(state) });
+}
+
+async function appendAnalyticsEvent(event) {
+  const analytics = await getAnalytics();
+  analytics.events.push(event);
+  if (analytics.events.length > MAX_ANALYTICS_EVENTS) {
+    analytics.events = analytics.events.slice(-MAX_ANALYTICS_EVENTS);
+  }
+  await saveAnalytics(analytics);
+}
+
+async function getAnalyticsDashboard() {
+  const analytics = await getAnalytics();
+  const events = analytics.events;
+  const now = Date.now();
+  const last7Days = getLast7DaysMeta();
+  const startMs = last7Days[0].startMs;
+  const weeklyEvents = events.filter((event) => event.timestamp >= startMs);
+
+  const blockedEvents = weeklyEvents.filter((event) => event.type === 'blocked_visit');
+  const overrideEvents = weeklyEvents.filter((event) => event.type === 'override_triggered');
+  const strictAccessEvents = weeklyEvents.filter((event) => (
+    event.type === 'access_granted' && event.strictSessionActive === true
+  ));
+
+  const blockedByDomain = new Map();
+  for (const event of blockedEvents) {
+    const key = normalizeDomain(event.domain) || 'unknown.com';
+    blockedByDomain.set(key, (blockedByDomain.get(key) || 0) + 1);
+  }
+
+  const topBlockedDomains = [...blockedByDomain.entries()]
+    .map(([domain, count]) => ({ domain, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const trendCounts = new Map(last7Days.map((entry) => [entry.dateKey, 0]));
+  for (const event of overrideEvents) {
+    const key = getDateKey(event.timestamp);
+    if (trendCounts.has(key)) {
+      trendCounts.set(key, (trendCounts.get(key) || 0) + 1);
+    }
+  }
+
+  const overrideFrequencyTrend = last7Days.map((entry) => ({
+    date: entry.dateKey,
+    count: trendCounts.get(entry.dateKey) || 0
+  }));
+
+  const strictSessionMinutes = strictAccessEvents.reduce(
+    (sum, event) => sum + positiveInt(event.durationMinutes, 0),
+    0
+  );
+
+  return {
+    generatedAt: now,
+    periodLabel: `${last7Days[0].dateKey} to ${last7Days[last7Days.length - 1].dateKey}`,
+    totals: {
+      blockedAttempts: blockedEvents.length,
+      overrides: overrideEvents.length,
+      strictSessionMinutes
+    },
+    topBlockedDomains,
+    overrideFrequencyTrend
+  };
+}
+
+async function getWeeklyReport() {
+  const analytics = await getAnalytics();
+  const events = analytics.events;
+  const currentRange = getRollingWeekRange(0);
+  const previousRange = getRollingWeekRange(1);
+  const current = buildWeekSummary(events, currentRange.startMs, currentRange.endMs);
+  const previous = buildWeekSummary(events, previousRange.startMs, previousRange.endMs);
+
+  const focusScore = clamp(
+    100 - (current.overrides * 5) - (current.manualDisableCount * 10),
+    0,
+    100
+  );
+  const previousFocusScore = clamp(
+    100 - (previous.overrides * 5) - (previous.manualDisableCount * 10),
+    0,
+    100
+  );
+  const trendVsLastWeek = focusScore - previousFocusScore;
+  const feedbackLine = getWeeklyFeedbackLine({
+    trendVsLastWeek,
+    currentOverrides: current.overrides,
+    previousOverrides: previous.overrides
+  });
+
+  const highlights = [
+    `Discipline score: ${focusScore}/100.`,
+    `Overrides this week: ${current.overrides}.`,
+    `Top distraction domains: ${current.topDistractionDomains.map((entry) => entry.domain).join(', ') || 'None'}.`,
+    `Trend vs last week: ${formatSignedNumber(trendVsLastWeek)} points.`
+  ];
+  const risks = [];
+  if (current.overrides > 8) {
+    risks.push('Overrides went up. Add a longer wait before manual unlock.');
+  }
+  if (current.manualDisableCount > 0) {
+    risks.push(`Strict mode was turned off ${current.manualDisableCount} time(s).`);
+  }
+  if (current.blockedAttempts > 30) {
+    risks.push('Many distraction attempts this week. Update your blocklist and schedule.');
+  }
+
+  return {
+    periodLabel: `${currentRange.startDate} to ${currentRange.endDate}`,
+    focusScore,
+    overridesThisWeek: current.overrides,
+    manualDisableCount: current.manualDisableCount,
+    topDistractionDomains: current.topDistractionDomains,
+    trendVsLastWeek,
+    feedbackLine,
+    highlights,
+    risks,
+    totals: {
+      blockedAttempts: current.blockedAttempts,
+      strictSessionMinutes: current.strictSessionMinutes,
+      overrides: current.overrides
+    }
+  };
+}
+
+function getDateKey(timestamp) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getLast7DaysMeta() {
+  const days = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - offset);
+    days.push({
+      dateKey: getDateKey(date.getTime()),
+      startMs: date.getTime()
+    });
+  }
+  return days;
+}
+
+function getRollingWeekRange(weeksBack) {
+  const normalizedWeeksBack = Math.max(0, Number(weeksBack) || 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() - (normalizedWeeksBack * 7));
+
+  const start = new Date(end);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+
+  return {
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+    startDate: getDateKey(start.getTime()),
+    endDate: getDateKey(end.getTime())
+  };
+}
+
+function buildWeekSummary(events, startMs, endMs) {
+  const windowEvents = (Array.isArray(events) ? events : [])
+    .filter((event) => event.timestamp >= startMs && event.timestamp <= endMs);
+  const blockedEvents = windowEvents.filter((event) => event.type === 'blocked_visit');
+  const overrideEvents = windowEvents.filter((event) => event.type === 'override_triggered');
+  const manualDisableEvents = windowEvents.filter((event) => event.type === 'manual_disable');
+  const strictAccessEvents = windowEvents.filter((event) => (
+    event.type === 'access_granted' && event.strictSessionActive === true
+  ));
+
+  const byDomain = new Map();
+  for (const event of blockedEvents) {
+    const domain = normalizeDomain(event.domain) || 'unknown.com';
+    byDomain.set(domain, (byDomain.get(domain) || 0) + 1);
+  }
+
+  return {
+    blockedAttempts: blockedEvents.length,
+    overrides: overrideEvents.length,
+    manualDisableCount: manualDisableEvents.length,
+    strictSessionMinutes: strictAccessEvents.reduce(
+      (sum, event) => sum + positiveInt(event.durationMinutes, 0),
+      0
+    ),
+    topDistractionDomains: [...byDomain.entries()]
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  };
+}
+
+function formatSignedNumber(value) {
+  const num = Number(value) || 0;
+  return num > 0 ? `+${num}` : `${num}`;
+}
+
+function getWeeklyFeedbackLine({ trendVsLastWeek, currentOverrides, previousOverrides }) {
+  if ((Number(currentOverrides) || 0) > (Number(previousOverrides) || 0)) {
+    return 'Overrides went up this week.';
+  }
+
+  const delta = Number(trendVsLastWeek) || 0;
+  if (delta > 0) {
+    return 'Solid control. Keep it.';
+  }
+  if (delta < 0) {
+    return 'Overrides went up this week.';
+  }
+
+  return 'Strong consistency. You protected your time.';
+}
+
 function getFromStorage(keys) {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(keys, (result) => {
@@ -527,4 +1405,24 @@ function setInStorage(value) {
       resolve();
     });
   });
+}
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.__RESISTGATE_TEST_HOOKS__ = {
+    sanitizeSettings,
+    sanitizeTemporaryAccess,
+    sanitizeAnalytics,
+    sanitizeBlocklist,
+    buildBlockingRules,
+    normalizeDomain,
+    isWithinSimpleSchedule,
+    applyStrictModeUpdate,
+    isEarnAccessActive,
+    getEarnAccessMinChallengeSeconds,
+    getDateKey,
+    getLast7DaysMeta,
+    getRollingWeekRange,
+    buildWeekSummary,
+    getWeeklyFeedbackLine
+  };
 }

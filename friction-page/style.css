@@ -30,7 +30,7 @@ body {
 
 .container {
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -84,24 +84,12 @@ body {
   background: var(--primary-hover);
 }
 
-.unlock-btn:disabled {
+.unlock-btn:disabled,
+.btn:disabled {
   background: #9ca3af;
+  border-color: #9ca3af;
+  color: #fff;
   cursor: not-allowed;
-}
-
-.alternative-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.btn-secondary {
-  background: var(--lavender);
-  color: #2a2333;
-  border: 1px solid var(--line);
-  text-decoration: none;
-  text-align: center;
 }
 
 .btn-primary {
@@ -113,6 +101,72 @@ body {
   background: var(--primary-hover);
 }
 
+.btn-secondary {
+  background: var(--lavender);
+  color: #2a2333;
+  border: 1px solid var(--line);
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-tertiary {
+  background: transparent;
+  color: #756d83;
+  border: 1px dashed #d8cde7;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-tertiary:hover {
+  color: #5f596b;
+  border-color: #c9badf;
+  background: #f8f4fd;
+}
+
+.primary-actions {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pro-precheck {
+  border: 1px solid var(--line);
+  background: #faf7ff;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.pro-precheck label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.precheck-input {
+  margin-bottom: 8px;
+}
+
+.precheck-error {
+  min-height: 18px;
+  margin-bottom: 8px;
+}
+
+.helper-text {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.alternative-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .challenge-container {
   margin-top: 4px;
 }
@@ -121,7 +175,7 @@ body {
   display: inline-block;
   margin-bottom: 10px;
   font-size: 12px;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #4a1d96;
   background: #efe7fb;
@@ -159,7 +213,7 @@ body {
 }
 
 .typing-input:focus {
-  outline: 2px solid rgba(74, 29, 150, .2);
+  outline: 2px solid rgba(74, 29, 150, 0.2);
   border-color: var(--primary);
 }
 
@@ -205,4 +259,37 @@ body {
 .success-message h2 {
   color: var(--ok);
   margin-bottom: 8px;
+}
+
+.access-timer {
+  margin-top: 8px;
+  margin-bottom: 2px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 18px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .primary-actions,
+  .alternative-actions,
+  .challenge-actions {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .challenge-actions .unlock-btn,
+  .challenge-actions .btn-secondary {
+    width: 100%;
+  }
 }

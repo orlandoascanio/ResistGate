@@ -61,6 +61,12 @@ label {
   gap: 8px;
 }
 
+.helper-text {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 input {
   width: 100%;
   border: 1px solid var(--line);
@@ -96,6 +102,7 @@ input:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 8px;
 }
 
@@ -104,6 +111,14 @@ input:focus {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+  white-space: nowrap;
+}
+
+.blocked-count-meta {
+  margin-top: -2px;
+  margin-bottom: 8px;
+  color: #7a7089;
+  font-size: 11px;
 }
 
 .manage-link {
@@ -111,6 +126,8 @@ input:focus {
   text-decoration: none;
   font-weight: 600;
   font-size: 12px;
+  margin-left: 6px;
+  white-space: nowrap;
 }
 
 .manage-link:hover {
@@ -139,6 +156,23 @@ input:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.remove-site-btn {
+  border: 0;
+  background: transparent;
+  color: #7d5aa8;
+  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove-site-btn:hover {
+  background: rgba(74, 29, 150, 0.12);
+  color: #4a1d96;
 }
 
 .list-more {

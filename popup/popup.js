@@ -28,15 +28,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function addBlockedSite() {
     const input = document.getElementById('new-blocked-site');
-    const domain = input.value.trim();
+    const domain = normalizeDomainInput(input.value);
 
     if (!domain) {
         showMessage('Please enter a valid domain', 'error');
-        return;
-    }
-
-    if (!isValidDomain(domain)) {
-        showMessage('Please enter a valid domain (e.g., example.com)', 'error');
         return;
     }
 
@@ -47,8 +42,8 @@ function addBlockedSite() {
             const settings = response.settings;
             settings.blocklist = settings.blocklist || [];
 
-            if (settings.blocklist.some(site => site.urlPattern === domain)) {
-                showMessage('Site already exists in FocusGate.', 'error');
+            if (settings.blocklist.some(site => normalizeDomainInput(site.urlPattern) === domain)) {
+                showMessage('Site already exists in ResistGate.', 'error');
                 return;
             }
 
@@ -71,13 +66,13 @@ function addBlockedSite() {
                 if (updateResponse && updateResponse.success) {
                     input.value = '';
                     loadBlockedSites();
-                    showMessage('Site added to FocusGate.', 'success');
+                    showMessage('Site added to ResistGate.', 'success');
                 } else {
                     showMessage('Unable to add site. Try again.', 'error');
                 }
             });
         } else {
-            showMessage('Unable to load FocusGate settings.', 'error');
+            showMessage('Unable to load ResistGate settings.', 'error');
         }
     });
 }
@@ -93,6 +88,11 @@ function loadBlockedSites() {
         const blocklist = response.settings.blocklist || [];
         const listElement = document.getElementById('blocked-sites-list');
         const emptyMsg = document.getElementById('empty-blocklist-msg');
+        const countBadge = document.getElementById('blocked-count-badge');
+
+        if (countBadge) {
+            countBadge.textContent = getBlockedCountMeta(blocklist.length);
+        }
 
         listElement.innerHTML = '';
 
@@ -113,7 +113,18 @@ function loadBlockedSites() {
             domainSpan.textContent = entry.urlPattern;
             domainSpan.setAttribute('title', entry.urlPattern);
 
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-site-btn';
+            removeBtn.type = 'button';
+            removeBtn.setAttribute('aria-label', `Remove ${entry.urlPattern}`);
+            removeBtn.title = `Remove ${entry.urlPattern}`;
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', function () {
+                removeBlockedSite(entry.id, entry.urlPattern);
+            });
+
             li.appendChild(domainSpan);
+            li.appendChild(removeBtn);
             listElement.appendChild(li);
         });
 
@@ -126,9 +137,70 @@ function loadBlockedSites() {
     });
 }
 
-function isValidDomain(domain) {
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9])*.?$/;
-    return domainRegex.test(domain);
+function removeBlockedSite(siteId, domainLabel) {
+    chrome.runtime.sendMessage({
+        action: 'getSettings'
+    }, function (response) {
+        if (!(response && response.settings)) {
+            showMessage('Unable to load ResistGate settings.', 'error');
+            return;
+        }
+
+        const settings = response.settings;
+        const blocklist = settings.blocklist || [];
+        settings.blocklist = blocklist.filter((entry) => entry.id !== siteId);
+
+        chrome.runtime.sendMessage({
+            action: 'updateSettings',
+            settings: settings
+        }, function (updateResponse) {
+            if (updateResponse && updateResponse.success) {
+                loadBlockedSites();
+                showMessage(`${domainLabel} removed from blocklist.`, 'success');
+            } else {
+                showMessage(updateResponse?.error || 'Unable to remove site. Try again.', 'error');
+            }
+        });
+    });
+}
+
+function normalizeDomainInput(value) {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    let domain = value.trim().toLowerCase();
+    if (!domain) {
+        return null;
+    }
+
+    if (domain.startsWith('http://') || domain.startsWith('https://')) {
+        try {
+            domain = new URL(domain).hostname.toLowerCase();
+        } catch {
+            return null;
+        }
+    }
+
+    domain = domain
+        .replace(/^\*\./, '')
+        .replace(/^\.+/, '')
+        .replace(/\.+$/, '')
+        .replace(/\/.*$/, '');
+
+    if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(domain) || !domain.includes('.')) {
+        return null;
+    }
+
+    return domain;
+}
+
+function getBlockedCountMeta(count) {
+    const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    if (safeCount <= 0) {
+        return 'No sites blocked';
+    }
+    return `${safeCount} blocked`;
 }
 
 function showMessage(text, type = 'info') {
@@ -148,4 +220,11 @@ function showMessage(text, type = 'info') {
             messageDiv.remove();
         }
     }, 3000);
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.__RESISTGATE_POPUP_TEST_HOOKS__ = {
+        normalizeDomainInput,
+        getBlockedCountMeta
+    };
 }
