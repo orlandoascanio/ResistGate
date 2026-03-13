@@ -55,16 +55,12 @@ It blocks distracting sites and requires a friction challenge before granting te
 
 | Feature | Status |
 |---|---|
-| Stripe payment integration | UI and pricing screen exist; no real Stripe or backend. `activateProPlan` just sets a local flag — **no real payment gate** |
-| Pro entitlement verification | Local `subscription.tier` flag only; no API or token validation |
-| Email-based license / JWT entitlement | Not started |
+| Real payment backend (Stripe webhook + entitlement API) | To be connected to a payment provider to issue the license keys expected by the extension. |
 
 ### ❌ Not yet implemented
 
 | Feature | Notes |
 |---|---|
-| Real payment backend (Stripe webhook + entitlement API) | Required before any real Pro monetization |
-| Entitlement refresh on startup / periodic re-check | Described in `Architecture.md`; not coded |
 | `chrome.storage.sync` for cross-device settings | All storage uses `chrome.storage.local` |
 | Trend charts / streak tracking / heatmaps | Post-v1 per ROADMAP |
 | Email weekly report | Post-v1 per ROADMAP |

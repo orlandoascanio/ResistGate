@@ -24,7 +24,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Codebase audit performed; documentation updated to reflect current state vs. stubs.
 - Storage normalization logic added to `background.js` to ensure consistent state on first boot.
+- **Strict Mode Reliability**: Fixed an issue where Strict Mode failed to lock if no schedule was active. Strict mode now acts globally when enabled without a schedule.
 
 ### Security
+- **Pro Entitlement**: Replaced mock local storage upgrade with cryptographic JWT license validation (RS256) using Web Crypto API.
+- Added 24-hour periodic entitlement refresh via `chrome.alarms` to detect expired or revoked licenses.
 - Verified all data stays in `chrome.storage.local`.
 - No remote analytics or external network dependencies in core logic.
