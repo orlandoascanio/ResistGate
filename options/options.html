@@ -265,36 +265,15 @@
 
   <div id="pricing-screen" class="pricing-screen hidden">
     <section class="pricing-card">
-      <h2>Choose Pro Plan</h2>
-      <p>Discipline tracking, reports, and stronger rules are ongoing, so Pro is subscription based.</p>
+      <h2>Activate Pro License</h2>
+      <p>Enter your license key below to unlock Pro features.</p>
 
-      <div class="plan-grid">
-        <article class="plan annual">
-          <h3>Pro Yearly</h3>
-          <p class="price">$50/year</p>
-          <p class="meta">About $4.17/month. Best if you want long-term results.</p>
-          <ul class="price-points">
-            <li>Discipline analytics dashboard</li>
-            <li>Weekly discipline report</li>
-            <li>Strict mode &amp; cooldown system</li>
-          </ul>
-          <button id="start-yearly-btn" class="btn btn-primary full">Start Pro Yearly - Best Value</button>
-        </article>
-
-        <article class="plan monthly">
-          <h3>Pro Monthly</h3>
-          <p class="price">$5/month</p>
-          <p class="meta">Flexible monthly access.</p>
-          <ul class="price-points">
-            <li>Same Pro features included</li>
-            <li>Flexible monthly billing</li>
-            <li>Cancel anytime</li>
-          </ul>
-          <button id="start-monthly-btn" class="btn btn-secondary full">Start Pro Monthly</button>
-        </article>
+      <div class="plan-grid" style="display: block; margin-top: 20px;">
+        <input id="license-key-input" type="text" placeholder="Paste your license key" style="width: 100%; margin-bottom: 10px; padding: 10px;" />
+        <button id="activate-license-btn" class="btn btn-primary full">Activate Pro</button>
       </div>
 
-      <button id="close-pricing-btn" class="btn btn-secondary full">Back</button>
+      <button id="close-pricing-btn" class="btn btn-secondary full" style="margin-top: 15px;">Back</button>
     </section>
   </div>
 

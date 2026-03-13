@@ -125,13 +125,13 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
   document.getElementById('close-pricing-btn').addEventListener('click', hidePricingScreen);
 
-  document.getElementById('start-yearly-btn').addEventListener('click', function () {
-    activateProPlan('yearly');
-  });
-
-  document.getElementById('start-monthly-btn').addEventListener('click', function () {
-    activateProPlan('monthly');
-  });
+  const activateLicenseBtn = document.getElementById('activate-license-btn');
+  if (activateLicenseBtn) {
+    activateLicenseBtn.addEventListener('click', function () {
+      const input = document.getElementById('license-key-input');
+      activateLicense(input.value.trim());
+    });
+  }
 
   loadSettings();
 });
@@ -624,8 +624,13 @@ function hidePricingScreen() {
   document.getElementById('pricing-screen').classList.add('hidden');
 }
 
-function activateProPlan(cycle) {
-  chrome.runtime.sendMessage({ action: 'activateProPlan', billingCycle: cycle }, function (response) {
+function activateLicense(licenseKey) {
+  if (!licenseKey) {
+    showMessage('Please enter a valid license key.', 'error');
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'activateLicense', licenseKey }, function (response) {
     if (!(response && response.success)) {
       showMessage(response?.error || 'Unable to start Pro. Try again.', 'error');
       return;
@@ -639,7 +644,7 @@ function activateProPlan(cycle) {
         return;
       }
 
-      showMessage(`Pro ${cycle === 'monthly' ? 'Monthly' : 'Yearly'} is active.`, 'success');
+      showMessage('Pro is active.', 'success');
 
       if (queuedProScreen) {
         const target = queuedProScreen;

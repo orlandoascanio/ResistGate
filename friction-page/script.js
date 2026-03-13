@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', function () {
       urlPattern: new URL(safeTargetUrl).hostname
     });
   } else {
-    blockedSite.textContent = 'Unknown destination';
+    blockedSite.textContent = 'Unknown destination or unparseable URL.';
+    document.querySelector('.message').textContent = 'The requested URL could not be verified. You can still complete the challenge if you believe this is correct.';
   }
 
   loadSettings();
@@ -45,6 +46,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('close-tab-btn').addEventListener('click', function () {
     window.close();
+  });
+
+  document.getElementById('confirm-start-challenge').addEventListener('click', function () {
+    startTime = Date.now();
+    startTypingChallenge(currentOriginalUrl);
+  });
+
+  document.getElementById('cancel-start-challenge').addEventListener('click', function () {
+    document.getElementById('ready-confirmation').classList.add('hidden');
+    document.getElementById('primary-actions-group').classList.remove('hidden');
+    clearPrecheckError();
   });
 });
 
@@ -192,7 +204,14 @@ function handleStartChallenge() {
     earnAccessEnabled: precheck.earnAccessEnabled
   };
 
-  const waitSeconds = precheck.timedWaitSeconds;
+  let waitSeconds = precheck.timedWaitSeconds;
+
+  // Apply a default 5 second countdown if no timed wait is configured
+  // (i.e. free tier or timed wait not active on pro)
+  if (waitSeconds <= 0) {
+    waitSeconds = 5;
+  }
+
   if (waitSeconds > 0) {
     startTimedWait(waitSeconds, function () {
       startChallengeFlow();
@@ -204,12 +223,8 @@ function handleStartChallenge() {
 }
 
 function startChallengeFlow() {
-  if (!confirm('Ready to earn access with ResistGate? Complete 5 paragraphs with full accuracy.')) {
-    return;
-  }
-
-  startTime = Date.now();
-  startTypingChallenge(currentOriginalUrl);
+  document.getElementById('primary-actions-group').classList.add('hidden');
+  document.getElementById('ready-confirmation').classList.remove('hidden');
 }
 
 function handleManualOverride() {

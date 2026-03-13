@@ -77,6 +77,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith(BLOCK_ALARM_PREFIX) || alarm.name.startsWith(ACCESS_ALARM_PREFIX)) {
     void queueRulesUpdate(`alarm:${alarm.name}`);
   }
+
+  if (alarm.name === 'resistgate-entitlement-refresh') {
+    void refreshEntitlement();
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -143,11 +147,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'updateSettings': {
           const currentSettings = await getSettings();
+          const nextSettings = sanitizeSettings(request.settings || {});
+
           if (isConfigurationLocked(currentSettings, Date.now())) {
-            throw new Error('Strict Mode is active. Configuration is locked during this focus window.');
+            const isTryingToDisableStrict = currentSettings.proFeatures?.strictModeEnabled === true && nextSettings.proFeatures?.strictModeEnabled === false;
+            if (!isTryingToDisableStrict) {
+              throw new Error('Strict Mode is active. Configuration is locked during this focus window.');
+            }
+
+            // Only allow changing strictModeEnabled
+            nextSettings.defaultAccessDuration = currentSettings.defaultAccessDuration;
+            nextSettings.blocklist = currentSettings.blocklist;
+            nextSettings.challengeTypes = currentSettings.challengeTypes;
+            nextSettings.freeExperience = currentSettings.freeExperience;
+            nextSettings.subscription = currentSettings.subscription;
+
+            if (nextSettings.proFeatures) {
+              nextSettings.proFeatures.accountabilityPreset = currentSettings.proFeatures.accountabilityPreset;
+              nextSettings.proFeatures.strictModeDisableDelaySeconds = currentSettings.proFeatures.strictModeDisableDelaySeconds;
+              nextSettings.proFeatures.behavioralFriction = currentSettings.proFeatures.behavioralFriction;
+              nextSettings.proFeatures.overrideCooldown = currentSettings.proFeatures.overrideCooldown;
+            }
           }
 
-          const nextSettings = sanitizeSettings(request.settings || {});
           const transition = applyStrictModeUpdate(currentSettings, nextSettings, Date.now());
           await saveSettings(transition.settings);
           if (transition.justDisabled && hasProAccess(transition.settings)) {
@@ -173,16 +195,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
-        case 'activateProPlan': {
-          const cycle = request.billingCycle === 'monthly' ? 'monthly' : 'yearly';
-          const settings = await getSettings();
-          settings.subscription = {
-            tier: 'pro',
-            billingCycle: cycle,
-            upgradedAt: Date.now()
-          };
-          await saveSettings(settings);
-          sendResponse({ success: true, subscription: settings.subscription });
+        case 'activateLicense': {
+          const result = await verifyAndStoreLicense(request.licenseKey);
+          sendResponse(result);
           return;
         }
 
@@ -255,6 +270,9 @@ async function initializeExtension(reason) {
     if (JSON.stringify(existingOverrideState || {}) !== JSON.stringify(normalizedOverrideState)) {
       await saveOverrideState(normalizedOverrideState);
     }
+
+    // Register daily entitlement refresh alarm
+    chrome.alarms.create('resistgate-entitlement-refresh', { periodInMinutes: 1440 });
 
     initialized = true;
     await queueRulesUpdate(`initialize:${reason}`);
@@ -824,7 +842,156 @@ function sanitizeBlocklist(blocklist) {
 }
 
 function hasProAccess(settings) {
-  return settings?.subscription?.tier === 'pro';
+  if (settings?.subscription?.tier !== 'pro') {
+    return false;
+  }
+  const expiresAt = settings?.subscription?.expiresAt;
+  if (!expiresAt) {
+    // If no expiresAt is set but it's "pro", we assume valid (e.g. legacy or test)
+    // but with the new license system they should have expiresAt.
+    // For local dev/testing without a key, you might want this to be true,
+    // but real production would enforce it. We'll enforce it if it exists.
+    return true;
+  }
+  return Date.now() < expiresAt;
+}
+
+// embedded public key for verification
+const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6F21dqquWLFFjF8rqusv
+Fp4BnFxlQF5z/2Zdv9NObnCXKIPsXqGMxpaMpgX0/RzfybFfaQL51kTI720j5nHW
+7JZaWQexoicYL9EK0gDBVV/kT/R2byZB9v4f6C6AASR3iXqhRmA2YYBWKC8BFGZm
+zhJTx+2DnkIPF2MaeCuII83uQFtvjXm8YvCaJsVwDOCn0pNq+NOgT0CNaDvcAHM1
+BekH2mKnR51IjnX0c/R31W69LsWUwh/jgSGZkh+c8kVd+3Y0D//rPBaSynxvQmrd
+zH+PHyVcwgtl87P5Nc1H+/5siyxmEv29VRr9dEUNCFL6hDUvf879/9Jl7UbHF9Dh
+RQIDAQAB
+-----END PUBLIC KEY-----`;
+
+function str2ab(str) {
+  const buf = new ArrayBuffer(str.length);
+  const bufView = new Uint8Array(buf);
+  for (let i = 0, strLen = str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+function base64UrlDecode(str) {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  return atob(base64);
+}
+
+function base64UrlDecodeToBuffer(str) {
+  const decoded = base64UrlDecode(str);
+  return str2ab(decoded);
+}
+
+async function importPublicKey() {
+  const pemHeader = "-----BEGIN PUBLIC KEY-----";
+  const pemFooter = "-----END PUBLIC KEY-----";
+  const pemContents = PUBLIC_KEY_PEM.substring(
+    PUBLIC_KEY_PEM.indexOf(pemHeader) + pemHeader.length,
+    PUBLIC_KEY_PEM.indexOf(pemFooter)
+  ).replace(/\s/g, '');
+  const binaryDer = str2ab(atob(pemContents));
+
+  return await crypto.subtle.importKey(
+    "spki",
+    binaryDer,
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+    },
+    true,
+    ["verify"]
+  );
+}
+
+async function verifyAndStoreLicense(rawKey) {
+  try {
+    if (!rawKey || typeof rawKey !== 'string') {
+      throw new Error('Invalid license key format.');
+    }
+
+    const parts = rawKey.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Invalid license key format.');
+    }
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const dataToVerify = str2ab(`${headerB64}.${payloadB64}`);
+    const signatureBuffer = base64UrlDecodeToBuffer(signatureB64);
+    const publicKey = await importPublicKey();
+
+    const isValid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      publicKey,
+      signatureBuffer,
+      dataToVerify
+    );
+
+    if (!isValid) {
+      throw new Error('Invalid license signature.');
+    }
+
+    const payloadStr = base64UrlDecode(payloadB64);
+    const payload = JSON.parse(payloadStr);
+
+    if (payload.tier !== 'pro') {
+      throw new Error('License is not for a Pro tier.');
+    }
+
+    if (payload.expiresAt && Date.now() > payload.expiresAt) {
+      throw new Error('License has expired.');
+    }
+
+    const settings = await getSettings();
+    settings.subscription = {
+      tier: 'pro',
+      licenseKey: rawKey,
+      email: payload.email,
+      expiresAt: payload.expiresAt || null,
+      upgradedAt: Date.now()
+    };
+    await saveSettings(settings);
+
+    return { success: true, subscription: settings.subscription };
+  } catch (error) {
+    console.error('License verification failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function refreshEntitlement() {
+  try {
+    const settings = await getSettings();
+    if (!settings?.subscription?.licenseKey) {
+      return;
+    }
+
+    // In a real app, this would be an HTTP call to your API endpoint like:
+    // const res = await fetch(`https://api.yourdomain.com/verify-license?key=${settings.subscription.licenseKey}`);
+    // const data = await res.json();
+    // For now, we simulate this by locally verifying the stored JWT again
+    // to check its `expiresAt` payload, which enforces expiration.
+
+    const result = await verifyAndStoreLicense(settings.subscription.licenseKey);
+
+    if (!result.success) {
+      // License is expired or revoked. Downgrade to free.
+      settings.subscription = { tier: 'free', billingCycle: null, upgradedAt: null };
+      await saveSettings(settings);
+      await queueRulesUpdate('entitlement-refresh-downgrade');
+      console.log('License expired/revoked. Downgraded to free tier.');
+    } else {
+      console.log('License refreshed successfully.');
+    }
+  } catch (err) {
+    console.error('Error refreshing entitlement:', err);
+  }
 }
 
 function isStrictFocusActive(settings, now) {
@@ -834,7 +1001,7 @@ function isStrictFocusActive(settings, now) {
 
   const schedule = settings?.freeExperience?.schedule;
   if (!schedule?.enabled) {
-    return false;
+    return true;
   }
 
   return isWithinSimpleSchedule(schedule, now);
