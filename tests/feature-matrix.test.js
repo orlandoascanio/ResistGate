@@ -9,9 +9,13 @@ describe('Feature Matrix Coverage', () => {
   let env;
   let hooks;
 
+  function enableRuntimePro() {
+    hooks.setRuntimeEntitlementForTests({ pro: true, email: 'pro@example.com' });
+  }
+
   beforeEach(async () => {
     env = createChromeMock();
-    const context = await loadScriptInVm('background.js', { chrome: env.chrome });
+    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: env.fetch });
     hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
 
@@ -107,6 +111,21 @@ describe('Feature Matrix Coverage', () => {
 
       expect(Object.keys(sanitized)).toEqual(['youtube.com']);
     });
+
+    it('does not unlock pro-only APIs from a local subscription flag alone', async () => {
+      const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settings.subscription = {
+        tier: 'pro',
+        billingCycle: 'monthly',
+        upgradedAt: Date.now()
+      };
+
+      await env.sendMessage({ action: 'updateSettings', settings });
+      const analytics = await env.sendMessage({ action: 'getAnalyticsDashboard' });
+
+      expect(analytics.success).toBe(false);
+      expect(analytics.proRequired).toBe(true);
+    });
   });
 
   describe('Pro: Strict Mode Lock', () => {
@@ -143,7 +162,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('blocks config updates during active strict schedule window', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.proFeatures.strictModeEnabled = true;
       settings.freeExperience.schedule = {
@@ -164,14 +183,14 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Override Cooldown', () => {
     it('starts with base manual override delay', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const status = await env.sendMessage({ action: 'getManualOverrideStatus' });
       expect(status.success).toBe(true);
       expect(status.status.requiredDelaySeconds).toBe(12);
     });
 
     it('increases required delay after successful overrides', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.delayStepSeconds = 15;
@@ -190,7 +209,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('locks manual override after threshold is exceeded', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.thresholdCount = 2;
@@ -230,6 +249,7 @@ describe('Feature Matrix Coverage', () => {
       });
       expect(hooks.isEarnAccessActive(freeSettings)).toBe(false);
 
+      enableRuntimePro();
       const proSettings = hooks.sanitizeSettings({
         subscription: { tier: 'pro', billingCycle: 'monthly' },
         proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
@@ -238,7 +258,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('rejects manual override when earn-access is active', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -257,7 +277,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('requires minimum challenge duration when earn-access is active', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -287,7 +307,7 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Analytics Dashboard', () => {
     it('computes blocked attempts, overrides, and strict session minutes', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -314,7 +334,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns top blocked domains sorted and limited to 5', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const now = Date.now();
       const domains = ['a.com', 'b.com', 'b.com', 'c.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'];
       env.storageData.analytics = {
@@ -331,7 +351,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('always returns a 7-day override trend series', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const res = await env.sendMessage({ action: 'getAnalyticsDashboard' });
       expect(res.dashboard.overrideFrequencyTrend).toHaveLength(7);
     });
@@ -339,7 +359,7 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Focus Score and Weekly Report', () => {
     it('uses score formula 100 - overrides*5 - manualDisable*10', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -355,7 +375,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('clamps score to 0 at lower bound', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const now = Date.now();
       const events = [];
       for (let i = 0; i < 40; i++) {
@@ -371,7 +391,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns weekly trend delta and a feedback line', async () => {
-      await env.sendMessage({ action: 'activateProPlan', billingCycle: 'monthly' });
+      enableRuntimePro();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {

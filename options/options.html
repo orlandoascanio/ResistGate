@@ -80,6 +80,19 @@
           <button id="open-pricing-btn" class="btn btn-secondary">See Pro Plans</button>
         </div>
 
+        <div class="billing-box">
+          <label for="billing-email-input">Billing email</label>
+          <div class="billing-row">
+            <input id="billing-email-input" type="email" placeholder="you@example.com" />
+            <button id="save-billing-email-btn" class="btn btn-secondary" type="button">Save Email</button>
+          </div>
+          <p class="helper">ResistGate stores your email locally and fetches Pro access from the API on load.</p>
+          <div class="billing-status-row">
+            <p id="pro-status-text" class="helper">Plan status: Free</p>
+            <button id="refresh-entitlement-btn" class="btn btn-secondary" type="button">Refresh Pro Access</button>
+          </div>
+        </div>
+
         <div class="preset-block">
           <p class="helper">Choose a preset:</p>
           <div class="preset-grid">
@@ -253,8 +266,8 @@
         <li>Analytics dashboard</li>
         <li>Weekly discipline reports</li>
         <li>Strict Mode and stronger unlock rules</li>
-        <li>$5 per month</li>
-        <li><strong>$50 per year (best value)</strong></li>
+        <li>$7.99 per month</li>
+        <li><strong>$65 per year (best value)</strong></li>
       </ul>
       <div class="modal-actions">
         <button id="view-pricing-btn" class="btn btn-primary">View Pro Pricing</button>
@@ -266,31 +279,31 @@
   <div id="pricing-screen" class="pricing-screen hidden">
     <section class="pricing-card">
       <h2>Choose Pro Plan</h2>
-      <p>Discipline tracking, reports, and stronger rules are ongoing, so Pro is subscription based.</p>
+      <p>Checkout opens in PayPal and activates Pro after the subscription webhook confirms your billing email.</p>
 
       <div class="plan-grid">
         <article class="plan annual">
           <h3>Pro Yearly</h3>
-          <p class="price">$50/year</p>
-          <p class="meta">About $4.17/month. Best if you want long-term results.</p>
+          <p class="price">$65/year</p>
+          <p class="meta">About $5.42/month. Best if you want long-term results.</p>
           <ul class="price-points">
             <li>Discipline analytics dashboard</li>
             <li>Weekly discipline report</li>
             <li>Strict mode &amp; cooldown system</li>
           </ul>
-          <button id="start-yearly-btn" class="btn btn-primary full">Start Pro Yearly - Best Value</button>
+          <button id="start-yearly-btn" class="btn btn-primary full">Continue with PayPal - Yearly</button>
         </article>
 
         <article class="plan monthly">
           <h3>Pro Monthly</h3>
-          <p class="price">$5/month</p>
+          <p class="price">$7.99/month</p>
           <p class="meta">Flexible monthly access.</p>
           <ul class="price-points">
             <li>Same Pro features included</li>
             <li>Flexible monthly billing</li>
             <li>Cancel anytime</li>
           </ul>
-          <button id="start-monthly-btn" class="btn btn-secondary full">Start Pro Monthly</button>
+          <button id="start-monthly-btn" class="btn btn-secondary full">Continue with PayPal - Monthly</button>
         </article>
       </div>
 

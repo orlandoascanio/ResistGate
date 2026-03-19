@@ -54,6 +54,31 @@ export function createChromeMock() {
   const storageData = {};
   let onMessageHandler = null;
   const alarms = new Map();
+  let fetchImpl = async (url) => {
+    const urlString = String(url);
+
+    if (urlString.includes('/api/entitlement')) {
+      return {
+        ok: true,
+        json: async () => ({ pro: false }),
+        text: async () => JSON.stringify({ pro: false })
+      };
+    }
+
+    if (urlString.includes('/api/paypal/subscribe')) {
+      return {
+        ok: true,
+        json: async () => ({ approvalUrl: 'https://paypal.test/checkout', email: 'test@example.com' }),
+        text: async () => JSON.stringify({ approvalUrl: 'https://paypal.test/checkout' })
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({}),
+      text: async () => ''
+    };
+  };
 
   const chrome = {
     runtime: {
@@ -136,7 +161,15 @@ export function createChromeMock() {
     });
   }
 
-  return { chrome, storageData, sendMessage };
+  return {
+    chrome,
+    storageData,
+    sendMessage,
+    fetch: (...args) => fetchImpl(...args),
+    setFetchImpl: (nextImpl) => {
+      fetchImpl = nextImpl;
+    }
+  };
 }
 
 export async function loadScriptInVm(relativeScriptPath, globals = {}) {

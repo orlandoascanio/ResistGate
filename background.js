@@ -4,10 +4,14 @@ const SETTINGS_KEY = 'settings';
 const TEMP_ACCESS_KEY = 'temporaryAccess';
 const ANALYTICS_KEY = 'analytics';
 const OVERRIDE_STATE_KEY = 'overrideState';
+const BILLING_EMAIL_KEY = 'billingEmail';
 
 const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
 const ACCESS_ALARM_PREFIX = 'resistgate-access-expire-';
 const MAX_ANALYTICS_EVENTS = 3000;
+const API_ORIGIN = 'https://orlandoascanio.com';
+const ENTITLEMENT_ENDPOINT = `${API_ORIGIN}/api/entitlement`;
+const CHECKOUT_ENDPOINT = `${API_ORIGIN}/api/paypal/subscribe`;
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -58,6 +62,8 @@ const DEFAULT_SETTINGS = {
 let updateQueue = Promise.resolve();
 let initialized = false;
 let initializationPromise = null;
+let entitlementRefreshPromise = null;
+let currentEntitlement = createEmptyEntitlementState();
 
 void initializeExtension('service-worker-start');
 
@@ -86,6 +92,10 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
   if (changes[SETTINGS_KEY] || changes[TEMP_ACCESS_KEY]) {
     void queueRulesUpdate('storage-change');
+  }
+
+  if (changes[BILLING_EMAIL_KEY]) {
+    void refreshEntitlementState('billing-email-change');
   }
 });
 
@@ -130,7 +140,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'getSettings': {
           const settings = await getSettings();
-          sendResponse({ success: true, settings });
+          const billingEmail = await getBillingEmail();
+          sendResponse({ success: true, settings, entitlement: getPublicEntitlementState(), billingEmail });
           return;
         }
 
@@ -173,16 +184,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
-        case 'activateProPlan': {
-          const cycle = request.billingCycle === 'monthly' ? 'monthly' : 'yearly';
-          const settings = await getSettings();
-          settings.subscription = {
-            tier: 'pro',
-            billingCycle: cycle,
-            upgradedAt: Date.now()
-          };
-          await saveSettings(settings);
-          sendResponse({ success: true, subscription: settings.subscription });
+        case 'setBillingEmail': {
+          const email = normalizeEmailAddress(request.email);
+          if (!isValidEmailAddress(email)) {
+            throw new Error('A valid billing email is required.');
+          }
+
+          await setInStorage({ [BILLING_EMAIL_KEY]: email });
+          await refreshEntitlementState('setBillingEmail', email);
+          sendResponse({ success: true, email, entitlement: getPublicEntitlementState() });
+          return;
+        }
+
+        case 'getBillingEmail': {
+          const email = await getBillingEmail();
+          sendResponse({ success: true, email });
+          return;
+        }
+
+        case 'refreshEntitlement': {
+          await refreshEntitlementState('message-refresh');
+          sendResponse({ success: true, entitlement: getPublicEntitlementState() });
+          return;
+        }
+
+        case 'getEntitlementStatus': {
+          sendResponse({ success: true, entitlement: getPublicEntitlementState() });
+          return;
+        }
+
+        case 'startSubscriptionCheckout': {
+          const billingEmail = normalizeEmailAddress(request.email) || await getBillingEmail();
+          if (!isValidEmailAddress(billingEmail)) {
+            throw new Error('A valid billing email is required before checkout.');
+          }
+
+          const plan = request.plan === 'monthly' ? 'monthly' : request.plan === 'yearly' ? 'yearly' : null;
+          if (!plan) {
+            throw new Error('Invalid plan selected.');
+          }
+
+          const checkout = await startSubscriptionCheckout(billingEmail, plan);
+          sendResponse({ success: true, approvalUrl: checkout.approvalUrl, email: billingEmail });
           return;
         }
 
@@ -256,6 +299,7 @@ async function initializeExtension(reason) {
       await saveOverrideState(normalizedOverrideState);
     }
 
+    await refreshEntitlementState(`initialize:${reason}`);
     initialized = true;
     await queueRulesUpdate(`initialize:${reason}`);
     console.log(`ResistGate initialized (${reason})`);
@@ -824,7 +868,121 @@ function sanitizeBlocklist(blocklist) {
 }
 
 function hasProAccess(settings) {
-  return settings?.subscription?.tier === 'pro';
+  return currentEntitlement.pro === true;
+}
+
+function createEmptyEntitlementState() {
+  return {
+    email: null,
+    pro: false,
+    checkedAt: null,
+    isRefreshing: false,
+    lastError: null,
+  };
+}
+
+function getPublicEntitlementState() {
+  return {
+    email: currentEntitlement.email,
+    pro: currentEntitlement.pro === true,
+    checkedAt: currentEntitlement.checkedAt,
+    isRefreshing: currentEntitlement.isRefreshing === true,
+    lastError: currentEntitlement.lastError || null,
+  };
+}
+
+function normalizeEmailAddress(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function isValidEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+async function getBillingEmail() {
+  const result = await getFromStorage([BILLING_EMAIL_KEY]);
+  const email = normalizeEmailAddress(result[BILLING_EMAIL_KEY]);
+  return isValidEmailAddress(email) ? email : null;
+}
+
+async function refreshEntitlementState(reason, providedEmail) {
+  if (!providedEmail && entitlementRefreshPromise) {
+    return entitlementRefreshPromise;
+  }
+
+  entitlementRefreshPromise = (async () => {
+    const email = normalizeEmailAddress(providedEmail) || await getBillingEmail();
+    if (!email) {
+      currentEntitlement = createEmptyEntitlementState();
+      return currentEntitlement;
+    }
+
+    currentEntitlement = {
+      ...currentEntitlement,
+      email,
+      isRefreshing: true,
+      lastError: null,
+    };
+
+    try {
+      const response = await fetch(`${ENTITLEMENT_ENDPOINT}?email=${encodeURIComponent(email)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Entitlement refresh failed (${reason}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      currentEntitlement = {
+        email,
+        pro: data?.pro === true,
+        checkedAt: Date.now(),
+        isRefreshing: false,
+        lastError: null,
+      };
+    } catch (error) {
+      currentEntitlement = {
+        email,
+        pro: false,
+        checkedAt: Date.now(),
+        isRefreshing: false,
+        lastError: error?.message || 'Unable to refresh entitlement.',
+      };
+    }
+
+    return currentEntitlement;
+  })();
+
+  try {
+    return await entitlementRefreshPromise;
+  } finally {
+    entitlementRefreshPromise = null;
+  }
+}
+
+async function startSubscriptionCheckout(email, plan) {
+  const response = await fetch(CHECKOUT_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email,
+      plan,
+      source: 'extension',
+      locale: 'en',
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data?.approvalUrl) {
+    throw new Error(data?.error || 'Unable to start checkout.');
+  }
+
+  return data;
 }
 
 function isStrictFocusActive(settings, now) {
@@ -1423,6 +1581,15 @@ if (typeof globalThis !== 'undefined') {
     getLast7DaysMeta,
     getRollingWeekRange,
     buildWeekSummary,
-    getWeeklyFeedbackLine
+    getWeeklyFeedbackLine,
+    normalizeEmailAddress,
+    isValidEmailAddress,
+    getPublicEntitlementState,
+    setRuntimeEntitlementForTests: (nextState) => {
+      currentEntitlement = {
+        ...createEmptyEntitlementState(),
+        ...(nextState || {}),
+      };
+    }
   };
 }

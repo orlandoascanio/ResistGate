@@ -273,6 +273,32 @@ label {
   margin-top: 10px;
 }
 
+.billing-box {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #d8c9f2;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.billing-row,
+.billing-status-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.billing-status-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.billing-row .btn,
+.billing-status-row .btn {
+  white-space: nowrap;
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -588,6 +614,12 @@ label {
 
   .panel-actions {
     flex-direction: column;
+  }
+
+  .billing-row,
+  .billing-status-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .plan-grid,
