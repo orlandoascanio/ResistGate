@@ -58,14 +58,16 @@ Stores raw events -> local storage.
 Periodically aggregates into weekly metrics (scheduled by `chrome.alarms`).
 
 #### e) Entitlement Refresh (Pro)
-On startup and every N hours:
-- Read email from sync storage.
-- Call your `/entitlement` endpoint.
-- Store `isPro`, `status`, `expiresAt` in storage.
+On startup and every 24 hours (via `chrome.alarms`):
+- Read `licenseKey` from storage.
+- Verify the key using the embedded RS256 public key (Web Crypto API).
+- Check `expiresAt` in the JWT payload.
+- Update `tier`, `expiresAt`, and `status` in storage.
+- If license is invalid or expired, downgrade to `free`.
 
 Expose this to UIs via:
 - `chrome.storage` (observed by components)
-- or message `getProStatus`.
+- or message `activateLicense`.
 
 ## 3. Storage Model (What Lives Where)
 Use typed schemas in TS so you don’t drown later.
@@ -73,14 +75,14 @@ Use typed schemas in TS so you don’t drown later.
 ### 3.1 Storage Areas
 #### `chrome.storage.sync`
 Light user settings that should sync between devices:
-- email
-- basic options
 - blocklist
 - schedules
-- isPro flag (optional, but still verify from backend periodically)
+- strictModeEnabled
+- basicFrictionEnabled
 
 #### `chrome.storage.local`
 Heavier / device-specific:
+- licenseKey
 - analytics raw events
 - weekly aggregates
 - `lastReportGeneratedAt`
@@ -91,7 +93,6 @@ Heavier / device-specific:
 ```ts
 // sync storage
 export interface SyncSettings {
-  email?: string;
   blocklist: string[]; // domains
   schedules: FocusSchedule[];
   strictModeEnabled: boolean;
@@ -105,14 +106,15 @@ export interface FocusSchedule {
   endTime: string;   // "13:00"
 }
 
-// entitlement (could be sync or local)
+// entitlement (local storage)
 export interface ProEntitlement {
-  isPro: boolean;
-  status?: 'active' | 'past_due' | 'canceled' | 'none';
-  currentPeriodEnd?: string; // ISO
-  lastCheckedAt?: string;
+  tier: 'pro' | 'free';
+  licenseKey?: string;
+  email?: string;
+  expiresAt?: number;
+  upgradedAt?: number;
 }
-
+```
 // local storage
 export interface LocalRuntimeState {
   tempAllowRules: TempAllowRule[];
@@ -258,14 +260,14 @@ No AI. Deterministic and cheap.
 
 ## 5. How Pro Fits Technically
 ### 5.1 Pro Gating
-Every Pro-only feature checks `ProEntitlement.isPro`.
+Every Pro-only feature checks `settings.subscription.tier === 'pro'`.
 
 In background:
 
 ```ts
 async function isProUser(): Promise<boolean> {
-  const { proEntitlement } = await chrome.storage.local.get('proEntitlement');
-  return proEntitlement?.isPro === true;
+  const settings = await getSettings();
+  return settings?.subscription?.tier === 'pro';
 }
 ```
 
@@ -276,7 +278,7 @@ Gated features:
 - Weekly report -> Pro only
 
 UI pattern:
-- UI checks `isPro` from storage.
+- UI checks `tier` from storage.
 - If user clicks Pro feature while free -> show paywall modal.
 
 ### 5.2 Storage Separation
@@ -294,17 +296,13 @@ Example:
 
 ```ts
 type MessageRequest =
-  | { type: 'GET_STATE' }
-  | { type: 'COMPLETE_CHALLENGE'; payload: { challengeId: string; originalUrl: string } }
-  | { type: 'GET_ANALYTICS_SUMMARY' }
-  | { type: 'GET_PRO_STATUS' }
-  | { type: 'REFRESH_ENTITLEMENT' };
+  | { type: 'getSettings' }
+  | { type: 'updateSettings'; settings: any }
+  | { type: 'activateLicense'; licenseKey: string }
+  | { type: 'getAnalyticsDashboard' };
 
 type MessageResponse =
-  | { type: 'STATE'; payload: /* relevant state object */ }
-  | { type: 'CHALLENGE_RESULT'; payload: { success: boolean; tempAccessGranted?: boolean } }
-  | { type: 'ANALYTICS_SUMMARY'; payload: WeeklyReport }
-  | { type: 'PRO_STATUS'; payload: ProEntitlement };
+  | { success: boolean; settings?: any; error?: string };
 ```
 
 In background:
@@ -312,10 +310,15 @@ In background:
 ```ts
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   (async () => {
-    switch (request.type) {
-      case 'GET_PRO_STATUS': {
-        const { proEntitlement } = await chrome.storage.local.get('proEntitlement');
-        sendResponse({ type: 'PRO_STATUS', payload: proEntitlement });
+    switch (request.action) {
+      case 'getSettings': {
+        const settings = await getSettings();
+        sendResponse({ success: true, settings });
+        break;
+      }
+      case 'activateLicense': {
+        const result = await verifyAndStoreLicense(request.licenseKey);
+        sendResponse(result);
         break;
       }
       // etc...

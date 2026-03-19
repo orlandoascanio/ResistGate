@@ -3,13 +3,6 @@ const DEFAULT_ACCESS_WINDOW_MINUTES = 15;
 const DEFAULT_OVERRIDE_DELAY_SECONDS = 12;
 const DEFAULT_STRICT_DISABLE_DELAY_SECONDS = 30;
 const DEFAULT_PRO_PRESET = 'balanced';
-const EMPTY_ENTITLEMENT = {
-  email: null,
-  pro: false,
-  checkedAt: null,
-  isRefreshing: false,
-  lastError: null
-};
 
 const PRO_PRESET_VALUES = {
   light: {
@@ -53,8 +46,6 @@ const PRO_PRESET_VALUES = {
 let activeTab = 'general';
 let queuedProScreen = null;
 let cachedSettings = null;
-let cachedEntitlement = { ...EMPTY_ENTITLEMENT };
-let cachedBillingEmail = '';
 
 document.addEventListener('DOMContentLoaded', function () {
   const newBlockedSiteInput = document.getElementById('new-blocked-site');
@@ -133,16 +124,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
   document.getElementById('close-pricing-btn').addEventListener('click', hidePricingScreen);
-  document.getElementById('save-billing-email-btn').addEventListener('click', saveBillingEmail);
-  document.getElementById('refresh-entitlement-btn').addEventListener('click', refreshEntitlementStatus);
 
-  document.getElementById('start-yearly-btn').addEventListener('click', function () {
-    startSubscriptionCheckout('yearly');
-  });
-
-  document.getElementById('start-monthly-btn').addEventListener('click', function () {
-    startSubscriptionCheckout('monthly');
-  });
+  const activateLicenseBtn = document.getElementById('activate-license-btn');
+  if (activateLicenseBtn) {
+    activateLicenseBtn.addEventListener('click', function () {
+      const input = document.getElementById('license-key-input');
+      activateLicense(input.value.trim());
+    });
+  }
 
   loadSettings();
 });
@@ -158,8 +147,6 @@ function loadSettings(callback) {
     }
 
     cachedSettings = response.settings;
-    cachedEntitlement = response.entitlement || { ...EMPTY_ENTITLEMENT };
-    cachedBillingEmail = response.billingEmail || cachedEntitlement.email || '';
     renderSettings();
 
     if (typeof callback === 'function') {
@@ -185,11 +172,9 @@ function renderSettings() {
 
   document.getElementById('manual-override-delay').value =
     settings.freeExperience?.manualOverrideDelaySeconds || DEFAULT_OVERRIDE_DELAY_SECONDS;
-  document.getElementById('billing-email-input').value = cachedBillingEmail;
 
   renderScheduleInputs(settings.freeExperience?.schedule || {});
   renderPlanPill();
-  renderEntitlementStatus();
   loadBlockedSites(blocklist);
   renderProFeatureInputs();
 
@@ -210,7 +195,8 @@ function renderPlanPill() {
   }
 
   if (isProUser()) {
-    planPill.textContent = 'Pro';
+    const cycleLabel = cachedSettings.subscription?.billingCycle === 'monthly' ? 'Monthly' : 'Yearly';
+    planPill.textContent = `Pro ${cycleLabel}`;
     planPill.classList.add('pro');
     openPricingBtn.textContent = 'Manage Pro';
     return;
@@ -219,32 +205,6 @@ function renderPlanPill() {
   planPill.textContent = 'Free';
   planPill.classList.remove('pro');
   openPricingBtn.textContent = 'See Pro Plans';
-}
-
-function renderEntitlementStatus() {
-  const statusLine = document.getElementById('pro-status-text');
-  if (!statusLine) {
-    return;
-  }
-
-  if (!cachedBillingEmail) {
-    statusLine.textContent = 'Plan status: Free. Save your billing email to verify Pro access.';
-    return;
-  }
-
-  if (cachedEntitlement.isRefreshing) {
-    statusLine.textContent = `Checking Pro access for ${cachedBillingEmail}...`;
-    return;
-  }
-
-  if (cachedEntitlement.lastError) {
-    statusLine.textContent = `Last check failed for ${cachedBillingEmail}.`;
-    return;
-  }
-
-  statusLine.textContent = cachedEntitlement.pro
-    ? `Plan status: Pro for ${cachedBillingEmail}`
-    : `Plan status: Free for ${cachedBillingEmail}`;
 }
 
 function renderScheduleInputs(schedule) {
@@ -664,72 +624,34 @@ function hidePricingScreen() {
   document.getElementById('pricing-screen').classList.add('hidden');
 }
 
-function saveBillingEmail() {
-  const input = document.getElementById('billing-email-input');
-  const email = normalizeEmailInput(input.value);
-  if (!email) {
-    showMessage('Enter a valid billing email first.', 'error');
+function activateLicense(licenseKey) {
+  if (!licenseKey) {
+    showMessage('Please enter a valid license key.', 'error');
     return;
   }
 
-  chrome.runtime.sendMessage({ action: 'setBillingEmail', email }, function (response) {
+  chrome.runtime.sendMessage({ action: 'activateLicense', licenseKey }, function (response) {
     if (!(response && response.success)) {
-      showMessage(response?.error || 'Unable to save billing email.', 'error');
+      showMessage(response?.error || 'Unable to start Pro. Try again.', 'error');
       return;
     }
 
-    cachedBillingEmail = response.email;
-    cachedEntitlement = response.entitlement || cachedEntitlement;
-    renderPlanPill();
-    renderEntitlementStatus();
-    showMessage('Billing email saved. ResistGate refreshed your Pro status.', 'success');
-  });
-}
+    hidePricingScreen();
+    hidePaywall();
 
-function refreshEntitlementStatus() {
-  chrome.runtime.sendMessage({ action: 'refreshEntitlement' }, function (response) {
-    if (!(response && response.success)) {
-      showMessage(response?.error || 'Unable to refresh Pro access.', 'error');
-      return;
-    }
+    loadSettings(function (loaded) {
+      if (!loaded) {
+        return;
+      }
 
-    cachedEntitlement = response.entitlement || { ...EMPTY_ENTITLEMENT };
-    renderPlanPill();
-    renderEntitlementStatus();
+      showMessage('Pro is active.', 'success');
 
-    if (cachedEntitlement.pro) {
-      hidePricingScreen();
-      hidePaywall();
-      showMessage('Pro access confirmed.', 'success');
       if (queuedProScreen) {
         const target = queuedProScreen;
         queuedProScreen = null;
         handleTabRequest(target);
       }
-      return;
-    }
-
-    showMessage('No active Pro entitlement found for this email yet.', 'info');
-  });
-}
-
-function startSubscriptionCheckout(plan) {
-  const input = document.getElementById('billing-email-input');
-  const email = normalizeEmailInput(input.value);
-  if (!email) {
-    showMessage('Save a valid billing email before starting checkout.', 'error');
-    return;
-  }
-
-  chrome.runtime.sendMessage({ action: 'startSubscriptionCheckout', plan, email }, function (response) {
-    if (!(response && response.success && response.approvalUrl)) {
-      showMessage(response?.error || 'Unable to start PayPal checkout.', 'error');
-      return;
-    }
-
-    cachedBillingEmail = response.email || email;
-    window.open(response.approvalUrl, '_blank', 'noopener');
-    showMessage('PayPal checkout opened in a new tab. Refresh Pro access after payment.', 'success');
+    });
   });
 }
 
@@ -828,13 +750,12 @@ if (typeof globalThis !== 'undefined') {
     getOverridesInsight,
     getStrictSessionInsight,
     sanitizePreset,
-    getEarnAccessMinChallengeSeconds,
-    normalizeEmailInput
+    getEarnAccessMinChallengeSeconds
   };
 }
 
 function isProUser() {
-  return cachedEntitlement?.pro === true;
+  return cachedSettings?.subscription?.tier === 'pro';
 }
 
 function withLatestSettings(onSuccess) {
@@ -877,19 +798,6 @@ function normalizeDomainInput(value) {
   }
 
   return domain;
-}
-
-function normalizeEmailInput(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const email = value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return null;
-  }
-
-  return email;
 }
 
 function showMessage(text, type = 'info') {

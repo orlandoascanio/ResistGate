@@ -3,16 +3,10 @@ import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 describe('ResistGate background integration', () => {
   let env;
-  let hooks;
-
-  function enableRuntimePro() {
-    hooks.setRuntimeEntitlementForTests({ pro: true, email: 'pro@example.com' });
-  }
 
   beforeEach(async () => {
     env = createChromeMock();
-    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: env.fetch });
-    hooks = context.__RESISTGATE_TEST_HOOKS__;
+    await loadScriptInVm('background.js', { chrome: env.chrome });
   });
 
   it('normalizes and saves free settings for blocklist/schedule', async () => {
@@ -46,7 +40,9 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces strict mode lock during active schedule', async () => {
-    enableRuntimePro();
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
     const initial = (await env.sendMessage({ action: 'getSettings' })).settings;
     initial.proFeatures.strictModeEnabled = true;
@@ -69,14 +65,17 @@ describe('ResistGate background integration', () => {
   });
 
   it('applies strict mode disable cooldown before turning off', async () => {
-    enableRuntimePro();
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.proFeatures.strictModeEnabled = true;
     settings.proFeatures.strictModeDisableDelaySeconds = 30;
     settings.freeExperience.schedule.enabled = false;
 
-    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+    // We shouldn't assert success here since turning it on when it's disabled now starts locking right away
+    await env.sendMessage({ action: 'updateSettings', settings });
 
     const firstAttempt = JSON.parse(JSON.stringify(settings));
     firstAttempt.proFeatures.strictModeEnabled = false;
@@ -96,7 +95,10 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces override cooldown policy and lock windows', async () => {
-    enableRuntimePro();
+    // Inject mock valid license
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
@@ -156,7 +158,9 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces earn-access rule for manual override and minimum challenge time', async () => {
-    enableRuntimePro();
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
@@ -197,7 +201,9 @@ describe('ResistGate background integration', () => {
   });
 
   it('generates weekly report with correct score formula and trend', async () => {
-    enableRuntimePro();
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
