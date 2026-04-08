@@ -108,6 +108,18 @@ npm install
 npm test
 ```
 
+### Billing integration notes
+
+- Run `npm run migrate` from `/Users/orlandoascanio/Desktop/Profesional-Portfolio/client` when the billing backend adds a new SQL migration.
+- For fully product-specific billing, set `PAYPAL_PLAN_MAP` in `Profesional-Portfolio/client/.env.local`.
+
+```env
+PAYPAL_PLAN_MAP={"resistgate":{"monthly":"P-...","yearly":"P-..."},"another-product":{"monthly":"P-...","yearly":"P-..."}}
+```
+
+- Each new extension origin must be added to `ENTITLEMENT_ALLOWED_ORIGINS` in the portfolio backend.
+- Each extension manifest must include your site in `externally_connectable`.
+
 ---
 
 ## Permissions (why)

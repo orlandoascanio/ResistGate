@@ -1,17 +1,17 @@
 # ResistGate Pro v1 (Revenue Version)
 
 ## Goal
-Ship a monetizable Pro version of ResistGate within 2–3 weeks.
+Ship a monetizable Pro version of ResistGate within 2-3 weeks.
 
 Primary objective:
 - Convert frustration + ambition into paid accountability.
 
-Not to build the “ultimate focus system.”
-Just enough value to justify $5/month.
+Not to build the "ultimate focus system."
+Just enough value to justify $7.99/month.
 
 ## Pricing Model
-- $5/month
-- $50/year (optional, after v1 stable)
+- $7.99/month
+- $65/year (optional, after v1 stable)
 - No free trial
 - 7-day refund policy
 
@@ -84,7 +84,7 @@ No complex stats.
 Just visible numbers.
 
 ### 4) Focus Score (Simple Formula)
-You don’t need behavioral science.
+You don't need behavioral science.
 Start simple.
 
 Example:
@@ -95,7 +95,7 @@ Focus Score =
  - (manualDisableCount × 10)
 ```
 
-Clamp between 0–100.
+Clamp between 0-100.
 Displayed weekly.
 
 Goal:
@@ -115,9 +115,9 @@ Content:
 - Trend vs last week (+/-)
 
 Short feedback line:
-- “Improved discipline.”
-- “Overrides increased.”
-- “Strong consistency.”
+- "Improved discipline."
+- "Overrides increased."
+- "Strong consistency."
 
 Keep it simple.
 
@@ -178,8 +178,8 @@ v1: Keep it minimal but secure enough.
 - PDF export
 - Advanced charts
 
-If it doesn’t directly help someone say:
-“Yes, I want accountability.”
+If it doesn't directly help someone say:
+"Yes, I want accountability."
 It waits.
 
 ## Emotional Trigger Strategy
@@ -189,10 +189,10 @@ Users upgrade when they feel:
 - Protective of identity
 
 Your Pro messaging should target:
-“I want proof that I’m improving.”
+"I want proof that I'm improving."
 
 Not:
-“More features.”
+"More features."
 
 ## Definition of Done (Pro v1)
 You are done when:
@@ -204,7 +204,7 @@ You are done when:
 - Weekly report generates
 - No major bypass bugs
 
-That’s it.
+That's it.
 Not perfection.
 Revenue.
 
