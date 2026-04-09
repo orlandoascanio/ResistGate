@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "driva": {
+      "command": "pnpm",
+      "args": ["--dir", "/Users/orlandoascanio/Desktop/Driva/mcp-bridge", "dev"]
+    }
+  }
+}
