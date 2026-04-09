@@ -53,28 +53,51 @@ export function createBrowserLikeGlobals() {
 export function createChromeMock() {
   const storageData = {};
   let onMessageHandler = null;
+  let onInstalledHandler = null;
+  let onStartupHandler = null;
+  let onAlarmHandler = null;
+  let onStorageChangedHandler = null;
+  let onMessageExternalHandler = null;
   const alarms = new Map();
+  const createdTabs = [];
 
   const chrome = {
     runtime: {
       id: 'resistgate-test-extension',
       lastError: null,
       onInstalled: {
-        addListener: () => {}
+        addListener: (handler) => {
+          onInstalledHandler = handler;
+        }
       },
       onStartup: {
-        addListener: () => {}
+        addListener: (handler) => {
+          onStartupHandler = handler;
+        }
       },
       onMessage: {
         addListener: (handler) => {
           onMessageHandler = handler;
         }
       },
+      onMessageExternal: {
+        addListener: (handler) => {
+          onMessageExternalHandler = handler;
+        }
+      },
       getURL: (assetPath) => `chrome-extension://resistgate/${assetPath}`
+    },
+    tabs: {
+      create: async (details) => {
+        createdTabs.push(details);
+        return details;
+      }
     },
     alarms: {
       onAlarm: {
-        addListener: () => {}
+        addListener: (handler) => {
+          onAlarmHandler = handler;
+        }
       },
       getAll: async () => [...alarms.values()],
       create: async (name, data) => {
@@ -86,7 +109,9 @@ export function createChromeMock() {
     },
     storage: {
       onChanged: {
-        addListener: () => {}
+        addListener: (handler) => {
+          onStorageChangedHandler = handler;
+        }
       },
       local: {
         get: (keys, callback) => {
@@ -136,7 +161,61 @@ export function createChromeMock() {
     });
   }
 
-  return { chrome, storageData, sendMessage };
+  async function sendExternalMessage(request, sender) {
+    if (!onMessageExternalHandler) {
+      throw new Error('onMessageExternal handler not registered');
+    }
+
+    return new Promise((resolve) => {
+      const maybeAsync = onMessageExternalHandler(request, sender || {}, (response) => {
+        resolve(response);
+      });
+
+      if (maybeAsync !== true) {
+        resolve(undefined);
+      }
+    });
+  }
+
+  async function triggerInstalled(details) {
+    if (onInstalledHandler) {
+      onInstalledHandler(details || { reason: 'install' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  async function triggerStartup() {
+    if (onStartupHandler) {
+      onStartupHandler();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  async function triggerAlarm(alarm) {
+    if (onAlarmHandler) {
+      onAlarmHandler(alarm);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  async function triggerStorageChanged(changes, namespace) {
+    if (onStorageChangedHandler) {
+      onStorageChangedHandler(changes || {}, namespace || 'local');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  return {
+    chrome,
+    storageData,
+    createdTabs,
+    sendMessage,
+    sendExternalMessage,
+    triggerInstalled,
+    triggerStartup,
+    triggerAlarm,
+    triggerStorageChanged
+  };
 }
 
 export async function loadScriptInVm(relativeScriptPath, globals = {}) {
@@ -153,6 +232,10 @@ export async function loadScriptInVm(relativeScriptPath, globals = {}) {
     Promise,
     URL,
     URLSearchParams,
+    ArrayBuffer,
+    Uint8Array,
+    atob: (str) => Buffer.from(str, 'base64').toString('binary'),
+    btoa: (str) => Buffer.from(str, 'binary').toString('base64'),
     ...globals,
     globalThis: {}
   };

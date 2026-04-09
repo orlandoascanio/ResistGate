@@ -39,6 +39,60 @@ describe('ResistGate background integration', () => {
     expect(saved.settings.freeExperience.schedule.days).toEqual([1, 2, 6]);
   });
 
+  it('opens pricing with the ResistGate product slug in checkout params', async () => {
+    const response = await env.sendMessage({ action: 'openPricingPage' });
+    expect(response.success).toBe(true);
+    expect(response.url).toContain('https://www.orlandoascanio.com/en/pricing');
+    expect(response.url).toContain('productSlug=resistgate');
+    expect(env.createdTabs).toHaveLength(1);
+    expect(env.createdTabs[0].url).toContain('https://www.orlandoascanio.com/en/pricing');
+    expect(env.createdTabs[0].url).toContain('productSlug=resistgate');
+    expect(env.createdTabs[0].url).toContain('source=extension');
+  });
+
+  it('activates Pro automatically from a trusted website message', async () => {
+    const activationFetch = async (url, init) => {
+      expect(url).toBe('https://www.orlandoascanio.com/api/entitlement/activate-install');
+      expect(init?.method).toBe('POST');
+
+      const body = JSON.parse(init.body);
+      expect(body.activationToken).toBe('signed-activation-token');
+      expect(typeof body.deviceId).toBe('string');
+      expect(body.deviceId.length).toBeGreaterThan(0);
+
+      return {
+        ok: true,
+        json: async () => ({
+          pro: true,
+          productSlug: 'resistgate',
+          billingCycle: 'yearly',
+          email: 'pro@example.com',
+          subscriptionStatus: 'ACTIVE',
+          installToken: 'install-token-123'
+        })
+      };
+    };
+
+    const activationEnv = createChromeMock();
+    await loadScriptInVm('background.js', {
+      chrome: activationEnv.chrome,
+      fetch: activationFetch
+    });
+
+    const response = await activationEnv.sendExternalMessage(
+      { action: 'activateProFromWebsite', activationToken: 'signed-activation-token' },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.subscription.tier).toBe('pro');
+    expect(response.subscription.billingCycle).toBe('yearly');
+    expect(response.subscription.email).toBe('pro@example.com');
+    expect(response.subscription.installToken).toBe('install-token-123');
+    expect(activationEnv.storageData.settings.subscription.tier).toBe('pro');
+    expect(activationEnv.createdTabs.at(-1).url).toContain('options/options.html?activation=success');
+  });
+
   it('enforces strict mode lock during active schedule', async () => {
     const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
     settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
