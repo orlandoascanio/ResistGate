@@ -116,9 +116,11 @@ function renderIntentionPage() {
   const goalDisplay = document.getElementById('personal-goal-display');
   const breathingExercise = document.getElementById('breathing-exercise');
   const pageTitle = document.getElementById('page-title');
+  const container = document.querySelector('.container');
 
   if (!isPro || intentionPage.enabled !== true) {
     if (intentionSection) intentionSection.classList.add('hidden');
+    if (container) container.classList.remove('has-intention');
     return;
   }
 
@@ -143,8 +145,10 @@ function renderIntentionPage() {
 
   if (hasContent) {
     intentionSection.classList.remove('hidden');
+    if (container) container.classList.add('has-intention');
   } else {
     intentionSection.classList.add('hidden');
+    if (container) container.classList.remove('has-intention');
   }
 }
 
