@@ -9,6 +9,7 @@ const INSTALLATION_KEY = 'installation';
 
 const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
 const ACCESS_ALARM_PREFIX = 'resistgate-access-expire-';
+const COMMITMENT_ALARM = 'resistgate-commitment-expire';
 const ENTITLEMENT_REFRESH_ALARM = 'resistgate-entitlement-refresh';
 const MAX_ANALYTICS_EVENTS = 3000;
 const RESISTGATE_SITE_URL = 'https://www.orlandoascanio.com';
@@ -68,6 +69,17 @@ const DEFAULT_SETTINGS = {
       delayStepSeconds: 10,
       maxDelaySeconds: 90,
       lockMinutes: 30
+    },
+    commitmentMode: {
+      active: false,
+      durationHours: 2,
+      activatedAt: null,
+      expiresAt: null
+    },
+    intentionPage: {
+      enabled: false,
+      personalGoal: '',
+      showBreathingExercise: false
     }
   }
 };
@@ -103,6 +115,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
   if (alarm.name.startsWith(BLOCK_ALARM_PREFIX) || alarm.name.startsWith(ACCESS_ALARM_PREFIX)) {
     void queueRulesUpdate(`alarm:${alarm.name}`);
+  }
+
+  if (alarm.name === COMMITMENT_ALARM) {
+    void (async () => {
+      try {
+        const settings = await getSettings();
+        if (settings.proFeatures?.commitmentMode?.active) {
+          settings.proFeatures.commitmentMode = {
+            active: false,
+            durationHours: settings.proFeatures.commitmentMode.durationHours || 2,
+            activatedAt: null,
+            expiresAt: null
+          };
+          await saveSettings(settings);
+          await queueRulesUpdate('commitment-expired');
+        }
+      } catch (err) {
+        console.error('Commitment mode expiry failed:', err);
+      }
+    })();
   }
 
   if (alarm.name === ENTITLEMENT_REFRESH_ALARM) {
@@ -175,6 +207,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'updateSettings': {
           const currentSettings = await getSettings();
           const nextSettings = sanitizeSettings(request.settings || {});
+
+          if (isCommitmentModeActive(currentSettings, Date.now())) {
+            throw new Error('Commitment Mode is active. All settings are locked until it expires.');
+          }
 
           if (isConfigurationLocked(currentSettings, Date.now())) {
             const isTryingToDisableStrict = currentSettings.proFeatures?.strictModeEnabled === true && nextSettings.proFeatures?.strictModeEnabled === false;
@@ -261,6 +297,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           const report = await getWeeklyReport();
           sendResponse({ success: true, report });
+          return;
+        }
+
+        case 'activateCommitmentMode': {
+          const settings = await getSettings();
+          if (!hasProAccess(settings)) {
+            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
+            return;
+          }
+
+          const now = Date.now();
+          if (isCommitmentModeActive(settings, now)) {
+            sendResponse({ success: false, error: 'Commitment Mode is already active.' });
+            return;
+          }
+
+          const hours = clamp(positiveInt(request.durationHours, 2), 1, 24);
+          const expiresAt = now + hours * 60 * 60 * 1000;
+
+          settings.proFeatures.commitmentMode = {
+            active: true,
+            durationHours: hours,
+            activatedAt: now,
+            expiresAt
+          };
+
+          await saveSettings(settings);
+          chrome.alarms.create(COMMITMENT_ALARM, { when: expiresAt });
+          await queueRulesUpdate('activateCommitmentMode');
+
+          if (hasProAccess(settings)) {
+            await appendAnalyticsEvent({
+              type: 'blocked_visit',
+              timestamp: now,
+              domain: 'commitment-mode'
+            });
+          }
+
+          sendResponse({ success: true, expiresAt });
+          return;
+        }
+
+        case 'deactivateCommitmentMode': {
+          sendResponse({ success: false, error: 'Commitment Mode cannot be deactivated early. Wait for it to expire.' });
+          return;
+        }
+
+        case 'getCommitmentModeStatus': {
+          const settings = await getSettings();
+          const now = Date.now();
+          const active = isCommitmentModeActive(settings, now);
+          const cm = settings.proFeatures?.commitmentMode || {};
+          const remainingMs = active ? Math.max(0, cm.expiresAt - now) : 0;
+          sendResponse({
+            success: true,
+            status: {
+              active,
+              expiresAt: active ? cm.expiresAt : null,
+              remainingSeconds: Math.ceil(remainingMs / 1000)
+            }
+          });
           return;
         }
 
@@ -463,6 +560,12 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
 
   const parsedMeta = sanitizeAccessMeta(meta);
   const now = Date.now();
+
+  if (isCommitmentModeActive(settings, now)) {
+    const remainingMs = Math.max(0, (settings.proFeatures.commitmentMode.expiresAt || 0) - now);
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    throw new Error(`Commitment Mode is active. All access is locked for ${remainingMin} more minutes.`);
+  }
 
   if (parsedMeta.method === 'manualOverride' && isStrictFocusActive(settings, now)) {
     throw new Error('Strict Mode is active. Manual override is disabled during this focus window.');
@@ -783,7 +886,9 @@ function sanitizeSettings(settings) {
       delayStepSeconds: clamp(positiveInt(incomingOverrideCooldown.delayStepSeconds, 10), 5, 45),
       maxDelaySeconds: clamp(positiveInt(incomingOverrideCooldown.maxDelaySeconds, 90), 15, 180),
       lockMinutes: clamp(positiveInt(incomingOverrideCooldown.lockMinutes, 30), 5, 180)
-    }
+    },
+    commitmentMode: sanitizeCommitmentMode(incoming.proFeatures?.commitmentMode),
+    intentionPage: sanitizeIntentionPage(incoming.proFeatures?.intentionPage)
   };
 
   return {
@@ -802,6 +907,42 @@ function sanitizeInstallation(installation) {
   return {
     deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId()
   };
+}
+
+function sanitizeCommitmentMode(commitmentMode) {
+  const incoming = commitmentMode && typeof commitmentMode === 'object' ? commitmentMode : {};
+  const now = Date.now();
+  const expiresAt = sanitizeTimestamp(incoming.expiresAt);
+  const isExpired = expiresAt !== null && expiresAt <= now;
+  return {
+    active: isExpired ? false : incoming.active === true,
+    durationHours: clamp(positiveInt(incoming.durationHours, 2), 1, 24),
+    activatedAt: isExpired ? null : sanitizeTimestamp(incoming.activatedAt),
+    expiresAt: isExpired ? null : expiresAt
+  };
+}
+
+function sanitizeIntentionPage(intentionPage) {
+  const incoming = intentionPage && typeof intentionPage === 'object' ? intentionPage : {};
+  const personalGoal = typeof incoming.personalGoal === 'string'
+    ? incoming.personalGoal.slice(0, 200).trim()
+    : '';
+  return {
+    enabled: incoming.enabled === true,
+    personalGoal,
+    showBreathingExercise: incoming.showBreathingExercise === true
+  };
+}
+
+function isCommitmentModeActive(settings, now) {
+  const cm = settings?.proFeatures?.commitmentMode;
+  if (!cm || cm.active !== true) {
+    return false;
+  }
+  if (!cm.expiresAt || cm.expiresAt <= now) {
+    return false;
+  }
+  return true;
 }
 
 function sanitizeTemporaryAccess(temporaryAccess) {
@@ -1866,6 +2007,9 @@ if (typeof globalThis !== 'undefined') {
     base64UrlDecode,
     base64UrlDecodeToBuffer,
     removeExpiredBlocks,
-    removeExpiredTemporaryAccess
+    removeExpiredTemporaryAccess,
+    sanitizeCommitmentMode,
+    sanitizeIntentionPage,
+    isCommitmentModeActive
   };
 }

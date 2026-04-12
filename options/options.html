@@ -253,6 +253,53 @@
         </details>
       </section>
 
+      <section class="panel pro-panel">
+        <h2>Commitment Mode</h2>
+        <p class="helper">Lock yourself out completely for a set time. No override, no challenge — just pure focus.</p>
+
+        <div id="commitment-status" class="commitment-status hidden">
+          <p id="commitment-active-text" class="commitment-active-text"></p>
+        </div>
+
+        <label for="commitment-duration-hours">Lock duration (hours)</label>
+        <input id="commitment-duration-hours" type="number" min="1" max="24" step="1" value="2" data-pro-feature="commitmentMode" />
+        <p class="helper">Choose 1–24 hours. Once activated, there is <strong>no way</strong> to disable it early.</p>
+
+        <button id="activate-commitment-btn" class="btn btn-primary" data-pro-feature="commitmentMode" style="margin-top: 12px;">Activate Commitment Mode</button>
+      </section>
+
+      <section class="panel pro-panel">
+        <h2>Intention Page</h2>
+        <p class="helper">Turn the blocked page into a moment of intention. Instead of just "BLOCKED," see your personal goal or a breathing exercise.</p>
+
+        <label class="switch-row">
+          <input id="intention-page-enabled" type="checkbox" data-pro-feature="intentionPage" />
+          <span>
+            <strong>Enable Intention Page</strong>
+            <small>Replace the default block header with your personal goal.</small>
+          </span>
+        </label>
+
+        <label for="personal-goal-text" class="sub-field">Your personal goal</label>
+        <input
+          id="personal-goal-text"
+          class="sub-field"
+          type="text"
+          maxlength="200"
+          placeholder="Example: Ship the MVP by Friday"
+          data-pro-feature="intentionPage"
+        />
+        <p class="helper">This appears on the blocked page to remind you why you're staying focused.</p>
+
+        <label class="switch-row sub-toggle">
+          <input id="breathing-exercise-enabled" type="checkbox" data-pro-feature="intentionPage" />
+          <span>
+            <strong>Show breathing exercise</strong>
+            <small>A guided 4-7-8 breathing cycle appears on the blocked page to help you reset.</small>
+          </span>
+        </label>
+      </section>
+
       <button data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
   </main>
@@ -264,20 +311,22 @@
       <ul class="price-points">
         <li>Analytics dashboard</li>
         <li>Weekly discipline reports</li>
+        <li>Commitment Mode — total lockout, no override</li>
+        <li>Intention Page — personal goals &amp; breathing exercises</li>
         <li>Strict Mode and stronger unlock rules</li>
       </ul>
       <div class="price-tiers">
         <div class="price-tier">
-          <span class="price-amount">$5.99</span>
+          <span class="price-amount">$3.99</span>
           <span class="price-cycle">/ month</span>
         </div>
         <div class="price-tier price-tier-featured">
-          <span class="price-amount">$34.99</span>
+          <span class="price-amount">$29.99</span>
           <span class="price-cycle">/ year</span>
           <span class="price-badge">Best value</span>
         </div>
         <div class="price-tier">
-          <span class="price-amount">$79</span>
+          <span class="price-amount">$49.99</span>
           <span class="price-cycle">once</span>
           <small class="price-note">Lifetime · Founding member</small>
         </div>

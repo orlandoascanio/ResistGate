@@ -85,6 +85,8 @@ function loadBlockedSites() {
             return;
         }
 
+        renderCommitmentPopupStatus();
+
         const blocklist = response.settings.blocklist || [];
         const listElement = document.getElementById('blocked-sites-list');
         const emptyMsg = document.getElementById('empty-blocklist-msg');
@@ -227,6 +229,22 @@ function showMessage(text, type = 'info') {
             messageDiv.remove();
         }
     }, 3000);
+}
+
+function renderCommitmentPopupStatus() {
+    const statusEl = document.getElementById('commitment-mode-popup-status');
+    const textEl = document.getElementById('commitment-popup-text');
+    if (!statusEl || !textEl) return;
+
+    chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
+        if (response && response.success && response.status?.active) {
+            const remainMin = Math.ceil(response.status.remainingSeconds / 60);
+            textEl.textContent = `🔒 Commitment Mode — ${remainMin}m remaining`;
+            statusEl.classList.remove('hidden');
+        } else {
+            statusEl.classList.add('hidden');
+        }
+    });
 }
 
 if (typeof globalThis !== 'undefined') {
