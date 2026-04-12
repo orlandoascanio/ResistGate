@@ -24,15 +24,25 @@
         <label for="new-blocked-site">Domain</label>
         <div class="input-row">
           <input id="new-blocked-site" type="text" placeholder="e.g., youtube.com" aria-describedby="new-site-hint" />
-          <button id="add-site-btn" class="btn btn-primary">Block this site</button>
         </div>
         <p class="helper-text" id="new-site-hint">Enter a domain like youtube.com (no https://)</p>
+        <button id="block-current-tab-btn" class="btn btn-secondary" style="width:100%;margin-top:6px;">Block current tab</button>
+      </section>
+
+      <section id="work-timer-section" class="section hidden">
+        <div class="work-timer-head">
+          <span class="work-timer-label">💼 Focus Timer</span>
+          <span id="work-timer-display" class="work-timer-display">0 min</span>
+        </div>
+        <p id="work-timer-sites" class="work-timer-sites"></p>
+        <button id="work-timer-toggle-btn" class="btn btn-work-timer">Start</button>
       </section>
 
       <section class="section blocked-sites-section">
         <div id="commitment-mode-popup-status" class="commitment-popup-status hidden">
           <span id="commitment-popup-text">Commitment Mode active</span>
         </div>
+        <button id="commitment-mode-activate-btn" class="btn btn-commitment hidden">🔒 Activate Commitment Mode</button>
         <div class="section-head">
           <h2>Currently Blocked</h2>
           <a href="#" id="open-options-btn" class="manage-link">Manage all</a>

@@ -11,6 +11,11 @@ const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
 const ACCESS_ALARM_PREFIX = 'resistgate-access-expire-';
 const COMMITMENT_ALARM = 'resistgate-commitment-expire';
 const ENTITLEMENT_REFRESH_ALARM = 'resistgate-entitlement-refresh';
+const DAILY_RESET_ALARM = 'resistgate-daily-reset';
+const BUNDLE_UNLOCK_ALARM_PREFIX = 'resistgate-bundle-unlock-';
+const DAILY_COUNT_KEY = 'dailyBlockCount';
+const RESISTANCE_COUNTERS_KEY = 'resistanceCounters';
+const WORK_TIMER_KEY = 'workTimer';
 const MAX_ANALYTICS_EVENTS = 3000;
 const RESISTGATE_SITE_URL = 'https://www.orlandoascanio.com';
 const RESISTGATE_PRICING_PATH = '/en/pricing';
@@ -113,7 +118,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     return;
   }
 
-  if (alarm.name.startsWith(BLOCK_ALARM_PREFIX) || alarm.name.startsWith(ACCESS_ALARM_PREFIX)) {
+  if (alarm.name.startsWith(BLOCK_ALARM_PREFIX) || alarm.name.startsWith(ACCESS_ALARM_PREFIX) || alarm.name.startsWith(BUNDLE_UNLOCK_ALARM_PREFIX)) {
     void queueRulesUpdate(`alarm:${alarm.name}`);
   }
 
@@ -139,6 +144,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
   if (alarm.name === ENTITLEMENT_REFRESH_ALARM) {
     void refreshEntitlement();
+  }
+
+  if (alarm.name === DAILY_RESET_ALARM) {
+    void (async () => {
+      try {
+        const today = getDateKey(Date.now());
+        await setInStorage({ [DAILY_COUNT_KEY]: { date: today, count: 0 } });
+        await saveWorkTimer({ todayMinutes: 0, date: today, running: false, startedAt: null });
+        chrome.action.setBadgeText({ text: '' });
+        await queueRulesUpdate('daily-reset');
+      } catch (err) {
+        console.error('Daily badge reset failed:', err);
+      }
+    })();
   }
 });
 
@@ -180,8 +199,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         case 'recordBlockedVisit': {
-          await recordBlockedVisit(request.urlPattern || request.domain);
-          sendResponse({ success: true });
+          const resistanceCount = await recordBlockedVisit(request.urlPattern || request.domain);
+          sendResponse({ success: true, resistanceCount });
+          return;
+        }
+
+        case 'getResistanceCount': {
+          const count = await getResistanceCount(request.domain);
+          sendResponse({ success: true, count });
           return;
         }
 
@@ -336,6 +361,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        case 'getWorkTimerState': {
+          const wt = await getWorkTimer();
+          const effectiveMinutes = Math.floor(getEffectiveWorkMinutes(wt, Date.now()));
+          sendResponse({ success: true, state: { ...wt, effectiveMinutes } });
+          return;
+        }
+
+        case 'startWorkTimer': {
+          const wt = await getWorkTimer();
+          if (!wt.running) {
+            wt.running = true;
+            wt.startedAt = Date.now();
+            await saveWorkTimer(wt);
+          }
+          const effectiveMinutes = Math.floor(getEffectiveWorkMinutes(wt, Date.now()));
+          sendResponse({ success: true, state: { ...wt, effectiveMinutes } });
+          return;
+        }
+
+        case 'stopWorkTimer': {
+          const wt = await getWorkTimer();
+          if (wt.running && wt.startedAt) {
+            const elapsed = (Date.now() - wt.startedAt) / 60000;
+            wt.todayMinutes = Math.round((wt.todayMinutes + elapsed) * 10) / 10;
+            wt.running = false;
+            wt.startedAt = null;
+            await saveWorkTimer(wt);
+            await queueRulesUpdate('stopWorkTimer');
+          }
+          const effectiveMinutes = Math.floor(getEffectiveWorkMinutes(wt, Date.now()));
+          sendResponse({ success: true, state: { ...wt, effectiveMinutes } });
+          return;
+        }
+
         case 'getCommitmentModeStatus': {
           const settings = await getSettings();
           const now = Date.now();
@@ -435,6 +494,14 @@ async function initializeExtension(reason) {
     // Register daily entitlement refresh alarm
     chrome.alarms.create(ENTITLEMENT_REFRESH_ALARM, { periodInMinutes: 1440 });
 
+    // Register daily badge reset alarm (fires at midnight, repeats every 24h)
+    const nextMidnight = new Date();
+    nextMidnight.setHours(24, 0, 0, 0);
+    chrome.alarms.create(DAILY_RESET_ALARM, { when: nextMidnight.getTime(), periodInMinutes: 1440 });
+
+    // Restore badge count for today (survives service worker restarts)
+    await restoreDailyBadge();
+
     initialized = true;
     await queueRulesUpdate(`initialize:${reason}`);
     console.log(`ResistGate initialized (${reason})`);
@@ -475,8 +542,10 @@ async function updateBlockingRules(reason) {
   }
 
   await syncExpiryAlarms(cleanedBlocklist.value, cleanedAccess.value, now);
+  await syncBundleUnlockAlarms(cleanedBlocklist.value, now);
 
-  const rulesToAdd = buildBlockingRules(settings, cleanedBlocklist.value, cleanedAccess.value, now);
+  const workTimer = await getWorkTimer();
+  const rulesToAdd = buildBlockingRules(settings, cleanedBlocklist.value, cleanedAccess.value, now, workTimer);
 
   const existingRules = await chrome.declarativeNetRequest.getSessionRules();
   const removeRuleIds = existingRules.map((rule) => rule.id);
@@ -491,7 +560,7 @@ async function updateBlockingRules(reason) {
   );
 }
 
-function buildBlockingRules(settings, blocklist, temporaryAccess, now) {
+function buildBlockingRules(settings, blocklist, temporaryAccess, now, workTimer) {
   if (!settings.enabled) {
     return [];
   }
@@ -517,6 +586,14 @@ function buildBlockingRules(settings, blocklist, temporaryAccess, now) {
       continue;
     }
 
+    // Skip the block rule if the temptation bundle condition is already met
+    if (entry.temptationBundle?.enabled && isBundleConditionMet(entry, workTimer ?? {}, now)) {
+      continue;
+    }
+
+    const commitmentActive = isCommitmentModeActive(settings, now);
+    const redirectPage = commitmentActive ? 'commitment-page/index.html' : 'friction-page/index.html';
+
     rules.push({
       id: ruleId++,
       priority: 1,
@@ -524,7 +601,7 @@ function buildBlockingRules(settings, blocklist, temporaryAccess, now) {
         type: 'redirect',
         redirect: {
           url:
-            `${chrome.runtime.getURL('friction-page/index.html')}?originalUrl=` +
+            `${chrome.runtime.getURL(redirectPage)}?originalUrl=` +
             encodeURIComponent(`https://${domain}`)
         }
       },
@@ -635,21 +712,69 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
 }
 
 async function recordBlockedVisit(urlPattern) {
-  const settings = await getSettings();
-  if (!hasProAccess(settings)) {
-    return;
-  }
-
   const domain = normalizeDomain(urlPattern);
   if (!domain) {
-    return;
+    return 0;
   }
 
-  await appendAnalyticsEvent({
-    type: 'blocked_visit',
-    timestamp: Date.now(),
-    domain
-  });
+  // Always track for all users: badge count and per-site resistance counter
+  await incrementDailyBadge();
+  const resistanceCount = await incrementResistanceCount(domain);
+
+  // Pro analytics only
+  const settings = await getSettings();
+  if (hasProAccess(settings)) {
+    await appendAnalyticsEvent({
+      type: 'blocked_visit',
+      timestamp: Date.now(),
+      domain
+    });
+  }
+
+  return resistanceCount;
+}
+
+async function incrementDailyBadge() {
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([DAILY_COUNT_KEY]);
+  const data = result[DAILY_COUNT_KEY] || {};
+  const count = (data.date === today ? (data.count || 0) : 0) + 1;
+  await setInStorage({ [DAILY_COUNT_KEY]: { date: today, count } });
+  chrome.action.setBadgeText({ text: String(count) });
+  chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
+}
+
+async function restoreDailyBadge() {
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([DAILY_COUNT_KEY]);
+  const data = result[DAILY_COUNT_KEY] || {};
+  if (data.date === today && data.count > 0) {
+    chrome.action.setBadgeText({ text: String(data.count) });
+    chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
+  } else {
+    chrome.action.setBadgeText({ text: '' });
+  }
+}
+
+async function incrementResistanceCount(domain) {
+  if (!domain) return 0;
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([RESISTANCE_COUNTERS_KEY]);
+  const data = result[RESISTANCE_COUNTERS_KEY] || {};
+  const todayData = (data[today] && typeof data[today] === 'object') ? { ...data[today] } : {};
+  const newCount = (todayData[domain] || 0) + 1;
+  todayData[domain] = newCount;
+  await setInStorage({ [RESISTANCE_COUNTERS_KEY]: { [today]: todayData } });
+  return newCount;
+}
+
+async function getResistanceCount(domain) {
+  if (!domain) return 0;
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([RESISTANCE_COUNTERS_KEY]);
+  const data = result[RESISTANCE_COUNTERS_KEY] || {};
+  const todayData = data[today] || {};
+  return todayData[domain] || 0;
 }
 
 async function recordAnalyticsEvent(type, domain) {
@@ -785,6 +910,46 @@ async function syncExpiryAlarms(blocklist, temporaryAccess, now) {
   }
 }
 
+async function syncBundleUnlockAlarms(blocklist, now) {
+  const allAlarms = await chrome.alarms.getAll();
+  const existingNames = new Set(
+    allAlarms
+      .map((a) => a.name)
+      .filter((n) => n.startsWith(BUNDLE_UNLOCK_ALARM_PREFIX))
+  );
+
+  const desiredAlarms = [];
+
+  for (const entry of blocklist) {
+    const bundle = entry?.temptationBundle;
+    if (!bundle || bundle.enabled !== true || bundle.conditionType !== 'time_of_day') continue;
+
+    const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
+    const d = new Date(now);
+    const unlock = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0).getTime();
+
+    // Only schedule if afterTime is still in the future today
+    if (unlock > now) {
+      desiredAlarms.push({
+        name: `${BUNDLE_UNLOCK_ALARM_PREFIX}${entry.urlPattern}`,
+        when: unlock
+      });
+    }
+  }
+
+  const desiredNames = new Set(desiredAlarms.map((a) => a.name));
+
+  for (const name of existingNames) {
+    if (!desiredNames.has(name)) {
+      await chrome.alarms.clear(name);
+    }
+  }
+
+  for (const alarm of desiredAlarms) {
+    await chrome.alarms.create(alarm.name, { when: alarm.when });
+  }
+}
+
 function sanitizeSettings(settings) {
   const incoming = settings && typeof settings === 'object' ? settings : {};
   const blocklist = sanitizeBlocklist(incoming.blocklist);
@@ -899,6 +1064,73 @@ function sanitizeInstallation(installation) {
   return {
     deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId()
   };
+}
+
+function sanitizeTemptationBundle(bundle) {
+  const incoming = bundle && typeof bundle === 'object' ? bundle : {};
+  const conditionType = incoming.conditionType === 'work_timer' ? 'work_timer' : 'time_of_day';
+  const afterTime = typeof incoming.afterTime === 'string' && /^\d{2}:\d{2}$/.test(incoming.afterTime)
+    ? incoming.afterTime
+    : '17:00';
+  const requiredMinutes = Math.max(1, Math.min(480, positiveInt(incoming.requiredMinutes, 60)));
+  return {
+    enabled: incoming.enabled === true,
+    conditionType,
+    afterTime,
+    requiredMinutes
+  };
+}
+
+function sanitizeWorkTimer(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const today = getDateKey(Date.now());
+  const sameDay = incoming.date === today;
+  return {
+    todayMinutes: sameDay && Number.isFinite(Number(incoming.todayMinutes))
+      ? Math.max(0, Math.round(Number(incoming.todayMinutes) * 10) / 10)
+      : 0,
+    date: today,
+    running: sameDay && incoming.running === true,
+    startedAt: (sameDay && incoming.running === true && Number.isFinite(Number(incoming.startedAt)))
+      ? Number(incoming.startedAt)
+      : null
+  };
+}
+
+async function getWorkTimer() {
+  const result = await getFromStorage([WORK_TIMER_KEY]);
+  return sanitizeWorkTimer(result[WORK_TIMER_KEY] ?? null);
+}
+
+async function saveWorkTimer(wt) {
+  await setInStorage({ [WORK_TIMER_KEY]: wt });
+}
+
+function getEffectiveWorkMinutes(wt, now) {
+  let total = Number(wt?.todayMinutes) || 0;
+  if (wt?.running && wt?.startedAt) {
+    total += (now - wt.startedAt) / 60000;
+  }
+  return total;
+}
+
+function isBundleConditionMet(entry, wt, now) {
+  const bundle = entry?.temptationBundle;
+  if (!bundle || bundle.enabled !== true) return false;
+
+  if (bundle.conditionType === 'time_of_day') {
+    const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
+    const d = new Date(now);
+    const currentMinutes = d.getHours() * 60 + d.getMinutes();
+    return currentMinutes >= (h * 60 + m);
+  }
+
+  if (bundle.conditionType === 'work_timer') {
+    const required = Number(bundle.requiredMinutes) || 60;
+    return getEffectiveWorkMinutes(wt, now) >= required;
+  }
+
+  return false;
 }
 
 function sanitizeCommitmentMode(commitmentMode) {
@@ -1055,6 +1287,12 @@ function sanitizeBlocklist(blocklist) {
       }
     } else {
       delete entry.unblockAt;
+    }
+
+    if (rawEntry.temptationBundle && typeof rawEntry.temptationBundle === 'object') {
+      entry.temptationBundle = sanitizeTemptationBundle(rawEntry.temptationBundle);
+    } else {
+      delete entry.temptationBundle;
     }
 
     deduped.push(entry);
@@ -2002,6 +2240,12 @@ if (typeof globalThis !== 'undefined') {
     removeExpiredTemporaryAccess,
     sanitizeCommitmentMode,
     sanitizeIntentionPage,
-    isCommitmentModeActive
+    isCommitmentModeActive,
+    sanitizeTemptationBundle,
+    sanitizeWorkTimer,
+    isBundleConditionMet,
+    getEffectiveWorkMinutes,
+    syncBundleUnlockAlarms,
+    BUNDLE_UNLOCK_ALARM_PREFIX
   };
 }

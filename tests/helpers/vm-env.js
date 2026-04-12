@@ -143,6 +143,10 @@ export function createChromeMock() {
     declarativeNetRequest: {
       getSessionRules: async () => [],
       updateSessionRules: async () => {}
+    },
+    action: {
+      setBadgeText: () => {},
+      setBadgeBackgroundColor: () => {}
     }
   };
 

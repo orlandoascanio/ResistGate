@@ -47,6 +47,7 @@ let activeTab = 'general';
 let queuedProScreen = null;
 let cachedSettings = null;
 let _paywallReturnFocus = null;
+let commitmentCountdownTimer = null;
 
 document.addEventListener('DOMContentLoaded', function () {
   const newBlockedSiteInput = document.getElementById('new-blocked-site');
@@ -353,6 +354,17 @@ function renderProFeatureInputs() {
   renderCommitmentStatus();
 }
 
+function formatCommitmentCountdown(remainingMs) {
+  const totalSecs = Math.max(0, Math.ceil(remainingMs / 1000));
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0) {
+    return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+  }
+  return `${m}m ${String(s).padStart(2, '0')}s`;
+}
+
 function renderCommitmentStatus() {
   const statusEl = document.getElementById('commitment-status');
   const textEl = document.getElementById('commitment-active-text');
@@ -361,13 +373,36 @@ function renderCommitmentStatus() {
     return;
   }
 
+  // Always clear any existing countdown before starting a new one
+  if (commitmentCountdownTimer !== null) {
+    clearInterval(commitmentCountdownTimer);
+    commitmentCountdownTimer = null;
+  }
+
   chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
-    if (response && response.success && response.status?.active) {
-      const remainMin = Math.ceil(response.status.remainingSeconds / 60);
-      textEl.textContent = `Commitment Mode is active. ${remainMin} minute${remainMin === 1 ? '' : 's'} remaining. All access is locked.`;
+    if (response && response.success && response.status?.active && response.status.expiresAt) {
+      const expiresAt = response.status.expiresAt;
+
       statusEl.classList.remove('hidden');
       activateBtn.disabled = true;
       activateBtn.textContent = 'Commitment Mode Active';
+
+      function tickCountdown() {
+        const remainingMs = expiresAt - Date.now();
+        if (remainingMs <= 0) {
+          clearInterval(commitmentCountdownTimer);
+          commitmentCountdownTimer = null;
+          textEl.textContent = 'Commitment Mode is active. 0m 00s remaining. All access is locked.';
+          // Re-render after a brief delay to let the alarm handler clean up
+          setTimeout(renderCommitmentStatus, 2000);
+          return;
+        }
+        textEl.textContent =
+          `Commitment Mode is active. ${formatCommitmentCountdown(remainingMs)} remaining. All access is locked.`;
+      }
+
+      tickCountdown();
+      commitmentCountdownTimer = setInterval(tickCountdown, 1000);
     } else {
       statusEl.classList.add('hidden');
       activateBtn.disabled = false;
@@ -475,6 +510,10 @@ function loadBlockedSites(blocklist = []) {
     const li = document.createElement('li');
     li.className = 'blocked-site-item';
 
+    // Top row: domain + remove button
+    const topRow = document.createElement('div');
+    topRow.className = 'blocked-site-row';
+
     const siteDomain = document.createElement('span');
     siteDomain.className = 'site-domain';
     siteDomain.textContent = entry.urlPattern;
@@ -485,8 +524,12 @@ function loadBlockedSites(blocklist = []) {
     removeButton.setAttribute('data-id', entry.id);
     removeButton.textContent = 'Remove';
 
-    li.appendChild(siteDomain);
-    li.appendChild(removeButton);
+    topRow.appendChild(siteDomain);
+    topRow.appendChild(removeButton);
+    li.appendChild(topRow);
+
+    // Temptation bundle config — badge injected into topRow, panel appended to li
+    li.appendChild(buildBundleConfig(entry, topRow));
 
     listElement.appendChild(li);
   });
@@ -495,6 +538,145 @@ function loadBlockedSites(blocklist = []) {
     button.addEventListener('click', function () {
       const id = this.getAttribute('data-id');
       removeBlockedSite(id);
+    });
+  });
+}
+
+function formatBundleBadge(bundle) {
+  if (!bundle || bundle.enabled !== true) return '+ Earn access';
+  if (bundle.conditionType === 'work_timer') {
+    return `\uD83C\uDFAF ${bundle.requiredMinutes || 60}\u202Fmin focus`;
+  }
+  const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `\u23F0 After ${hour}:${String(m).padStart(2, '0')}\u202F${period}`;
+}
+
+function buildBundleConfig(entry, topRow) {
+  const bundle = entry.temptationBundle || {};
+  const isEnabled = bundle.enabled === true;
+  const conditionType = bundle.conditionType || 'time_of_day';
+  const afterTime = bundle.afterTime || '17:00';
+  const requiredMinutes = bundle.requiredMinutes || 60;
+
+  // ── Badge in top row (always visible) ──────────────────────────
+  const badge = document.createElement('button');
+  badge.type = 'button';
+  badge.className = `bundle-badge ${isEnabled ? 'bundle-badge--on' : 'bundle-badge--off'}`;
+  badge.setAttribute('title', isEnabled ? 'Edit access condition' : 'Set an earn-access condition');
+  badge.textContent = formatBundleBadge(isEnabled ? bundle : null);
+  // Insert before the Remove button
+  topRow.insertBefore(badge, topRow.lastElementChild);
+
+  // ── Config panel (collapsed by default) ────────────────────────
+  const configPanel = document.createElement('div');
+  configPanel.className = 'bundle-config';
+  configPanel.style.display = 'none';
+
+  badge.addEventListener('click', function () {
+    const isOpen = configPanel.style.display !== 'none';
+    configPanel.style.display = isOpen ? 'none' : 'grid';
+  });
+
+  // Helper text at top of panel
+  const helpText = document.createElement('p');
+  helpText.className = 'bundle-help-text';
+  helpText.textContent = 'Instead of blocking, allow access only after the condition below is met.';
+
+  // Enable/disable toggle inside the panel
+  const toggleLabel = document.createElement('label');
+  toggleLabel.className = 'bundle-toggle-row';
+  const toggleCheck = document.createElement('input');
+  toggleCheck.type = 'checkbox';
+  toggleCheck.checked = isEnabled;
+  const toggleSpan = document.createElement('span');
+  toggleSpan.textContent = 'Enable Temptation Bundling for this site';
+  toggleLabel.appendChild(toggleCheck);
+  toggleLabel.appendChild(toggleSpan);
+
+  const typeLabel = document.createElement('label');
+  typeLabel.textContent = 'Unlock condition';
+  const typeSelect = document.createElement('select');
+  typeSelect.innerHTML = `
+    <option value="time_of_day">After a certain time of day</option>
+    <option value="work_timer">After N minutes on the work timer</option>
+  `;
+  typeSelect.value = conditionType;
+
+  const timeLabel = document.createElement('label');
+  timeLabel.textContent = conditionType === 'work_timer' ? 'Minutes of focus required' : 'Unlock after';
+
+  const timeInput = document.createElement('input');
+  timeInput.type = conditionType === 'work_timer' ? 'number' : 'time';
+  timeInput.min = conditionType === 'work_timer' ? '1' : undefined;
+  timeInput.max = conditionType === 'work_timer' ? '480' : undefined;
+  timeInput.value = conditionType === 'work_timer' ? String(requiredMinutes) : afterTime;
+
+  typeSelect.addEventListener('change', function () {
+    const isTimer = typeSelect.value === 'work_timer';
+    timeLabel.textContent = isTimer ? 'Minutes of focus required' : 'Unlock after';
+    timeInput.type = isTimer ? 'number' : 'time';
+    timeInput.min = isTimer ? '1' : '';
+    timeInput.max = isTimer ? '480' : '';
+    timeInput.value = isTimer ? String(requiredMinutes) : afterTime;
+  });
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary bundle-save-btn';
+  saveBtn.textContent = 'Save condition';
+  saveBtn.addEventListener('click', function () {
+    const newBundle = {
+      enabled: true,
+      conditionType: typeSelect.value,
+      afterTime: typeSelect.value === 'time_of_day' ? timeInput.value : (bundle.afterTime || '17:00'),
+      requiredMinutes: typeSelect.value === 'work_timer'
+        ? Math.max(1, parseInt(timeInput.value, 10) || 60)
+        : (bundle.requiredMinutes || 60)
+    };
+    saveBundleForEntry(entry.id, newBundle);
+    badge.className = 'bundle-badge bundle-badge--on';
+    badge.textContent = formatBundleBadge(newBundle);
+  });
+
+  toggleCheck.addEventListener('change', function () {
+    const condFields = [typeLabel, typeSelect, timeLabel, timeInput, saveBtn];
+    condFields.forEach((el) => { el.style.display = toggleCheck.checked ? '' : 'none'; });
+    if (!toggleCheck.checked) {
+      badge.className = 'bundle-badge bundle-badge--off';
+      badge.textContent = formatBundleBadge(null);
+      saveBundleForEntry(entry.id, { enabled: false, conditionType, afterTime, requiredMinutes });
+    }
+  });
+
+  // Hide condition fields initially if bundle is disabled
+  if (!isEnabled) {
+    [typeLabel, typeSelect, timeLabel, timeInput, saveBtn].forEach((el) => { el.style.display = 'none'; });
+  }
+
+  configPanel.appendChild(helpText);
+  configPanel.appendChild(toggleLabel);
+  configPanel.appendChild(typeLabel);
+  configPanel.appendChild(typeSelect);
+  configPanel.appendChild(timeLabel);
+  configPanel.appendChild(timeInput);
+  configPanel.appendChild(saveBtn);
+
+  return configPanel;
+}
+
+function saveBundleForEntry(entryId, bundle) {
+  withLatestSettings(function (settings) {
+    const entry = (settings.blocklist || []).find((e) => e.id === entryId);
+    if (!entry) return;
+    entry.temptationBundle = bundle;
+    chrome.runtime.sendMessage({ action: 'updateSettings', settings }, function (response) {
+      if (response && response.success) {
+        cachedSettings = settings;
+        showMessage('Condition saved.', 'success');
+      } else {
+        showMessage(response?.error || 'Unable to save condition.', 'error');
+      }
     });
   });
 }

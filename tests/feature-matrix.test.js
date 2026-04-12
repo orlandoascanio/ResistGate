@@ -830,4 +830,266 @@ describe('Feature Matrix Coverage', () => {
       // No error thrown means handler ran successfully
     });
   });
+
+  describe('Free: Temptation Bundling', () => {
+    describe('sanitizeTemptationBundle', () => {
+      it('returns safe defaults for null input', () => {
+        const result = hooks.sanitizeTemptationBundle(null);
+        expect(result.enabled).toBe(false);
+        expect(result.conditionType).toBe('time_of_day');
+        expect(result.afterTime).toBe('17:00');
+        expect(result.requiredMinutes).toBe(60);
+      });
+
+      it('preserves valid work_timer bundle', () => {
+        const result = hooks.sanitizeTemptationBundle({
+          enabled: true,
+          conditionType: 'work_timer',
+          requiredMinutes: 90
+        });
+        expect(result.enabled).toBe(true);
+        expect(result.conditionType).toBe('work_timer');
+        expect(result.requiredMinutes).toBe(90);
+      });
+
+      it('clamps requiredMinutes to 480 max; falls back to 60 for invalid values', () => {
+        // positiveInt rejects 0 and negatives → falls back to default 60
+        expect(hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'work_timer', requiredMinutes: 0 }).requiredMinutes).toBe(60);
+        expect(hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'work_timer', requiredMinutes: -10 }).requiredMinutes).toBe(60);
+        // Values above 480 are clamped
+        expect(hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'work_timer', requiredMinutes: 999 }).requiredMinutes).toBe(480);
+      });
+
+      it('rejects invalid afterTime format and falls back to 17:00', () => {
+        const result = hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'time_of_day', afterTime: 'bad' });
+        expect(result.afterTime).toBe('17:00');
+      });
+
+      it('preserves valid afterTime', () => {
+        const result = hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'time_of_day', afterTime: '09:30' });
+        expect(result.afterTime).toBe('09:30');
+      });
+
+      it('unknown conditionType falls back to time_of_day', () => {
+        const result = hooks.sanitizeTemptationBundle({ enabled: true, conditionType: 'unknown_type' });
+        expect(result.conditionType).toBe('time_of_day');
+      });
+    });
+
+    describe('sanitizeWorkTimer', () => {
+      it('returns zeroed state for null input', () => {
+        const result = hooks.sanitizeWorkTimer(null);
+        expect(result.todayMinutes).toBe(0);
+        expect(result.running).toBe(false);
+        expect(result.startedAt).toBeNull();
+      });
+
+      it('resets when stored date differs from today (day change)', () => {
+        const yesterday = '1999-12-31';
+        const result = hooks.sanitizeWorkTimer({ todayMinutes: 120, running: true, startedAt: 1000, date: yesterday });
+        expect(result.todayMinutes).toBe(0);
+        expect(result.running).toBe(false);
+        expect(result.startedAt).toBeNull();
+      });
+
+      it('preserves valid same-day state', () => {
+        const today = hooks.getDateKey(Date.now());
+        const startedAt = Date.now() - 5000;
+        const result = hooks.sanitizeWorkTimer({ todayMinutes: 45, running: true, startedAt, date: today });
+        expect(result.todayMinutes).toBe(45);
+        expect(result.running).toBe(true);
+        expect(result.startedAt).toBe(startedAt);
+      });
+    });
+
+    describe('getEffectiveWorkMinutes', () => {
+      it('returns todayMinutes when timer is stopped', () => {
+        const wt = { todayMinutes: 30, running: false, startedAt: null };
+        expect(hooks.getEffectiveWorkMinutes(wt, Date.now())).toBe(30);
+      });
+
+      it('adds elapsed time from running session', () => {
+        const startedAt = Date.now() - 10 * 60 * 1000; // 10 min ago
+        const wt = { todayMinutes: 20, running: true, startedAt };
+        const effective = hooks.getEffectiveWorkMinutes(wt, Date.now());
+        expect(effective).toBeGreaterThanOrEqual(29.9);
+        expect(effective).toBeLessThan(31);
+      });
+
+      it('returns 0 for null/empty timer', () => {
+        expect(hooks.getEffectiveWorkMinutes(null, Date.now())).toBe(0);
+        expect(hooks.getEffectiveWorkMinutes({}, Date.now())).toBe(0);
+      });
+    });
+
+    describe('isBundleConditionMet', () => {
+      it('returns false when bundle is not enabled', () => {
+        const entry = { temptationBundle: { enabled: false, conditionType: 'work_timer', requiredMinutes: 10 } };
+        const wt = { todayMinutes: 100, running: false, startedAt: null };
+        expect(hooks.isBundleConditionMet(entry, wt, Date.now())).toBe(false);
+      });
+
+      it('returns false when entry has no bundle', () => {
+        expect(hooks.isBundleConditionMet({}, {}, Date.now())).toBe(false);
+        expect(hooks.isBundleConditionMet(null, {}, Date.now())).toBe(false);
+      });
+
+      it('work_timer: returns false when minutes are insufficient', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 } };
+        const wt = { todayMinutes: 30, running: false, startedAt: null };
+        expect(hooks.isBundleConditionMet(entry, wt, Date.now())).toBe(false);
+      });
+
+      it('work_timer: returns true when minutes meet the threshold', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 } };
+        const wt = { todayMinutes: 60, running: false, startedAt: null };
+        expect(hooks.isBundleConditionMet(entry, wt, Date.now())).toBe(true);
+      });
+
+      it('work_timer: counts running session toward the total', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 } };
+        const startedAt = Date.now() - 30 * 60 * 1000; // 30 min ago
+        const wt = { todayMinutes: 30, running: true, startedAt };
+        expect(hooks.isBundleConditionMet(entry, wt, Date.now())).toBe(true);
+      });
+
+      it('time_of_day: returns false before afterTime', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '23:59' } };
+        // Use a known past timestamp: 2024-01-15 08:00 UTC
+        const morning = new Date('2024-01-15T08:00:00').getTime();
+        expect(hooks.isBundleConditionMet(entry, {}, morning)).toBe(false);
+      });
+
+      it('time_of_day: returns true at and after afterTime', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '17:00' } };
+        const after = new Date('2024-01-15T17:00:00').getTime();
+        expect(hooks.isBundleConditionMet(entry, {}, after)).toBe(true);
+
+        const wellAfter = new Date('2024-01-15T20:00:00').getTime();
+        expect(hooks.isBundleConditionMet(entry, {}, wellAfter)).toBe(true);
+      });
+
+      it('time_of_day: returns false one minute before afterTime', () => {
+        const entry = { temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '17:00' } };
+        const justBefore = new Date('2024-01-15T16:59:00').getTime();
+        expect(hooks.isBundleConditionMet(entry, {}, justBefore)).toBe(false);
+      });
+    });
+
+    describe('syncBundleUnlockAlarms', () => {
+      it('schedules an alarm for a future time_of_day bundle', async () => {
+        const midnight = new Date();
+        midnight.setHours(23, 59, 0, 0);
+        const entry = {
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '23:59' }
+        };
+        const now = new Date();
+        now.setHours(8, 0, 0, 0); // 8 AM — afterTime is in the future
+        await hooks.syncBundleUnlockAlarms([entry], now.getTime());
+        const alarms = await env.chrome.alarms.getAll();
+        const bundleAlarm = alarms.find((a) => a.name === `${hooks.BUNDLE_UNLOCK_ALARM_PREFIX}reddit.com`);
+        expect(bundleAlarm).toBeDefined();
+      });
+
+      it('does not schedule an alarm when time_of_day has already passed', async () => {
+        const entry = {
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '09:00' }
+        };
+        const now = new Date();
+        now.setHours(10, 0, 0, 0); // 10 AM — afterTime has passed
+        await hooks.syncBundleUnlockAlarms([entry], now.getTime());
+        const alarms = await env.chrome.alarms.getAll();
+        const bundleAlarm = alarms.find((a) => a.name === `${hooks.BUNDLE_UNLOCK_ALARM_PREFIX}reddit.com`);
+        expect(bundleAlarm).toBeUndefined();
+      });
+
+      it('does not schedule an alarm for work_timer bundles', async () => {
+        const entry = {
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 }
+        };
+        await hooks.syncBundleUnlockAlarms([entry], Date.now());
+        const alarms = await env.chrome.alarms.getAll();
+        const bundleAlarm = alarms.find((a) => a.name.startsWith(hooks.BUNDLE_UNLOCK_ALARM_PREFIX));
+        expect(bundleAlarm).toBeUndefined();
+      });
+
+      it('bundle unlock alarm triggers queueRulesUpdate', async () => {
+        await env.triggerAlarm({ name: `${hooks.BUNDLE_UNLOCK_ALARM_PREFIX}reddit.com` });
+        // No error thrown — handler ran successfully
+      });
+    });
+
+    describe('temptation bundle end-to-end via buildBlockingRules', () => {
+      it('skips block rule when time_of_day condition is met', () => {
+        const settings = hooks.sanitizeSettings({ enabled: true, blocklist: [] });
+        const entry = {
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '09:00' }
+        };
+        const evening = new Date('2024-01-15T18:00:00').getTime();
+        const rules = hooks.buildBlockingRules(settings, [entry], {}, evening, {});
+        expect(rules).toHaveLength(0);
+      });
+
+      it('keeps block rule when time_of_day condition is not yet met', () => {
+        const settings = hooks.sanitizeSettings({ enabled: true, blocklist: [] });
+        const entry = {
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'time_of_day', afterTime: '17:00' }
+        };
+        const morning = new Date('2024-01-15T08:00:00').getTime();
+        const rules = hooks.buildBlockingRules(settings, [entry], {}, morning, {});
+        expect(rules).toHaveLength(1);
+      });
+
+      it('skips block rule when work_timer condition is met', () => {
+        const settings = hooks.sanitizeSettings({ enabled: true, blocklist: [] });
+        const entry = {
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 }
+        };
+        const wt = { todayMinutes: 60, running: false, startedAt: null };
+        const rules = hooks.buildBlockingRules(settings, [entry], {}, Date.now(), wt);
+        expect(rules).toHaveLength(0);
+      });
+
+      it('keeps block rule when work_timer condition is not met', () => {
+        const settings = hooks.sanitizeSettings({ enabled: true, blocklist: [] });
+        const entry = {
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 }
+        };
+        const wt = { todayMinutes: 30, running: false, startedAt: null };
+        const rules = hooks.buildBlockingRules(settings, [entry], {}, Date.now(), wt);
+        expect(rules).toHaveLength(1);
+      });
+
+      it('sanitizeBlocklist preserves temptationBundle on entries', () => {
+        const result = hooks.sanitizeBlocklist([{
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: { enabled: true, conditionType: 'work_timer', requiredMinutes: 45 }
+        }]);
+        expect(result[0].temptationBundle).toBeDefined();
+        expect(result[0].temptationBundle.enabled).toBe(true);
+        expect(result[0].temptationBundle.requiredMinutes).toBe(45);
+      });
+
+      it('sanitizeBlocklist strips invalid temptationBundle', () => {
+        const result = hooks.sanitizeBlocklist([{
+          id: '1',
+          urlPattern: 'reddit.com',
+          temptationBundle: 'not-an-object'
+        }]);
+        expect(result[0].temptationBundle).toBeUndefined();
+      });
+    });
+  });
 });

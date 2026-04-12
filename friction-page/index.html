@@ -27,14 +27,23 @@
         </div>
       </div>
       <p class="site-info"><span id="blocked-site">Loading...</span></p>
+      <p id="resistance-count" class="helper-text" style="margin-top:4px;"></p>
       <p class="message" id="page-message">
         This is an intentional pause. Complete the challenge to unlock access —
         or close this tab and stay focused.
       </p>
     </header>
 
-    <div id="commitment-lock-banner" class="commitment-lock-banner hidden">
-      <p id="commitment-lock-text">Commitment Mode is active. All access is locked.</p>
+  <div id="intention-divider" class="intention-divider hidden" aria-hidden="true">
+    <span class="intention-divider-label">When you're ready</span>
+  </div>
+
+    <div id="bundle-panel" class="bundle-panel hidden">
+      <p id="bundle-label" class="bundle-label"></p>
+      <div class="bundle-progress-wrap">
+        <div id="bundle-progress-bar" class="bundle-progress-bar" style="width:0%"></div>
+      </div>
+      <p id="bundle-progress-text" class="bundle-progress-text"></p>
     </div>
 
     <div class="content">

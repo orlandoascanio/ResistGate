@@ -1,14 +1,29 @@
 // Popup Script
 const POPUP_PREVIEW_LIMIT = 5;
+let popupCommitmentTimer = null;
+let workTimerPollInterval = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     const newBlockedSiteInput = document.getElementById('new-blocked-site');
-    const addSiteBtn = document.getElementById('add-site-btn');
     const openOptionsBtn = document.getElementById('open-options-btn');
 
     loadBlockedSites();
+    loadWorkTimerUI();
 
-    addSiteBtn.addEventListener('click', addBlockedSite);
+    const blockCurrentTabBtn = document.getElementById('block-current-tab-btn');
+    if (blockCurrentTabBtn) {
+        blockCurrentTabBtn.addEventListener('click', blockCurrentTab);
+    }
+
+    const commitmentActivateBtn = document.getElementById('commitment-mode-activate-btn');
+    if (commitmentActivateBtn) {
+        commitmentActivateBtn.addEventListener('click', activateCommitmentMode);
+    }
+
+    const workTimerToggleBtn = document.getElementById('work-timer-toggle-btn');
+    if (workTimerToggleBtn) {
+        workTimerToggleBtn.addEventListener('click', toggleWorkTimer);
+    }
 
     newBlockedSiteInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
@@ -77,6 +92,33 @@ function addBlockedSite() {
     });
 }
 
+function blockCurrentTab() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        const tab = tabs && tabs[0];
+        if (!tab || !tab.url) {
+            showMessage('No active tab found.', 'error');
+            return;
+        }
+
+        let hostname;
+        try {
+            const url = new URL(tab.url);
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                showMessage('Cannot block this type of page.', 'error');
+                return;
+            }
+            hostname = url.hostname;
+        } catch {
+            showMessage('Cannot read this tab\'s URL.', 'error');
+            return;
+        }
+
+        const input = document.getElementById('new-blocked-site');
+        input.value = hostname;
+        addBlockedSite();
+    });
+}
+
 function loadBlockedSites() {
     chrome.runtime.sendMessage({
         action: 'getSettings'
@@ -85,7 +127,7 @@ function loadBlockedSites() {
             return;
         }
 
-        renderCommitmentPopupStatus();
+        renderCommitmentPopupStatus(response.settings);
 
         const blocklist = response.settings.blocklist || [];
         const listElement = document.getElementById('blocked-sites-list');
@@ -231,18 +273,161 @@ function showMessage(text, type = 'info') {
     }, 3000);
 }
 
-function renderCommitmentPopupStatus() {
+function isPopupProUser(settings) {
+    if (settings?.subscription?.tier !== 'pro') {
+        return false;
+    }
+    const expiresAt = settings.subscription.expiresAt;
+    if (!expiresAt) {
+        return true;
+    }
+    return Date.now() < expiresAt;
+}
+
+function formatPopupCountdown(remainingMs) {
+    const totalSecs = Math.max(0, Math.ceil(remainingMs / 1000));
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    if (h > 0) {
+        return `${h}h ${m}m`;
+    }
+    if (m > 0) {
+        return `${m}m ${String(s).padStart(2, '0')}s`;
+    }
+    return `${s}s`;
+}
+
+function renderCommitmentPopupStatus(settings) {
     const statusEl = document.getElementById('commitment-mode-popup-status');
     const textEl = document.getElementById('commitment-popup-text');
-    if (!statusEl || !textEl) return;
+    const activateBtn = document.getElementById('commitment-mode-activate-btn');
+    if (!statusEl || !textEl || !activateBtn) return;
+
+    // Clear any existing countdown
+    if (popupCommitmentTimer !== null) {
+        clearInterval(popupCommitmentTimer);
+        popupCommitmentTimer = null;
+    }
+
+    // Non-Pro users see neither the banner nor the button
+    if (!isPopupProUser(settings)) {
+        statusEl.classList.add('hidden');
+        activateBtn.classList.add('hidden');
+        return;
+    }
 
     chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
-        if (response && response.success && response.status?.active) {
-            const remainMin = Math.ceil(response.status.remainingSeconds / 60);
-            textEl.textContent = `🔒 Commitment Mode — ${remainMin}m remaining`;
+        if (response && response.success && response.status?.active && response.status.expiresAt) {
+            // Active — show countdown banner, hide activate button
+            const expiresAt = response.status.expiresAt;
+            activateBtn.classList.add('hidden');
             statusEl.classList.remove('hidden');
+
+            function tickCountdown() {
+                const remainingMs = expiresAt - Date.now();
+                if (remainingMs <= 0) {
+                    clearInterval(popupCommitmentTimer);
+                    popupCommitmentTimer = null;
+                    statusEl.classList.add('hidden');
+                    activateBtn.classList.remove('hidden');
+                    return;
+                }
+                textEl.textContent = `🔒 Commitment Mode — ${formatPopupCountdown(remainingMs)} remaining`;
+            }
+
+            tickCountdown();
+            popupCommitmentTimer = setInterval(tickCountdown, 1000);
         } else {
+            // Pro user, commitment mode inactive — show activate button
             statusEl.classList.add('hidden');
+            activateBtn.classList.remove('hidden');
+        }
+    });
+}
+
+function activateCommitmentMode() {
+    const hours = 2; // default 2-hour commitment session
+    chrome.runtime.sendMessage({ action: 'activateCommitmentMode', durationHours: hours }, function (response) {
+        if (response && response.success) {
+            chrome.runtime.sendMessage({ action: 'getSettings' }, function (r) {
+                if (r && r.settings) renderCommitmentPopupStatus(r.settings);
+            });
+        } else {
+            showMessage(response?.error || 'Could not activate Commitment Mode.', 'error');
+        }
+    });
+}
+
+function loadWorkTimerUI() {
+    // Only show the work timer section if at least one site uses the work_timer bundle
+    chrome.runtime.sendMessage({ action: 'getSettings' }, function (response) {
+        if (!response || !response.settings) return;
+        const workTimerSites = (response.settings.blocklist || [])
+            .filter((e) => e.temptationBundle?.enabled && e.temptationBundle.conditionType === 'work_timer')
+            .map((e) => e.urlPattern);
+        const section = document.getElementById('work-timer-section');
+        if (!section) return;
+        if (workTimerSites.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+        renderWorkTimerSites(workTimerSites);
+        fetchAndRenderWorkTimer();
+    });
+}
+
+function renderWorkTimerSites(sites) {
+    const el = document.getElementById('work-timer-sites');
+    if (!el) return;
+    if (!sites || sites.length === 0) {
+        el.textContent = '';
+        return;
+    }
+    el.textContent = `Unlocks when met: ${sites.join(', ')}`;
+}
+
+function fetchAndRenderWorkTimer() {
+    chrome.runtime.sendMessage({ action: 'getWorkTimerState' }, function (response) {
+        if (response && response.success) {
+            renderWorkTimerUI(response.state);
+        }
+    });
+}
+
+function renderWorkTimerUI(state) {
+    const display = document.getElementById('work-timer-display');
+    const btn = document.getElementById('work-timer-toggle-btn');
+    if (!display || !btn) return;
+
+    const mins = state.effectiveMinutes ?? Math.floor(state.todayMinutes || 0);
+    display.textContent = `${mins} min today`;
+
+    if (state.running) {
+        btn.textContent = '⏹ Stop timer';
+        btn.classList.add('running');
+        // Poll every 30s while running so the display stays fresh
+        if (!workTimerPollInterval) {
+            workTimerPollInterval = setInterval(fetchAndRenderWorkTimer, 30000);
+        }
+    } else {
+        btn.textContent = '▶ Start timer';
+        btn.classList.remove('running');
+        if (workTimerPollInterval) {
+            clearInterval(workTimerPollInterval);
+            workTimerPollInterval = null;
+        }
+    }
+}
+
+function toggleWorkTimer() {
+    const btn = document.getElementById('work-timer-toggle-btn');
+    const isRunning = btn && btn.classList.contains('running');
+    const action = isRunning ? 'stopWorkTimer' : 'startWorkTimer';
+    chrome.runtime.sendMessage({ action }, function (response) {
+        if (response && response.success) {
+            renderWorkTimerUI(response.state);
         }
     });
 }

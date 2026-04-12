@@ -163,11 +163,11 @@ body {
 }
 
 .breathing-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .breathing-circle {
@@ -181,84 +181,135 @@ body {
   font-size: 14px;
   font-weight: 700;
   color: #fff;
-  transition: transform 4s ease-in-out, background-color 2s ease;
+  /* Transition is controlled per phase so timing matches each duration */
 }
 
 .breathing-circle.breathe-in {
   transform: scale(1.3);
   background: var(--primary);
+  transition: transform 4s ease-in-out, background-color 1.5s ease;
 }
 
 .breathing-circle.breathe-hold {
   transform: scale(1.3);
   background: var(--primary-hover);
+  /* transform doesn't change — only color shifts */
+  transition: background-color 0.8s ease;
 }
 
 .breathing-circle.breathe-out {
   transform: scale(1);
   background: var(--primary-subtle);
+  /* 8s matches the 8000ms phase duration in the JS */
+  transition: transform 8s ease-in-out, background-color 2s ease;
 }
 
 .breathing-hint {
   font-size: 12px;
   color: var(--muted);
+  letter-spacing: 0.02em;
 }
 
 /* ── Intention-enhanced layout ──────────────────────────────────── */
 .has-intention .header {
   background: var(--lavender-2);
   border-radius: var(--radius) var(--radius) 0 0;
-  margin: -24px -24px 20px -24px;
-  padding: 32px 24px 28px;
+  /* No bottom margin — the intention-divider handles that spacing */
+  margin: -24px -24px 0 -24px;
+  padding: 44px 28px 32px;
   border-bottom: 1px solid var(--line-2);
 }
 
+/* Title steps back — the goal is the headline */
+.has-intention .header h1 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+
+/* Personal goal becomes the centerpiece — large, clean, no decoration box */
 .has-intention .personal-goal {
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.4;
   text-align: center;
+  color: var(--text);
+  background: none;
   border-left: none;
-  border-top: 3px solid var(--primary);
-  background: var(--card);
-  margin-bottom: 20px;
+  border-top: none;
+  padding: 0 8px;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+/* Site name becomes secondary — no longer competes with the goal */
+.has-intention .site-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+
+.has-intention .message {
+  font-size: 13px;
 }
 
 .has-intention .breathing-exercise {
   padding: 4px 0 8px;
-  gap: 16px;
+  gap: 20px;
 }
 
 .has-intention .breathing-circle {
-  width: 120px;
-  height: 120px;
+  width: 160px;
+  height: 160px;
   font-size: 16px;
-  box-shadow: 0 0 0 10px var(--lavender);
+  /* Double ring: inner lavender halo, outer subtle border */
+  box-shadow: 0 0 0 14px var(--lavender), 0 0 0 15px var(--line-2);
 }
 
-.has-intention .site-info {
-  margin-top: 12px;
+/* ── Intention divider ──────────────────────────────────────────── */
+.intention-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0 8px;
+}
+
+.intention-divider::before,
+.intention-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.intention-divider-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .breathing-circle.breathe-in,
+  .breathing-circle.breathe-hold,
+  .breathing-circle.breathe-out {
+    transition: none;
+    transform: none;
+  }
 }
 
 @media (max-width: 640px) {
   .has-intention .header {
-    margin: -18px -18px 16px -18px;
-    padding: 24px 18px 20px;
-  }
-}
-
-/* ── Commitment Mode Lock ──────────────────────────────────────── */
-.commitment-lock-banner {
-  border: 1px solid var(--err);
-  border-radius: var(--radius-sm);
-  background: #fff7f6;
-  color: var(--err);
-  padding: 12px 14px;
-  margin-bottom: 12px;
-  text-align: center;
-  font-weight: 600;
-}
-
-@media (prefers-color-scheme: dark) {
-  .commitment-lock-banner {
-    background: rgba(248, 113, 113, 0.1);
+    margin: -18px -18px 0 -18px;
+    padding: 32px 18px 24px;
   }
 }
 
@@ -542,4 +593,61 @@ body {
   .challenge-actions .btn-secondary {
     width: 100%;
   }
+}
+
+/* ── Temptation Bundle panel ────────────────────────────────────── */
+.bundle-panel {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bundle-panel {
+    background: rgba(134, 239, 172, 0.07);
+    border-color: #4ade80;
+  }
+}
+
+.bundle-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #166534;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bundle-label { color: #86efac; }
+}
+
+.bundle-progress-wrap {
+  background: #dcfce7;
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bundle-progress-wrap { background: rgba(134, 239, 172, 0.15); }
+}
+
+.bundle-progress-bar {
+  height: 100%;
+  background: #22c55e;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.bundle-progress-text {
+  font-size: 12px;
+  color: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bundle-progress-text { color: #4ade80; }
 }

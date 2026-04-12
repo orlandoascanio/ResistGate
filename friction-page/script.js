@@ -6,6 +6,7 @@ let waitCountdownInterval = null;
 let breathingAnimationTimeout = null;
 let currentOriginalUrl = null;
 let currentSettings = null;
+let currentWorkTimer = null;
 let manualOverrideState = {
   requiredDelaySeconds: 12,
   locked: false,
@@ -30,6 +31,14 @@ document.addEventListener('DOMContentLoaded', function () {
     chrome.runtime.sendMessage({
       action: 'recordBlockedVisit',
       urlPattern: hostname
+    }, function (response) {
+      if (response && response.resistanceCount > 0) {
+        const countEl = document.getElementById('resistance-count');
+        if (countEl) {
+          const n = response.resistanceCount;
+          countEl.textContent = `You've resisted ${hostname} ${n} ${n === 1 ? 'time' : 'times'} today.`;
+        }
+      }
     });
     const searchBtn = document.getElementById('search-instead-btn');
     if (searchBtn) {
@@ -78,10 +87,13 @@ function loadSettings() {
       || currentSettings.challengeTypes?.typing?.duration
       || accessDurationMinutes;
 
-    renderIntentionPage();
-    renderCommitmentModeLock();
-    renderProPrecheck();
-    refreshManualOverrideStatus();
+    chrome.runtime.sendMessage({ action: 'getWorkTimerState' }, function (wtResponse) {
+      currentWorkTimer = (wtResponse && wtResponse.success) ? wtResponse.state : null;
+      renderBundlePanel();
+      renderIntentionPage();
+      renderProPrecheck();
+      refreshManualOverrideStatus();
+    });
   });
 }
 
@@ -107,6 +119,68 @@ function refreshManualOverrideStatus(onReady) {
       onReady();
     }
   });
+}
+
+function renderBundlePanel() {
+  const panel = document.getElementById('bundle-panel');
+  const labelEl = document.getElementById('bundle-label');
+  const bar = document.getElementById('bundle-progress-bar');
+  const progressText = document.getElementById('bundle-progress-text');
+  if (!panel || !labelEl || !bar || !progressText) return;
+
+  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
+  if (!safeTargetUrl || !currentSettings) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  const hostname = new URL(safeTargetUrl).hostname.replace(/^www\./, '');
+  const entry = (currentSettings.blocklist || []).find((e) => {
+    const p = (e.urlPattern || '').toLowerCase();
+    return hostname.endsWith(p) || p.endsWith(hostname);
+  });
+
+  const bundle = entry?.temptationBundle;
+  if (!bundle || bundle.enabled !== true) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  panel.classList.remove('hidden');
+
+  if (bundle.conditionType === 'time_of_day') {
+    const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
+    const label12 = formatTime12(h, m);
+    labelEl.textContent = `⏳ You can visit this site after ${label12} today.`;
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const targetMins = h * 60 + m;
+    const progress = Math.min(100, Math.round((currentMins / targetMins) * 100));
+    bar.style.width = `${progress}%`;
+    const minsLeft = Math.max(0, targetMins - currentMins);
+    progressText.textContent = minsLeft > 0
+      ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m until unlocked`
+      : 'Condition met — start the challenge to access the site.';
+    return;
+  }
+
+  if (bundle.conditionType === 'work_timer') {
+    const required = bundle.requiredMinutes || 60;
+    const done = currentWorkTimer ? Math.floor(currentWorkTimer.effectiveMinutes) : 0;
+    const left = Math.max(0, required - done);
+    const progress = Math.min(100, Math.round((done / required) * 100));
+    labelEl.textContent = `🎯 You can visit this site after ${required} min of focused work today.`;
+    bar.style.width = `${progress}%`;
+    progressText.textContent = done >= required
+      ? 'Condition met — start the challenge to access the site.'
+      : `${done} / ${required} min logged — ${left} min to go. Start your work timer in the popup.`;
+  }
+}
+
+function formatTime12(h, m) {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
 }
 
 function renderIntentionPage() {
@@ -180,31 +254,6 @@ function startBreathingAnimation() {
   }
 
   runPhase();
-}
-
-function renderCommitmentModeLock() {
-  const banner = document.getElementById('commitment-lock-banner');
-  const bannerText = document.getElementById('commitment-lock-text');
-  if (!banner || !bannerText) return;
-
-  chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
-    if (response && response.success && response.status?.active) {
-      const remainMin = Math.ceil(response.status.remainingSeconds / 60);
-      bannerText.textContent = `Commitment Mode is active. All access is locked for ${remainMin} more minute${remainMin === 1 ? '' : 's'}.`;
-      banner.classList.remove('hidden');
-
-      // Disable all unlock buttons
-      const challengeBtn = document.getElementById('start-unlock-challenge');
-      const manualBtn = document.getElementById('manual-override-btn');
-      if (challengeBtn) challengeBtn.disabled = true;
-      if (manualBtn) manualBtn.disabled = true;
-
-      const hint = document.getElementById('manual-override-hint');
-      if (hint) hint.textContent = 'Commitment Mode is active. No access is possible until it expires.';
-    } else {
-      banner.classList.add('hidden');
-    }
-  });
 }
 
 function renderProPrecheck() {
@@ -931,10 +980,15 @@ if (typeof globalThis !== 'undefined') {
     getEarnAccessBonus,
     getSafeTargetUrl,
     formatTime,
+    formatTime12,
     renderIntentionPage,
+    renderBundlePanel,
     startBreathingAnimation,
     __setCurrentSettingsForTest: (settings) => {
       currentSettings = settings;
+    },
+    __setCurrentWorkTimerForTest: (wt) => {
+      currentWorkTimer = wt;
     }
   };
 }

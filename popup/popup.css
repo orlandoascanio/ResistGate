@@ -75,6 +75,10 @@
 }
 
 /* ── Utility ────────────────────────────────────────────────────── */
+.hidden {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -305,12 +309,83 @@ input:focus {
   }
 }
 
+.btn-commitment {
+  width: 100%;
+  margin-bottom: 8px;
+  background: transparent;
+  border: 1px dashed var(--primary-subtle);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-commitment:hover {
+  background: var(--lavender);
+  border-color: var(--primary);
+}
+
 .error {
   color: var(--err);
 }
 
 .success {
   color: var(--ok);
+}
+
+/* ── Work Timer ─────────────────────────────────────────────────── */
+.work-timer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.work-timer-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.work-timer-display {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.work-timer-sites {
+  font-size: 11px;
+  color: var(--muted);
+  margin: -4px 0 6px;
+  line-height: 1.4;
+}
+
+.btn-work-timer {
+  width: 100%;
+  background: var(--lavender);
+  color: var(--primary);
+  border: 1px solid var(--line-2);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.btn-work-timer:hover {
+  background: var(--lavender-2);
+}
+
+.btn-work-timer.running {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.btn-work-timer.running:hover {
+  background: var(--primary-hover);
 }
 
 /* ── Undo toast button ──────────────────────────────────────────── */
