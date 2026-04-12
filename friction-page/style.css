@@ -204,6 +204,46 @@ body {
   color: var(--muted);
 }
 
+/* ── Intention-enhanced layout ──────────────────────────────────── */
+.has-intention .header {
+  background: var(--lavender-2);
+  border-radius: var(--radius) var(--radius) 0 0;
+  margin: -24px -24px 20px -24px;
+  padding: 32px 24px 28px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.has-intention .personal-goal {
+  text-align: center;
+  border-left: none;
+  border-top: 3px solid var(--primary);
+  background: var(--card);
+  margin-bottom: 20px;
+}
+
+.has-intention .breathing-exercise {
+  padding: 4px 0 8px;
+  gap: 16px;
+}
+
+.has-intention .breathing-circle {
+  width: 120px;
+  height: 120px;
+  font-size: 16px;
+  box-shadow: 0 0 0 10px var(--lavender);
+}
+
+.has-intention .site-info {
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .has-intention .header {
+    margin: -18px -18px 16px -18px;
+    padding: 24px 18px 20px;
+  }
+}
+
 /* ── Commitment Mode Lock ──────────────────────────────────────── */
 .commitment-lock-banner {
   border: 1px solid var(--err);
