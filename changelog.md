@@ -7,10 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [1.1.0] - 2026-04-12
 
 ### Added
-- **Commitment Mode (Pro)**: Total lockout for 1–24 hours — no overrides, no challenge completions, no settings changes possible during the lock period. Auto-expires via Chrome alarm. Status visible in popup, options page, and friction page. New message actions: `activateCommitmentMode`, `getCommitmentModeStatus`, `deactivateCommitmentMode` (always refuses early deactivation). Applies globally across **all blocked sites**.
+- **Commitment Mode (Pro)**: Total lockout for 1–24 hours — no overrides, no challenge completions, no settings changes possible during the lock period. Auto-expires via Chrome alarm. New message actions: `activateCommitmentMode`, `getCommitmentModeStatus`, `deactivateCommitmentMode` (always refuses early deactivation). Applies globally across **all blocked sites**.
+- **Commitment Page** (`commitment-page/`): Dedicated full-screen lockout page shown instead of the friction challenge when Commitment Mode is active. Displays a live countdown to expiry and a motivational lock screen.
+- **Popup Commitment Mode Status**: Popup now shows a live countdown when Commitment Mode is active and exposes a one-click **Activate Commitment Mode** button (2-hour default) for Pro users.
 - **Intention Page (Pro)**: Replaces the generic friction message with the user's personal goal (e.g., "Ship the MVP by Friday"). Includes an optional 4-7-8 breathing exercise animation to turn temptation into a mindfulness moment. Both features are configurable via simple toggles in the options page.
+- **Sentry Error Monitoring**: Added `vendor/sentry.min.js` and `vendor/sentry-init.js`. All five extension pages (popup, options, welcome, friction-page, commitment-page) now initialize Sentry for real-time error reporting in production builds.
+- **Feature Matrix Test Suite**: New `tests/feature-matrix.test.js` providing comprehensive integration coverage for Commitment Mode, Intention Page, and Pro-gating across all new message actions.
 
 ### Changed
+- **Friction Page UI**: Visually separated the Intention/Pause zone from the typing challenge section for clearer layout hierarchy. The personal goal and breathing exercise are now grouped above a distinct challenge card.
 - **Pricing**: Updated subscription tiers to improve conversion:
   - Monthly: $5.99/mo → **$3.99/mo**
   - Annual: $34.99/yr → **$29.99/yr**
@@ -55,9 +60,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Release History
 
-**1.1.0** adds the two flagship Pro differentiators and launch-friendly pricing:
+**1.1.0** adds two flagship Pro differentiators, a dedicated lockout page, Sentry monitoring, and launch-friendly pricing:
 - Commitment Mode: irrevocable global lockout across all blocked sites (1–24 h)
+- Commitment Page: full-screen lockout UI with live countdown (replaces friction challenge)
+- Popup status: live Commitment Mode countdown + quick-activate button
 - Intention Page: personal goal display + optional 4-7-8 breathing animation
+- Friction Page UI: pause zone visually separated from the typing challenge section
+- Sentry error monitoring integrated across all extension pages
 - Revised pricing: $3.99/mo · $29.99/yr · $49.99 lifetime
 
 **1.0.0** is the stable release candidate with full Pro feature support:
