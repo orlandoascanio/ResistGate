@@ -127,6 +127,35 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
   // refresh-entitlement-btn removed
 
+  document.getElementById('activate-commitment-btn').addEventListener('click', function () {
+    if (!isProUser()) {
+      showPaywall('commitment-mode');
+      return;
+    }
+
+    const hours = parseInt(document.getElementById('commitment-duration-hours').value, 10) || 2;
+    const confirmed = confirm(
+      `Activate Commitment Mode for ${hours} hour${hours === 1 ? '' : 's'}?\n\n` +
+      'This will lock ALL access to blocked sites. There is NO way to disable it early. ' +
+      'Settings changes will also be blocked.\n\nAre you sure?'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'activateCommitmentMode',
+      durationHours: hours
+    }, function (response) {
+      if (response && response.success) {
+        loadSettings();
+        showMessage(`Commitment Mode activated for ${hours} hour${hours === 1 ? '' : 's'}.`, 'success');
+      } else {
+        showMessage(response?.error || 'Unable to activate Commitment Mode.', 'error');
+      }
+    });
+  });
+
   if (chrome.storage?.onChanged?.addListener) {
     chrome.storage.onChanged.addListener(handleSettingsStorageChange);
   }
@@ -299,6 +328,8 @@ function renderProFeatureInputs() {
   const proFeatures = cachedSettings?.proFeatures || {};
   const behavior = proFeatures.behavioralFriction || {};
   const preset = sanitizePreset(proFeatures.accountabilityPreset);
+  const intentionPage = proFeatures.intentionPage || {};
+  const commitmentMode = proFeatures.commitmentMode || {};
 
   document.getElementById('strict-mode-toggle').checked = proFeatures.strictModeEnabled === true;
   document.getElementById('strict-disable-delay-seconds').value =
@@ -311,6 +342,38 @@ function renderProFeatureInputs() {
   document.getElementById('earn-access-min-seconds').value = behavior.earnAccessMinChallengeSeconds || 90;
   document.getElementById('custom-challenge-prompt').value = behavior.customChallengePrompt || '';
   setActivePresetButton(preset);
+
+  // Intention Page
+  document.getElementById('intention-page-enabled').checked = intentionPage.enabled === true;
+  document.getElementById('personal-goal-text').value = intentionPage.personalGoal || '';
+  document.getElementById('breathing-exercise-enabled').checked = intentionPage.showBreathingExercise === true;
+
+  // Commitment Mode
+  document.getElementById('commitment-duration-hours').value = commitmentMode.durationHours || 2;
+  renderCommitmentStatus();
+}
+
+function renderCommitmentStatus() {
+  const statusEl = document.getElementById('commitment-status');
+  const textEl = document.getElementById('commitment-active-text');
+  const activateBtn = document.getElementById('activate-commitment-btn');
+  if (!statusEl || !textEl || !activateBtn) {
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
+    if (response && response.success && response.status?.active) {
+      const remainMin = Math.ceil(response.status.remainingSeconds / 60);
+      textEl.textContent = `Commitment Mode is active. ${remainMin} minute${remainMin === 1 ? '' : 's'} remaining. All access is locked.`;
+      statusEl.classList.remove('hidden');
+      activateBtn.disabled = true;
+      activateBtn.textContent = 'Commitment Mode Active';
+    } else {
+      statusEl.classList.add('hidden');
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Activate Commitment Mode';
+    }
+  });
 }
 
 function handleTabRequest(requestedTab) {
@@ -547,6 +610,11 @@ function saveSettings() {
       settings.proFeatures.behavioralFriction.earnAccessEnabled = document.getElementById('earn-access-enabled').checked;
       settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
       settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
+
+      settings.proFeatures.intentionPage = settings.proFeatures.intentionPage || {};
+      settings.proFeatures.intentionPage.enabled = document.getElementById('intention-page-enabled').checked;
+      settings.proFeatures.intentionPage.personalGoal = document.getElementById('personal-goal-text').value.trim().slice(0, 200);
+      settings.proFeatures.intentionPage.showBreathingExercise = document.getElementById('breathing-exercise-enabled').checked;
     }
 
     chrome.runtime.sendMessage({

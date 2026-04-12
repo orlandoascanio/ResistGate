@@ -282,6 +282,22 @@ label {
   padding: 12px 14px;
 }
 
+.commitment-status {
+  margin-bottom: 12px;
+  border: 1px solid var(--err);
+  border-radius: 12px;
+  background: #fff7f6;
+  color: var(--err);
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .commitment-status {
+    background: rgba(248, 113, 113, 0.1);
+  }
+}
+
 .pro-utility-actions {
   display: flex;
   gap: 10px;

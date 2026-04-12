@@ -280,4 +280,66 @@ describe('ResistGate background integration', () => {
     expect(reportRes.report.topDistractionDomains[0].domain).toBe('youtube.com');
     expect(reportRes.report.feedbackLine.length).toBeGreaterThan(0);
   });
+
+  it('activates and enforces commitment mode lockout', async () => {
+    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+    settingsObj.blocklist = [{ id: 'c1', urlPattern: 'reddit.com', createdAt: Date.now() }];
+    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+
+    // Activate commitment mode for 2 hours
+    const activateRes = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 2 });
+    expect(activateRes.success).toBe(true);
+    expect(activateRes.expiresAt).toBeGreaterThan(Date.now());
+
+    // Status should report active
+    const statusRes = await env.sendMessage({ action: 'getCommitmentModeStatus' });
+    expect(statusRes.success).toBe(true);
+    expect(statusRes.status.active).toBe(true);
+    expect(statusRes.status.remainingSeconds).toBeGreaterThan(0);
+
+    // Double activation should fail
+    const doubleActivate = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 1 });
+    expect(doubleActivate.success).toBe(false);
+
+    // Manual override should be blocked
+    const overrideBlocked = await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 10,
+      meta: { method: 'manualOverride', waitedSeconds: 15 }
+    });
+    expect(overrideBlocked.success).toBe(false);
+    expect(overrideBlocked.error).toContain('Commitment Mode');
+
+    // Challenge should also be blocked
+    const challengeBlocked = await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 10,
+      timeSpent: 200,
+      meta: { method: 'challenge' }
+    });
+    expect(challengeBlocked.success).toBe(false);
+    expect(challengeBlocked.error).toContain('Commitment Mode');
+
+    // Settings changes should be blocked
+    const settingsBlocked = await env.sendMessage({
+      action: 'updateSettings',
+      settings: { ...settingsObj, defaultAccessDuration: 30 }
+    });
+    expect(settingsBlocked.success).toBe(false);
+    expect(settingsBlocked.error).toContain('Commitment Mode');
+
+    // Deactivation should be refused
+    const deactivate = await env.sendMessage({ action: 'deactivateCommitmentMode' });
+    expect(deactivate.success).toBe(false);
+    expect(deactivate.error).toContain('cannot be deactivated early');
+  });
+
+  it('requires Pro for commitment mode activation', async () => {
+    const res = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 2 });
+    expect(res.success).toBe(false);
+    expect(res.proRequired).toBe(true);
+  });
 });

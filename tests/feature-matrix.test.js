@@ -695,4 +695,139 @@ describe('Feature Matrix Coverage', () => {
       // Should be ignored silently
     });
   });
+
+  describe('Pro: Commitment Mode', () => {
+    it('sanitizeCommitmentMode returns defaults for null input', () => {
+      const result = hooks.sanitizeCommitmentMode(null);
+      expect(result.active).toBe(false);
+      expect(result.durationHours).toBe(2);
+      expect(result.activatedAt).toBeNull();
+      expect(result.expiresAt).toBeNull();
+    });
+
+    it('sanitizeCommitmentMode clamps duration to 1-24 hours', () => {
+      expect(hooks.sanitizeCommitmentMode({ durationHours: 0 }).durationHours).toBe(2);
+      expect(hooks.sanitizeCommitmentMode({ durationHours: 50 }).durationHours).toBe(24);
+      expect(hooks.sanitizeCommitmentMode({ durationHours: 8 }).durationHours).toBe(8);
+    });
+
+    it('sanitizeCommitmentMode auto-deactivates expired sessions', () => {
+      const result = hooks.sanitizeCommitmentMode({
+        active: true,
+        durationHours: 2,
+        activatedAt: Date.now() - 200000,
+        expiresAt: Date.now() - 1000
+      });
+      expect(result.active).toBe(false);
+      expect(result.activatedAt).toBeNull();
+      expect(result.expiresAt).toBeNull();
+    });
+
+    it('sanitizeCommitmentMode preserves active state with valid expiry', () => {
+      const now = Date.now();
+      const result = hooks.sanitizeCommitmentMode({
+        active: true,
+        durationHours: 3,
+        activatedAt: now - 1000,
+        expiresAt: now + 60000
+      });
+      expect(result.active).toBe(true);
+      expect(result.expiresAt).toBe(now + 60000);
+    });
+
+    it('isCommitmentModeActive returns false for free users', () => {
+      const settings = hooks.sanitizeSettings({ subscription: { tier: 'free' } });
+      expect(hooks.isCommitmentModeActive(settings, Date.now())).toBe(false);
+    });
+
+    it('isCommitmentModeActive returns true during active commitment', () => {
+      const now = Date.now();
+      const settings = hooks.sanitizeSettings({
+        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        proFeatures: {
+          commitmentMode: {
+            active: true,
+            durationHours: 2,
+            activatedAt: now - 1000,
+            expiresAt: now + 60000
+          }
+        }
+      });
+      expect(hooks.isCommitmentModeActive(settings, now)).toBe(true);
+    });
+
+    it('isCommitmentModeActive returns false when expired', () => {
+      const now = Date.now();
+      const settings = hooks.sanitizeSettings({
+        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        proFeatures: {
+          commitmentMode: {
+            active: true,
+            durationHours: 2,
+            activatedAt: now - 200000,
+            expiresAt: now - 1000
+          }
+        }
+      });
+      expect(hooks.isCommitmentModeActive(settings, now)).toBe(false);
+    });
+
+    it('sanitizeSettings includes commitmentMode and intentionPage in output', () => {
+      const result = hooks.sanitizeSettings({});
+      expect(result.proFeatures.commitmentMode).toBeDefined();
+      expect(result.proFeatures.commitmentMode.active).toBe(false);
+      expect(result.proFeatures.intentionPage).toBeDefined();
+      expect(result.proFeatures.intentionPage.enabled).toBe(false);
+    });
+  });
+
+  describe('Pro: Intention Page', () => {
+    it('sanitizeIntentionPage returns defaults for null input', () => {
+      const result = hooks.sanitizeIntentionPage(null);
+      expect(result.enabled).toBe(false);
+      expect(result.personalGoal).toBe('');
+      expect(result.showBreathingExercise).toBe(false);
+    });
+
+    it('sanitizeIntentionPage truncates personalGoal to 200 chars', () => {
+      const longGoal = 'x'.repeat(300);
+      const result = hooks.sanitizeIntentionPage({ enabled: true, personalGoal: longGoal });
+      expect(result.personalGoal.length).toBe(200);
+      expect(result.enabled).toBe(true);
+    });
+
+    it('sanitizeIntentionPage preserves valid input', () => {
+      const result = hooks.sanitizeIntentionPage({
+        enabled: true,
+        personalGoal: 'Ship the MVP by Friday',
+        showBreathingExercise: true
+      });
+      expect(result.enabled).toBe(true);
+      expect(result.personalGoal).toBe('Ship the MVP by Friday');
+      expect(result.showBreathingExercise).toBe(true);
+    });
+
+    it('intention page settings are saved and retrieved via message actions', async () => {
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.proFeatures.intentionPage = {
+        enabled: true,
+        personalGoal: 'Stay focused on the project',
+        showBreathingExercise: true
+      };
+      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.proFeatures.intentionPage.enabled).toBe(true);
+      expect(saved.proFeatures.intentionPage.personalGoal).toBe('Stay focused on the project');
+      expect(saved.proFeatures.intentionPage.showBreathingExercise).toBe(true);
+    });
+  });
+
+  describe('Pro: Commitment Mode Alarm', () => {
+    it('commitment alarm triggers rules update', async () => {
+      await env.triggerAlarm({ name: 'resistgate-commitment-expire' });
+      // No error thrown means handler ran successfully
+    });
+  });
 });

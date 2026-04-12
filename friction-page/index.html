@@ -15,13 +15,27 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1>You blocked this for a reason.</h1>
+      <h1 id="page-title">You blocked this for a reason.</h1>
+      <div id="intention-section" class="intention-section hidden">
+        <p id="personal-goal-display" class="personal-goal"></p>
+        <div id="breathing-exercise" class="breathing-exercise hidden">
+          <p class="breathing-label">Take a moment to breathe</p>
+          <div class="breathing-circle" id="breathing-circle">
+            <span id="breathing-text">Breathe in</span>
+          </div>
+          <p class="breathing-hint">4 seconds in · 7 seconds hold · 8 seconds out</p>
+        </div>
+      </div>
       <p class="site-info"><span id="blocked-site">Loading...</span></p>
-      <p class="message">
+      <p class="message" id="page-message">
         This is an intentional pause. Complete the challenge to unlock access —
         or close this tab and stay focused.
       </p>
     </header>
+
+    <div id="commitment-lock-banner" class="commitment-lock-banner hidden">
+      <p id="commitment-lock-text">Commitment Mode is active. All access is locked.</p>
+    </div>
 
     <div class="content">
       <div class="challenge-selection">

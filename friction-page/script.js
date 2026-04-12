@@ -3,6 +3,7 @@ let startTime = null;
 let accessDurationMinutes = 15;
 let accessCountdownInterval = null;
 let waitCountdownInterval = null;
+let breathingAnimationTimeout = null;
 let currentOriginalUrl = null;
 let currentSettings = null;
 let manualOverrideState = {
@@ -77,6 +78,8 @@ function loadSettings() {
       || currentSettings.challengeTypes?.typing?.duration
       || accessDurationMinutes;
 
+    renderIntentionPage();
+    renderCommitmentModeLock();
     renderProPrecheck();
     refreshManualOverrideStatus();
   });
@@ -102,6 +105,100 @@ function refreshManualOverrideStatus(onReady) {
 
     if (typeof onReady === 'function') {
       onReady();
+    }
+  });
+}
+
+function renderIntentionPage() {
+  const isPro = currentSettings?.subscription?.tier === 'pro';
+  const intentionPage = currentSettings?.proFeatures?.intentionPage || {};
+  const intentionSection = document.getElementById('intention-section');
+  const goalDisplay = document.getElementById('personal-goal-display');
+  const breathingExercise = document.getElementById('breathing-exercise');
+  const pageTitle = document.getElementById('page-title');
+
+  if (!isPro || intentionPage.enabled !== true) {
+    if (intentionSection) intentionSection.classList.add('hidden');
+    return;
+  }
+
+  let hasContent = false;
+
+  if (intentionPage.personalGoal) {
+    pageTitle.textContent = 'Remember your goal.';
+    goalDisplay.textContent = intentionPage.personalGoal;
+    goalDisplay.classList.remove('hidden');
+    hasContent = true;
+  } else {
+    goalDisplay.classList.add('hidden');
+  }
+
+  if (intentionPage.showBreathingExercise) {
+    breathingExercise.classList.remove('hidden');
+    startBreathingAnimation();
+    hasContent = true;
+  } else {
+    breathingExercise.classList.add('hidden');
+  }
+
+  if (hasContent) {
+    intentionSection.classList.remove('hidden');
+  } else {
+    intentionSection.classList.add('hidden');
+  }
+}
+
+function startBreathingAnimation() {
+  const circle = document.getElementById('breathing-circle');
+  const text = document.getElementById('breathing-text');
+  if (!circle || !text) return;
+
+  if (breathingAnimationTimeout) {
+    clearTimeout(breathingAnimationTimeout);
+    breathingAnimationTimeout = null;
+  }
+
+  const phases = [
+    { label: 'Breathe in', duration: 4000, className: 'breathe-in' },
+    { label: 'Hold', duration: 7000, className: 'breathe-hold' },
+    { label: 'Breathe out', duration: 8000, className: 'breathe-out' }
+  ];
+
+  let phaseIndex = 0;
+
+  function runPhase() {
+    if (!document.getElementById('breathing-circle')) return;
+    const phase = phases[phaseIndex % phases.length];
+    text.textContent = phase.label;
+    circle.className = 'breathing-circle ' + phase.className;
+    phaseIndex++;
+    breathingAnimationTimeout = setTimeout(runPhase, phase.duration);
+  }
+
+  runPhase();
+}
+
+function renderCommitmentModeLock() {
+  const banner = document.getElementById('commitment-lock-banner');
+  const bannerText = document.getElementById('commitment-lock-text');
+  if (!banner || !bannerText) return;
+
+  chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
+    if (response && response.success && response.status?.active) {
+      const remainMin = Math.ceil(response.status.remainingSeconds / 60);
+      bannerText.textContent = `Commitment Mode is active. All access is locked for ${remainMin} more minute${remainMin === 1 ? '' : 's'}.`;
+      banner.classList.remove('hidden');
+
+      // Disable all unlock buttons
+      const challengeBtn = document.getElementById('start-unlock-challenge');
+      const manualBtn = document.getElementById('manual-override-btn');
+      if (challengeBtn) challengeBtn.disabled = true;
+      if (manualBtn) manualBtn.disabled = true;
+
+      const hint = document.getElementById('manual-override-hint');
+      if (hint) hint.textContent = 'Commitment Mode is active. No access is possible until it expires.';
+    } else {
+      banner.classList.add('hidden');
     }
   });
 }
@@ -830,6 +927,8 @@ if (typeof globalThis !== 'undefined') {
     getEarnAccessBonus,
     getSafeTargetUrl,
     formatTime,
+    renderIntentionPage,
+    startBreathingAnimation,
     __setCurrentSettingsForTest: (settings) => {
       currentSettings = settings;
     }

@@ -287,6 +287,24 @@ input:focus {
   margin-top: 8px;
 }
 
+.commitment-popup-status {
+  border: 1px solid var(--err);
+  border-radius: 8px;
+  background: #fff7f6;
+  color: var(--err);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .commitment-popup-status {
+    background: rgba(248, 113, 113, 0.1);
+  }
+}
+
 .error {
   color: var(--err);
 }
