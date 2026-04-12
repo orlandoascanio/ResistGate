@@ -16,7 +16,7 @@ describe('UI copy and state logic', () => {
 
     expect(popupHtml).toContain('Block distractions. Unlock intentionally.');
     expect(optionsHtml).toContain('Weekly Discipline Report');
-    expect(optionsHtml).toContain('Pro gives you deeper focus tools and weekly reports to help you stay on track.');
+    expect(optionsHtml).toContain('Deeper focus tools and weekly accountability reports.');
     expect(frictionHtml).toContain('You blocked this for a reason.');
   });
 

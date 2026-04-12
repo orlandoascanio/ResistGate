@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2026-03-13
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-04-11
 
 ### Added
 - **Core Engine**: Manifest V3 `declarativeNetRequest` based domain blocking.
@@ -29,5 +31,18 @@ All notable changes to this project will be documented in this file.
 ### Security
 - **Pro Entitlement**: Replaced mock local storage upgrade with cryptographic JWT license validation (RS256) using Web Crypto API.
 - Added 24-hour periodic entitlement refresh via `chrome.alarms` to detect expired or revoked licenses.
+- License key input validation and secure storage in `chrome.storage.local`.
 - Verified all data stays in `chrome.storage.local`.
 - No remote analytics or external network dependencies in core logic.
+- All user data isolated per browser profile (uses `chrome.storage.local`, not `sync`).
+
+---
+
+## Release History
+
+**1.0.0** is the stable release candidate with full Pro feature support:
+- Core blocking engine with typing challenge friction
+- Free & Pro tier split with license-based entitlement
+- Analytics dashboard and weekly discipline report (Pro only)
+- All test suites passing (81 tests, 88.5% coverage on `background.js`)
+- Ready for Chrome Web Store submission

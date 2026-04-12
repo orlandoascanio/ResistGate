@@ -1,227 +1,228 @@
-# ResistGate Pro v1 (Revenue Version)
+# ResistGate Roadmap
 
-## Goal
-Ship a monetizable Pro version of ResistGate within 2-3 weeks.
+## Current Status: v1.0.0 ✅ Live on Chrome Web Store
 
-Primary objective:
-- Convert frustration + ambition into paid accountability.
+**Shipped:** April 11, 2026 — Now in production with active users collecting real-world feedback.
 
-Not to build the "ultimate focus system."
-Just enough value to justify $7.99/month.
+### v1 Baseline Metrics
+- ✅ All 81 tests passing (88.5% coverage)
+- ✅ Free + Pro tiers with license-based entitlement (RS256 JWT)
+- ✅ Actively gathering user feedback and behavior data
+- ✅ Stable core engine proven in production
+
+---
 
 ## Pricing Model
-- $7.99/month
-- $65/year (optional, after v1 stable)
-- No free trial
-- 7-day refund policy
 
-## Core Positioning
-- Free = Block distractions
-- Pro = Measure and improve your discipline
+- **Free** = Block distractions + typing challenge + temporary access
+- **Pro** = Strict mode + analytics + weekly report + earn-access bonus
+- **$5/month** (or equivalent in local currency)
+- **$50/year** (pay once, 12-month access)
+- 24-hour license entitlement refresh via Chrome alarms
 
-## Feature Split
-### Free (Always Available)
-- Domain blocking
-- Schedule-based blocking
-- Basic friction challenge
-- Temporary access
-- Manual override
+---
 
-Free is functional.
-Pro is transformational.
+## v1.0.0 Feature Completion
 
-## Pro v1 Feature Set (Strict Scope)
-### 1) Strict Mode Lock
-When enabled:
-- Prevent settings changes during active schedule
-- Prevent blocklist edits
-- Require cooldown to disable
-- Optional delay before disabling
+### Free Tier (Fully Implemented)
+- ✅ Domain blocking via `declarativeNetRequest`
+- ✅ Schedule-based blocking (days + time windows)
+- ✅ Friction challenge (5 paragraphs, 100% accuracy, paste disabled)
+- ✅ Temporary access grant + auto-expiry (via alarms)
+- ✅ Manual override with configurable 10-15s delay countdown
+- ✅ Popup for quick add/remove sites
+- ✅ Options page with full blocklist management
 
-Goal:
-- Increase commitment friction.
+### Pro Tier (Fully Implemented)
+- ✅ **Strict Mode Lock** — Prevent settings changes during active schedule; require cooldown to disable
+- ✅ **Override Cooldown System** — Track overrides; lock manual access after threshold exceeded
+- ✅ **Focus Analytics Dashboard** — 7-day view of blocked attempts, overrides, top domains
+- ✅ **Focus Score** — Weekly discipline score (0-100 formula based on override count + manual disables)
+- ✅ **Weekly Report** — Auto-generated feedback with trend comparison
+- ✅ **Earn-Access Bonus** — Extra minutes awarded for completing extended challenge sessions
+- ✅ **License-based Entitlement** — RS256 JWT verification with 24-hour refresh alarm
+- ✅ **Event Logging** — Track all blocking, access, override, and challenge events
 
-Implementation:
-- Boolean flag `strictModeEnabled`
-- Lock UI controls conditionally
-- Store lock state in extension storage
-- Enforce via background worker
+---
 
-### 2) Override Cooldown System
-If user manually overrides more than X times in Y hours:
-- Increase friction
-- Force longer wait
-- Temporarily disable override
+## v2.0 Planned Features
 
-Track:
-- `overrideCount`
-- `overrideTimestamps`
+After first 10+ paying users validate the core value, prioritize:
 
-Goal:
-- Stop repeated impulse bypass.
+### Near-term (Q2 2026)
+- **Visual Analytics** — Trend charts (7-day, 30-day), block frequency heatmaps, override trends
+- **Streak Tracking** — Consecutive days without manual overrides; visual streak counter
+- **Improved Focus Score** — Adaptive weighting based on domain difficulty + time of day
+- **Email Weekly Report** — Optional digest sent to registered email address
+- **Export Report** — CSV/PDF export of weekly data and focus score
+- **Settings Sync** — Optional `chrome.storage.sync` for cross-device consistency
 
-### 3) Focus Analytics (Basic Dashboard)
-This is the core Pro hook.
+### Mid-term (Q3 2026)
+- **Focus Sessions** — Dedicated "deep work" timer integration (independent session blocks)
+- **Distraction Ranking** — Learn which sites are most tempting; surface top offenders
+- **Earn-Access Customization** — Let users define their own earn-access challenge (typing length, difficulty, cooldown)
+- **Advanced Scheduling** — Per-site block schedules; time-of-day based rules
+- **Dark Mode** — Extension UI support for system dark mode preference
 
-Track events:
-- `blocked_visit`
-- `access_granted`
-- `override_triggered`
-- `challenge_failed`
-- `challenge_completed`
+### Long-term (Post-v2)
+- **Team/Family Mode** — Share accountability partner blocking (limited trusted connections)
+- **AI Coach** (Optional) — Behavioral insights based on override patterns (post-MVP, evaluate privacy tradeoffs)
+- **Portable Data** — Export lifetime discipline stats for privacy-preserving sharing
+- **Platform Expansion** — Firefox, Safari, Edge support
 
-Store locally (initially).
+---
 
-Dashboard shows:
-- Total blocked attempts (this week)
-- Total overrides
-- Time spent in strict sessions
-- Top 5 blocked domains
-- Override frequency trend (7-day view)
+## What Remains Out of Scope (v1-v2)
 
-No AI.
-No complex stats.
-Just visible numbers.
+**NOT building:**
+- Browser sync across devices (use cases don't justify complexity)
+- Machine learning personalization (manual rules > AI surprises)
+- Team/group dashboards (focus on individual accountability first)
+- Website companion (extension is sufficient for v1-v2)
+- Mobile apps (desktop focus is the strategic moat)
 
-### 4) Focus Score (Simple Formula)
-You don't need behavioral science.
-Start simple.
+**Why:**
+- Limits scope creep
+- Keeps extension performant
+- Preserves privacy (no external data pipelines)
+- Lets us ship faster
 
-Example:
-```text
-Focus Score =
-100
- - (overrideCount × 5)
- - (manualDisableCount × 10)
-```
+---
 
-Clamp between 0-100.
-Displayed weekly.
+## Post-Launch Strategy (Active Phase)
 
-Goal:
-- Create visible accountability.
+### Current (Weeks 1-4 Post-Launch)
+**Goal:** Collect real user feedback, identify friction points, validate monetization assumptions.
 
-### 5) Weekly Report
-Generated every 7 days.
-Display inside extension (v1).
+- **Monitor Web Store reviews** — Surface issues and feature requests
+- **Track analytics events** — Understand where users abandon vs. complete friction
+- **Pro conversion funnel** — Which users upgrade and at what step?
+- **Support tickets** — Prioritize by impact and frequency
+- **Cohort analysis** — Compare free vs. Pro user behavior patterns
 
-Optional later:
-- Email report (v2).
+**Key Metrics to Watch:**
+- Free → Pro conversion rate (target: 5-10%)
+- Friction challenge completion rate (target: 80%+)
+- License activation success rate (target: 99%)
+- Churn rate first 7 days (target: < 30%)
+- Support tickets per 1000 users (target: < 10)
 
-Content:
-- Focus score
-- Overrides this week
-- Top distraction domains
-- Trend vs last week (+/-)
+### Month 2-3 (Iteration Phase)
+Based on real user data, prioritize v1.1 hotfixes:
+- **High-impact bugs** (crashes, data loss, license failures) → deploy immediately
+- **UX friction** (unclear copy, confusing flows) → iterate next patch
+- **Performance issues** (slow challenges, slow dashboard) → optimize
+- **Feature requests** (most requested by paying users) → evaluate for v1.1
 
-Short feedback line:
-- "Improved discipline."
-- "Overrides increased."
-- "Strong consistency."
+### Decision Point: v1.1 vs v2.0
+After first 100-500 real users:
+- **If conversion < 2%**: Rethink pricing or core value prop (v1.1 pivot)
+- **If churn > 20%**: Focus on retention before adding features (v1.1 hardening)
+- **If stable (5%+ conv, < 10% churn)**: Lock v1, plan v2.0 (near-term features)
 
-Keep it simple.
+---
 
-### 6) Earn-Access System (Optional but Powerful)
-Instead of manual override, user must:
-- Complete focus session
-- Complete harder challenge
-- Wait extended delay
+## Success Metrics (Live Product)
 
-This increases perceived seriousness.
+### v1 Health Indicators (Track Continuously)
 
-But keep v1 simple:
-- Just one earn-access rule.
+| Metric | Target | Why It Matters |
+|---|---|---|
+| Chrome Web Store Rating | 4.0+ stars | Product quality signal |
+| Free Users (Week 1) | 50-200 | Growth trajectory |
+| Pro Conversion Rate | 5-10% | Revenue viability |
+| Friction Completion Rate | 75%+ | Core mechanic works |
+| License Refresh Success | 99%+ | Entitlement stability |
+| 7-Day Retention | 40%+ | Free tier stickiness |
+| 30-Day Retention (Pro) | 80%+ | Pro value confirmation |
+| Churn Rate (Pro) | <5%/month | Paying user stability |
+| Support Tickets | <10 per 1000 users | Product clarity |
+| Critical Bugs | 0 | Data integrity |
 
-## Billing System
-Start simple.
+### Decision Thresholds
 
-Recommendation:
-- Stripe
-- Not Paddle
-- Not PayPal
+**Red Flag (Act immediately):**
+- Rating drops below 3.5 stars
+- Crash rate > 1 per 1000 sessions
+- License verification fails > 1%
+- Pro churn > 20%/month
 
-Why:
-- Clean API
-- Easy subscriptions
-- Works globally
-- Dev-friendly
+**Green Light (Plan v2):**
+- 100+ free users
+- 5%+ Pro conversion
+- <10% churn
+- 4.0+ star rating
+- <5 critical issues
 
-Architecture:
-- User purchases on web.
-- Stripe webhook confirms payment.
-- Backend issues Pro entitlement token.
-- Extension verifies entitlement periodically.
+**Iterate (v1.1):**
+- Top 3 feature requests from Pro users
+- UX friction points from reviews
+- Performance bottlenecks from telemetry
 
-For v1:
-- You can even manually issue license keys.
-- Do not overengineer.
+---
 
-## Entitlement System (v1 Simple Version)
-### Option A (Simplest)
-- User enters email after purchase.
-- Extension checks your API endpoint: `/api/check-pro?email=`
-- Return true/false.
+## Development Priorities (Locked v1 + Active Iteration)
 
-### Option B (Better)
-- Signed JWT entitlement.
-- Expiry check.
-- Renewal verification.
+### v1 is LOCKED — No new features to core engine
+- Only critical bugfixes (crashes, data loss, security)
+- Entitlement system is production-hardened
+- Friction challenge is stable
+- Analytics events are immutable
 
-v1: Keep it minimal but secure enough.
+### v1.1 Hotfixes (If Needed)
+Monitor user feedback for:
+- **Crashes** → Deploy within 24h
+- **License verification failures** → Deploy immediately
+- **Copy/UX confusion** (top issue in reviews) → next patch
+- **Performance regressions** (challenge feels slow) → optimize
 
-## What NOT To Build In v1
-- Adaptive friction
-- Cross-device sync
-- Team mode
-- Focus coach AI
-- Smart schedule suggestions
-- PDF export
-- Advanced charts
+### v2 Planning (Start after 100 users + stable metrics)
+- Code-review all feature requests from real users
+- A/B test competing feature hypotheses
+- Design spec for #1 priority (likely: visual analytics)
+- Maintain test coverage at 85%+
+- No shipping until v1 metrics are green
 
-If it doesn't directly help someone say:
-"Yes, I want accountability."
-It waits.
+### Code Quality (Non-negotiable)
+- All changes require full test suite passing
+- Entitlement security review before any deploy
+- No data schema changes without migration plan
+- Backwards-compatible storage updates only
 
-## Emotional Trigger Strategy
-Users upgrade when they feel:
-- Frustrated at themselves
-- Ambitious about improvement
-- Protective of identity
+---
 
-Your Pro messaging should target:
-"I want proof that I'm improving."
+## Engineering Discipline
 
-Not:
-"More features."
+### Code Quality
+- Maintain 85% coverage on background.js
+- All changes require green test suite
+- Security review for entitlement changes
+- No external dependencies beyond test harness
 
-## Definition of Done (Pro v1)
-You are done when:
-- User can pay $5
-- Pro unlocks correctly
-- Strict mode works
-- Overrides tracked
-- Dashboard shows numbers
-- Weekly report generates
-- No major bypass bugs
+### Performance
+- Extension should load < 500ms
+- Storage queries non-blocking
+- No memory leaks in long-running sessions
+- Alarms accuracy +/- 1 second
 
-That's it.
-Not perfection.
-Revenue.
+### Security
+- License keys validated via RS256 JWT (non-negotiable)
+- No user data sent externally without explicit consent
+- All PII stored only in `chrome.storage.local`
+- Periodic security audit (quarterly minimum)
 
-## After First 10 Paying Users
-Then you build:
-- Trend charts
-- Streak tracking
-- Improved scoring model
-- Heatmap visuals
-- Export reports
+---
 
-Not before.
+## Final Principle
 
-## Final Rule
-If a feature does not:
-- Increase commitment
-- Increase accountability
-- Increase visibility of discipline
+ResistGate is not trying to be everything.
 
-It is not Pro v1.
+It is trying to be the most **effective** friction between impulse and action.
+
+Every feature should pass this test:
+> "Does this make the user feel more accountable to themselves?"
+
+If yes, consider it.
+If no, reject it.
+
+This is what separates ResistGate from generic focus apps.

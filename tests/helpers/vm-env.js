@@ -85,7 +85,8 @@ export function createChromeMock() {
           onMessageExternalHandler = handler;
         }
       },
-      getURL: (assetPath) => `chrome-extension://resistgate/${assetPath}`
+      getURL: (assetPath) => `chrome-extension://resistgate/${assetPath}`,
+      setUninstallURL: () => {}
     },
     tabs: {
       create: async (details) => {

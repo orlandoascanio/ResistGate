@@ -215,6 +215,13 @@ function showMessage(text, type = 'info') {
 
     document.querySelector('.container').appendChild(messageDiv);
 
+    // Announce to screen readers via aria-live region
+    const announcement = document.getElementById('status-announcement');
+    if (announcement) {
+        announcement.textContent = '';
+        setTimeout(() => { announcement.textContent = text; }, 50);
+    }
+
     setTimeout(() => {
         if (messageDiv.parentNode) {
             messageDiv.remove();

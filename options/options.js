@@ -46,11 +46,11 @@ const PRO_PRESET_VALUES = {
 let activeTab = 'general';
 let queuedProScreen = null;
 let cachedSettings = null;
+let _paywallReturnFocus = null;
 
 document.addEventListener('DOMContentLoaded', function () {
   const newBlockedSiteInput = document.getElementById('new-blocked-site');
   const addSiteBtn = document.getElementById('add-site-btn');
-  const saveSettingsBtn = document.getElementById('save-settings-btn');
   const scheduleEnabledToggle = document.getElementById('schedule-enabled');
 
   addSiteBtn.addEventListener('click', addBlockedSite);
@@ -60,7 +60,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  saveSettingsBtn.addEventListener('click', saveSettings);
+  document.querySelectorAll('[data-action="save-settings"]').forEach(function (btn) {
+    btn.addEventListener('click', saveSettings);
+  });
   scheduleEnabledToggle.addEventListener('change', function () {
     toggleScheduleConfig(scheduleEnabledToggle.checked);
   });
@@ -118,16 +120,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('view-pricing-btn').addEventListener('click', function () {
-    const email = getPaywallEmail();
-    const emailError = document.getElementById('paywall-email-error');
-    if (!isValidEmail(email)) {
-      if (emailError) emailError.classList.remove('hidden');
-      document.getElementById('paywall-email').focus();
-      return;
-    }
-    if (emailError) emailError.classList.add('hidden');
     hidePaywall();
-    openPricingPage(email);
+    openPricingPage();
   });
 
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
@@ -148,6 +142,8 @@ document.addEventListener('DOMContentLoaded', function () {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   });
+
+  initDetailsAnimation();
 });
 
 function loadSettings(callback) {
@@ -322,7 +318,9 @@ function handleTabRequest(requestedTab) {
     return;
   }
 
-  if (requestedTab !== 'general' && !isProUser()) {
+  // Analytics and Report tabs are Pro-gated; the Pro tab itself is open to all
+  const proGatedTabs = ['analytics', 'report'];
+  if (proGatedTabs.includes(requestedTab) && !isProUser()) {
     queuedProScreen = requestedTab;
     showPaywall(`tab-${requestedTab}`);
     return;
@@ -343,7 +341,9 @@ function setActiveTab(tabName) {
   activeTab = tabName;
 
   document.querySelectorAll('.tab-btn[data-tab]').forEach((button) => {
-    button.classList.toggle('active', button.getAttribute('data-tab') === tabName);
+    const isActive = button.getAttribute('data-tab') === tabName;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
 
   document.querySelectorAll('.tab-panel').forEach((panel) => {
@@ -403,7 +403,7 @@ function loadBlockedSites(blocklist = []) {
   if (blocklist.length === 0) {
     const noSitesItem = document.createElement('li');
     noSitesItem.className = 'message';
-    noSitesItem.textContent = 'No sites in ResistGate yet';
+    noSitesItem.textContent = 'Add a site above to start blocking.';
     listElement.appendChild(noSitesItem);
     return;
   }
@@ -438,6 +438,7 @@ function loadBlockedSites(blocklist = []) {
 
 function removeBlockedSite(id) {
   withLatestSettings(function (settings) {
+    const removedEntry = (settings.blocklist || []).find((entry) => entry.id === id);
     settings.blocklist = (settings.blocklist || []).filter((entry) => entry.id !== id);
 
     chrome.runtime.sendMessage({
@@ -447,12 +448,69 @@ function removeBlockedSite(id) {
       if (updateResponse && updateResponse.success) {
         cachedSettings = settings;
         loadBlockedSites(settings.blocklist);
-        showMessage('Site removed from ResistGate.', 'success');
+        showUndoToast(
+          `${removedEntry ? removedEntry.urlPattern : 'Site'} removed.`,
+          removedEntry ? function () { undoRemoveBlockedSite(removedEntry); } : null
+        );
       } else {
         showMessage(updateResponse?.error || 'Unable to remove site. Try again.', 'error');
       }
     });
   });
+}
+
+function undoRemoveBlockedSite(entry) {
+  withLatestSettings(function (settings) {
+    settings.blocklist = settings.blocklist || [];
+    settings.blocklist.push(entry);
+    chrome.runtime.sendMessage({
+      action: 'updateSettings',
+      settings: settings
+    }, function (updateResponse) {
+      if (updateResponse && updateResponse.success) {
+        cachedSettings = settings;
+        loadBlockedSites(settings.blocklist);
+        showMessage(`${entry.urlPattern} restored.`, 'success');
+      } else {
+        showMessage('Unable to restore site. Try again.', 'error');
+      }
+    });
+  });
+}
+
+function showUndoToast(text, onUndo) {
+  const existingBanner = document.querySelector('.message.banner');
+  if (existingBanner) existingBanner.remove();
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message banner success';
+
+  const textSpan = document.createElement('span');
+  textSpan.textContent = text;
+  messageDiv.appendChild(textSpan);
+
+  if (typeof onUndo === 'function') {
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'undo-btn';
+    undoBtn.textContent = 'Undo';
+    undoBtn.addEventListener('click', function () {
+      messageDiv.remove();
+      onUndo();
+    });
+    messageDiv.appendChild(undoBtn);
+  }
+
+  document.querySelector('.container').appendChild(messageDiv);
+
+  const announcement = document.getElementById('status-announcement');
+  if (announcement) {
+    announcement.textContent = '';
+    setTimeout(function () { announcement.textContent = text; }, 50);
+  }
+
+  setTimeout(function () {
+    if (messageDiv.parentNode) messageDiv.remove();
+  }, 5000);
 }
 
 function saveSettings() {
@@ -782,18 +840,72 @@ function renderWeeklyReport(report) {
 }
 
 function showPaywall(source) {
+  _paywallReturnFocus = document.activeElement;
   const modal = document.getElementById('paywall-modal');
   modal.dataset.source = source || 'unknown';
   modal.classList.remove('hidden');
+  // Focus the first interactive element in the modal
+  const firstFocusable = modal.querySelector('input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (firstFocusable) {
+    firstFocusable.focus();
+  }
+  _attachModalFocusTrap(modal);
 }
 
 function hidePaywall() {
   const modal = document.getElementById('paywall-modal');
+  _detachModalFocusTrap(modal);
   modal.classList.add('hidden');
   const emailInput = document.getElementById('paywall-email');
   const emailError = document.getElementById('paywall-email-error');
   if (emailInput) emailInput.value = '';
   if (emailError) emailError.classList.add('hidden');
+  // Restore focus to the element that opened the modal
+  if (_paywallReturnFocus && typeof _paywallReturnFocus.focus === 'function') {
+    _paywallReturnFocus.focus();
+  }
+  _paywallReturnFocus = null;
+}
+
+function _attachModalFocusTrap(modal) {
+  const focusableSelectors = 'button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])';
+  function getFocusable() {
+    return Array.from(modal.querySelectorAll(focusableSelectors));
+  }
+
+  function handler(e) {
+    if (e.key === 'Escape') {
+      hidePaywall();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  modal._focusTrapHandler = handler;
+  modal.addEventListener('keydown', handler);
+}
+
+function _detachModalFocusTrap(modal) {
+  if (modal._focusTrapHandler) {
+    modal.removeEventListener('keydown', modal._focusTrapHandler);
+    modal._focusTrapHandler = null;
+  }
 }
 
 function getPaywallEmail() {
@@ -946,6 +1058,26 @@ if (typeof globalThis !== 'undefined') {
   };
 }
 
+function initDetailsAnimation() {
+  document.querySelectorAll('details.advanced-tuning').forEach(function (details) {
+    const body = details.querySelector('.tuning-body');
+    if (!body) return;
+
+    // Manage inert for keyboard-accessibility of collapsed content
+    if (!details.open) {
+      body.setAttribute('inert', '');
+    }
+
+    details.addEventListener('toggle', function () {
+      if (details.open) {
+        body.removeAttribute('inert');
+      } else {
+        body.setAttribute('inert', '');
+      }
+    });
+  });
+}
+
 function isProUser() {
   if (cachedSettings?.subscription?.tier !== 'pro') {
     return false;
@@ -1011,6 +1143,14 @@ function showMessage(text, type = 'info') {
   messageDiv.textContent = text;
 
   document.querySelector('.container').appendChild(messageDiv);
+
+  // Announce to screen readers via aria-live region
+  const announcement = document.getElementById('status-announcement');
+  if (announcement) {
+    announcement.textContent = '';
+    // Brief timeout ensures the change is detected by assistive technology
+    setTimeout(() => { announcement.textContent = text; }, 50);
+  }
 
   setTimeout(() => {
     if (messageDiv.parentNode) {

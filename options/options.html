@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="../vendor/sentry.min.js"></script>
+  <script src="../vendor/sentry-init.js"></script>
+  <script>Sentry.setTag('page', 'options');</script>
 </head>
 <body>
   <main class="container">
@@ -19,18 +22,19 @@
       <p>Set up your blocker and choose how much friction you want before distracting sites open.</p>
     </header>
 
-    <nav class="tabs" aria-label="Settings sections">
-      <button id="tab-general" class="tab-btn active" data-tab="general">General</button>
-      <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics">Analytics</button>
-      <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report">Weekly Report</button>
+    <nav class="tabs" role="tablist" aria-label="Settings sections">
+      <button id="tab-general" class="tab-btn active" data-tab="general" role="tab" aria-selected="true" aria-controls="panel-general">General</button>
+      <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Analytics</button>
+      <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">Weekly Report</button>
+      <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Pro</button>
     </nav>
 
-    <section id="panel-general" class="tab-panel active">
+    <section id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
       <section class="panel">
         <h2>Blocklist</h2>
         <div class="input-group">
           <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com" />
-          <button id="add-site-btn" class="btn btn-primary">Add</button>
+          <button id="add-site-btn" class="btn btn-primary">Block site</button>
         </div>
         <ul id="blocked-sites-list"></ul>
       </section>
@@ -41,8 +45,8 @@
         <input id="access-window-minutes" type="number" min="1" step="1" />
 
         <label for="manual-override-delay" class="top-space">Manual override delay (seconds)</label>
-        <input id="manual-override-delay" type="number" min="10" max="15" step="1" />
-        <p class="helper">Free manual override uses a 10 to 15 second pause before access.</p>
+        <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
+        <p class="helper" id="override-delay-hint">Free manual override uses a 10 to 15 second pause before access.</p>
 
         <div class="schedule-header top-space">
           <h3>Simple Schedule</h3>
@@ -77,122 +81,31 @@
         </div>
       </section>
 
-      <section class="panel pro-panel">
-        <div class="pro-panel-head">
-          <h2>Pro Focus Tools</h2>
-          <button id="open-pricing-btn" class="btn btn-secondary">See Pro Plans</button>
-        </div>
-        <div id="subscription-status" class="subscription-status">
-          Visit our pricing page to get Pro. After checkout, this browser activates automatically.
-        </div>
-        <p class="helper">Add extra steps between you and a blocked site — so you only visit when it's actually worth it.</p>
-
-        <div class="preset-block">
-          <p class="helper">How hard should it be to open a blocked site?</p>
-          <div class="preset-grid">
-            <button type="button" class="preset-btn" data-pro-preset="light">Light</button>
-            <button type="button" class="preset-btn" data-pro-preset="balanced">Balanced</button>
-            <button type="button" class="preset-btn" data-pro-preset="strict">Strict</button>
-          </div>
-        </div>
-
-        <details class="advanced-tuning">
-          <summary>Customize how each step works</summary>
-          <div class="pro-feature-list">
-            <label class="switch-row">
-              <input id="strict-mode-toggle" type="checkbox" data-pro-feature="strictMode" />
-              <span>
-                <strong>Lock settings while a schedule is running</strong>
-                <small>While a schedule is active, you can't turn off blocking or change any settings.</small>
-              </span>
-            </label>
-
-            <label for="strict-disable-delay-seconds" class="sub-field">Wait time before you can turn this off (seconds)</label>
-            <input id="strict-disable-delay-seconds" class="sub-field" type="number" min="10" max="300" step="1" data-pro-feature="strictMode" />
-
-            <label class="switch-row">
-              <input id="behavioral-friction-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
-              <span>
-                <strong>Add extra steps before opening a blocked site</strong>
-                <small>Useful when Light mode isn't slowing you down enough.</small>
-              </span>
-            </label>
-
-            <label class="switch-row sub-toggle">
-              <input id="require-task-intent" type="checkbox" data-pro-feature="behavioralFriction" />
-              <span>
-                <strong>Ask why you're visiting before you get in</strong>
-                <small>Before the typing challenge, you'll be asked to write your reason for visiting.</small>
-              </span>
-            </label>
-
-            <label class="switch-row sub-toggle">
-              <input id="timed-wait-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
-              <span>
-                <strong>Add a countdown before the typing challenge</strong>
-                <small>Gives you a moment to change your mind before the site opens.</small>
-              </span>
-            </label>
-
-            <label for="timed-wait-seconds" class="sub-field">Countdown length (seconds)</label>
-            <input id="timed-wait-seconds" class="sub-field" type="number" min="5" max="90" step="1" data-pro-feature="behavioralFriction" />
-
-            <label class="switch-row sub-toggle">
-              <input id="earn-access-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
-              <span>
-                <strong>Require finishing the typing challenge to get in</strong>
-                <small>You can't skip — the site only opens after you complete the full challenge.</small>
-              </span>
-            </label>
-
-            <label for="earn-access-min-seconds" class="sub-field">Minimum time on the challenge before the site opens (seconds)</label>
-            <input id="earn-access-min-seconds" class="sub-field" type="number" min="30" max="900" step="5" data-pro-feature="behavioralFriction" />
-
-            <label for="custom-challenge-prompt" class="sub-field">Custom question to answer before getting in (optional)</label>
-            <input
-              id="custom-challenge-prompt"
-              class="sub-field"
-              type="text"
-              maxlength="120"
-              placeholder="Example: What do you need from this site right now?"
-              data-pro-feature="behavioralFriction"
-            />
-          </div>
-        </details>
-
-        <div class="panel-actions">
-          <button id="open-analytics-btn" class="btn btn-secondary" data-pro-screen="analytics">Open Analytics Dashboard</button>
-          <button id="open-weekly-report-btn" class="btn btn-secondary" data-pro-screen="report">Open Weekly Report</button>
-        </div>
-      </section>
-
-
-      <button id="save-settings-btn" class="btn btn-primary full">Save Settings</button>
+      <button id="save-settings-btn" data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
 
-    <section id="panel-analytics" class="tab-panel">
+    <section id="panel-analytics" class="tab-panel" role="tabpanel" aria-labelledby="tab-analytics">
       <section class="panel">
         <h2>Analytics Dashboard</h2>
         <p id="analytics-period-value" class="metric-period">--</p>
 
-        <div class="metric-hero-card">
-          <span class="metric-label">Blocked attempts</span>
-          <div class="metric-hero-number">
-            <span id="blocked-attempts-value">--</span>
+        <div class="scoreboard">
+          <div class="score-stat">
+            <span class="score-label">Blocked attempts</span>
+            <span id="blocked-attempts-value" class="score-value">--</span>
+            <span id="blocked-attempts-insight" class="score-insight">--</span>
           </div>
-          <span id="blocked-attempts-insight" class="metric-insight">--</span>
-        </div>
-
-        <div class="metric-pair">
-          <div class="metric-card" id="metric-card-overrides">
-            <span class="metric-label">Overrides</span>
-            <span id="overrides-value" class="metric-number">--</span>
-            <span id="overrides-insight" class="metric-insight">--</span>
+          <div class="score-divider" aria-hidden="true"></div>
+          <div class="score-stat" id="metric-card-overrides">
+            <span class="score-label">Overrides</span>
+            <span id="overrides-value" class="score-value">--</span>
+            <span id="overrides-insight" class="score-insight">--</span>
           </div>
-          <div class="metric-card" id="metric-card-strict">
-            <span class="metric-label">Focus time</span>
-            <span id="strict-session-minutes-value" class="metric-number">--</span>
-            <span id="strict-session-insight" class="metric-insight">--</span>
+          <div class="score-divider" aria-hidden="true"></div>
+          <div class="score-stat" id="metric-card-strict">
+            <span class="score-label">Focus time</span>
+            <span id="strict-session-minutes-value" class="score-value">--</span>
+            <span id="strict-session-insight" class="score-insight">--</span>
           </div>
         </div>
       </section>
@@ -208,26 +121,25 @@
       </section>
     </section>
 
-    <section id="panel-report" class="tab-panel">
+    <section id="panel-report" class="tab-panel" role="tabpanel" aria-labelledby="tab-report">
       <section class="panel">
         <h2 id="weekly-report-title">Weekly Discipline Report</h2>
         <p id="weekly-report-period" class="metric-period">--</p>
 
-        <div class="metric-hero-card">
-          <span class="metric-label">Discipline score</span>
-          <div class="metric-hero-number">
-            <span id="weekly-focus-score-value">--</span>
-          </div>
+        <div class="discipline-score-block">
+          <span class="score-label">Discipline score</span>
+          <span id="weekly-focus-score-value" class="discipline-score-value">--</span>
         </div>
 
-        <div class="metric-pair">
-          <div class="metric-card" id="metric-card-weekly-overrides">
-            <span class="metric-label">Overrides this week</span>
-            <span id="weekly-overrides-value" class="metric-number">--</span>
+        <div class="scoreboard scoreboard-sm">
+          <div class="score-stat" id="metric-card-weekly-overrides">
+            <span class="score-label">Overrides this week</span>
+            <span id="weekly-overrides-value" class="score-value">--</span>
           </div>
-          <div class="metric-card" id="metric-card-weekly-trend">
-            <span class="metric-label">Trend vs last week</span>
-            <span id="weekly-trend-value" class="metric-number">--</span>
+          <div class="score-divider" aria-hidden="true"></div>
+          <div class="score-stat" id="metric-card-weekly-trend">
+            <span class="score-label">Trend vs last week</span>
+            <span id="weekly-trend-value" class="score-value">--</span>
           </div>
         </div>
 
@@ -251,26 +163,124 @@
         <ul id="weekly-report-risks" class="metric-list"></ul>
       </section>
     </section>
+
+    <section id="panel-pro" class="tab-panel" role="tabpanel" aria-labelledby="tab-pro">
+      <section class="panel pro-panel">
+        <div class="pro-panel-head">
+          <h2>Pro Focus Tools</h2>
+          <button id="open-pricing-btn" class="btn btn-secondary">See Pro Plans</button>
+        </div>
+        <div id="subscription-status" class="subscription-status">
+          Visit our pricing page to get Pro. After checkout, this browser activates automatically.
+        </div>
+        <p class="helper">Add extra friction between you and a blocked site — so you only visit when it's genuinely worth it.</p>
+
+        <div class="preset-block">
+          <p class="helper">How hard should it be to open a blocked site?</p>
+          <div class="preset-grid">
+            <button type="button" class="preset-btn" data-pro-preset="light">Light</button>
+            <button type="button" class="preset-btn" data-pro-preset="balanced">Balanced</button>
+            <button type="button" class="preset-btn" data-pro-preset="strict">Strict</button>
+          </div>
+        </div>
+
+        <details class="advanced-tuning">
+          <summary>Customize each step</summary>
+          <div class="tuning-body">
+            <div class="tuning-body-inner">
+              <div class="pro-feature-list">
+                <label class="switch-row">
+                  <input id="strict-mode-toggle" type="checkbox" data-pro-feature="strictMode" />
+                  <span>
+                    <strong>Lock settings while a schedule is running</strong>
+                    <small>While a schedule is active, you can't turn off blocking or change any settings.</small>
+                  </span>
+                </label>
+
+                <label for="strict-disable-delay-seconds" class="sub-field">Wait time before you can turn this off (seconds)</label>
+                <input id="strict-disable-delay-seconds" class="sub-field" type="number" min="10" max="300" step="1" data-pro-feature="strictMode" />
+
+                <label class="switch-row">
+                  <input id="behavioral-friction-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
+                  <span>
+                    <strong>Add extra steps before opening a blocked site</strong>
+                    <small>Useful when Light mode isn't slowing you down enough.</small>
+                  </span>
+                </label>
+
+                <label class="switch-row sub-toggle">
+                  <input id="require-task-intent" type="checkbox" data-pro-feature="behavioralFriction" />
+                  <span>
+                    <strong>Ask why you're visiting before you get in</strong>
+                    <small>Before the typing challenge, you'll be asked to write your reason for visiting.</small>
+                  </span>
+                </label>
+
+                <label class="switch-row sub-toggle">
+                  <input id="timed-wait-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
+                  <span>
+                    <strong>Add a countdown before the typing challenge</strong>
+                    <small>Gives you a moment to change your mind before the site opens.</small>
+                  </span>
+                </label>
+
+                <label for="timed-wait-seconds" class="sub-field">Countdown length (seconds)</label>
+                <input id="timed-wait-seconds" class="sub-field" type="number" min="5" max="90" step="1" data-pro-feature="behavioralFriction" />
+
+                <label class="switch-row sub-toggle">
+                  <input id="earn-access-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
+                  <span>
+                    <strong>Require finishing the typing challenge to get in</strong>
+                    <small>You can't skip — the site only opens after you complete the full challenge.</small>
+                  </span>
+                </label>
+
+                <label for="earn-access-min-seconds" class="sub-field">Minimum time on the challenge before the site opens (seconds)</label>
+                <input id="earn-access-min-seconds" class="sub-field" type="number" min="30" max="900" step="5" data-pro-feature="behavioralFriction" />
+
+                <label for="custom-challenge-prompt" class="sub-field">Custom question to answer before getting in (optional)</label>
+                <input
+                  id="custom-challenge-prompt"
+                  class="sub-field"
+                  type="text"
+                  maxlength="120"
+                  placeholder="Example: What do you need from this site right now?"
+                  data-pro-feature="behavioralFriction"
+                />
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <button data-action="save-settings" class="btn btn-primary full">Save Settings</button>
+    </section>
   </main>
 
   <div id="paywall-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
     <div class="modal-card">
       <h2 id="paywall-title">Upgrade to Pro</h2>
-      <p>
-        Pro gives you deeper focus tools and weekly reports to help you stay on track.
-      </p>
+      <p>Deeper focus tools and weekly accountability reports.</p>
       <ul class="price-points">
         <li>Analytics dashboard</li>
         <li>Weekly discipline reports</li>
         <li>Strict Mode and stronger unlock rules</li>
-        <li>$5.99 per month</li>
-        <li><strong>$34.99 per year — Recommended</strong></li>
-        <li>$79 once — Lifetime (founding member)</li>
       </ul>
-      <div class="modal-email">
-        <label for="paywall-email">Your email</label>
-        <input id="paywall-email" type="email" placeholder="you@example.com" required autocomplete="email" />
-        <p id="paywall-email-error" class="field-error hidden">Enter a valid email address to continue.</p>
+      <div class="price-tiers">
+        <div class="price-tier">
+          <span class="price-amount">$5.99</span>
+          <span class="price-cycle">/ month</span>
+        </div>
+        <div class="price-tier price-tier-featured">
+          <span class="price-amount">$34.99</span>
+          <span class="price-cycle">/ year</span>
+          <span class="price-badge">Best value</span>
+        </div>
+        <div class="price-tier">
+          <span class="price-amount">$79</span>
+          <span class="price-cycle">once</span>
+          <small class="price-note">Lifetime · Founding member</small>
+        </div>
       </div>
       <div class="modal-actions">
         <button id="view-pricing-btn" class="btn btn-primary">Go to Pricing</button>
@@ -279,6 +289,7 @@
     </div>
   </div>
 
+  <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
   <script src="options.js"></script>
 </body>
 </html>

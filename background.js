@@ -81,6 +81,9 @@ void initializeExtension('service-worker-start');
 chrome.runtime.onInstalled.addListener((details) => {
   void initializeExtension('onInstalled');
   
+  // Set the survey/uninstall URL (Must be https)
+  chrome.runtime.setUninstallURL('https://www.orlandoascanio.com/resistgate/uninstall');
+  
   // Show welcome page on first install
   if (details.reason === 'install') {
     chrome.tabs.create({

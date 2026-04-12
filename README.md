@@ -105,8 +105,22 @@ No build step required. Plain HTML/CSS/JS.
 
 ```bash
 npm install
-npm test
+npm test                    # Run all tests once
+npm run test:watch          # Watch mode (re-run on file changes)
+npm run test:coverage       # Generate coverage report (enforced thresholds: 85% background.js, 45% others)
 ```
+
+**Test structure**: Vitest runs 81 tests across 4 suites:
+- `background.integration.test.js` — Service worker message handling and storage lifecycle
+- `feature-matrix.test.js` — Pro features, entitlement, analytics, alarms
+- `friction-page.flow.test.js` — Typing challenge, manual override, temporary access grant
+- `ui.logic.test.js` — Popup and options page settings logic
+
+**Coverage thresholds** (enforced by CI):
+| Scope | Lines | Statements | Functions | Branches |
+|---|---|---|---|---|
+| `background.js` | 85% | 85% | 95% | 70% |
+| All other files | 45% | 45% | 50% | 70% |
 
 ### Billing integration notes
 
@@ -120,7 +134,15 @@ PAYPAL_PLAN_MAP={"resistgate":{"monthly":"P-...","yearly":"P-..."},"another-prod
 - Each new extension origin must be added to `ENTITLEMENT_ALLOWED_ORIGINS` in the portfolio backend.
 - Each extension manifest must include your site in `externally_connectable`.
 
----
+### Release process
+
+1. Update version in `manifest.json` and `package.json`.
+2. Update `changelog.md` with release notes.
+3. Run `npm run test:coverage` to ensure all tests pass and coverage thresholds are met.
+4. Commit with message: `Release v1.x.y`
+5. Tag and push: `git tag v1.x.y && git push origin v1.x.y`
+6. CI automatically creates a GitHub Release with build artifacts (zipped extension).
+7. Upload to Chrome Web Store via developer dashboard.
 
 ## Permissions (why)
 
@@ -150,9 +172,23 @@ PAYPAL_PLAN_MAP={"resistgate":{"monthly":"P-...","yearly":"P-..."},"another-prod
 
 ---
 
+## Release Status
+
+**Version 1.0.0** — Live on Chrome Web Store with active users.
+
+- ✅ Deployed to Chrome Web Store
+- ✅ All 81 tests passing (vitest)
+- ✅ 88.5% coverage on background.js (exceeds 85% threshold)
+- ✅ License-based Pro entitlement via RS256 JWT
+- ✅ Free tier + Pro monetization active
+- ✅ Collecting real user feedback and analytics
+
+---
+
 ## Documentation
 
-- [Implementation Plan (Next Steps)](docs/Implementation.md)
 - [Changelog](changelog.md)
 - [Architecture](Architecture.md)
 - [Roadmap](ROADMAP.md)
+- [Implementation Notes](docs/Implementation.md)
+- [Agent Guidelines](AGENTS.md)

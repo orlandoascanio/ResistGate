@@ -1,24 +1,76 @@
+/* ── Design tokens ──────────────────────────────────────────────── */
 :root {
-  --bg: #f5f2fb;
+  /* Backgrounds */
+  --bg: #f6f7fb;
+  --bg-alt: #f8f9fc;
   --card: #ffffff;
-  --text: #121016;
+
+  /* Text */
+  --text: #0f0d14;
+  --text-2: #3f3750;
   --muted: #5f596b;
-  --line: #e6deef;
+
+  /* Borders */
+  --line: #e1e4ed;
+  --line-2: #cec6e8;
+
+  /* Brand */
   --primary: #4a1d96;
   --primary-hover: #3d167d;
   --lavender: #efe7fb;
-  --ok: #0f766e;
+
+  /* Focus ring */
+  --focus-ring: rgba(74, 29, 150, 0.35);
+
+  /* Radius */
   --radius: 14px;
+  --radius-sm: 10px;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0b17;
+    --bg-alt: #16101f;
+    --card: #1a1228;
+
+    --text: #ede7f8;
+    --text-2: #c3b5d8;
+    --muted: #8c7fa8;
+
+    --line: #2c1f42;
+    --line-2: #3d2c5a;
+
+    --primary: #8b5cf6;
+    --primary-hover: #7c3aed;
+    --lavender: #26193a;
+
+    --focus-ring: rgba(139, 92, 246, 0.5);
+  }
+}
+
+/* ── Reset ──────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* ── Utility ────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Base ───────────────────────────────────────────────────────── */
 body {
-  background: linear-gradient(180deg, #faf8ff 0%, #f5f2fb 100%);
+  background: var(--bg);
   color: var(--text);
   font: 15px/1.5 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
@@ -28,6 +80,7 @@ body {
   padding: 20px;
 }
 
+/* ── Welcome card ───────────────────────────────────────────────── */
 .welcome-container {
   width: 100%;
   max-width: 560px;
@@ -37,10 +90,11 @@ body {
   background: var(--card);
   border-radius: var(--radius);
   padding: 48px 40px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 24px rgba(74, 29, 150, 0.07);
   border: 1px solid var(--line);
 }
 
+/* ── Welcome header ─────────────────────────────────────────────── */
 .welcome-header {
   text-align: center;
   margin-bottom: 28px;
@@ -60,6 +114,7 @@ body {
   letter-spacing: 0.4px;
 }
 
+/* ── Features list ──────────────────────────────────────────────── */
 .welcome-content {
   margin-bottom: 40px;
 }
@@ -99,14 +154,15 @@ body {
   line-height: 1.5;
 }
 
+/* ── Next steps ─────────────────────────────────────────────────── */
 .next-steps {
   background: var(--lavender);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 16px;
   margin-bottom: 24px;
 }
 
-.next-steps h3 {
+.next-steps h2 {
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
@@ -146,6 +202,7 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Actions ────────────────────────────────────────────────────── */
 .welcome-actions {
   display: flex;
   flex-direction: column;
@@ -155,12 +212,14 @@ body {
 
 .btn {
   padding: 12px 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out,
+              border-color 0.15s ease-out, box-shadow 0.15s ease-out,
+              transform 0.15s ease-out;
   text-align: center;
   text-decoration: none;
 }
@@ -174,8 +233,7 @@ body {
 .btn-primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(74, 29, 150, 0.3);
+  box-shadow: 0 2px 8px rgba(74, 29, 150, 0.22);
 }
 
 .btn-primary:active {
@@ -190,14 +248,20 @@ body {
 
 .btn-secondary:hover {
   background: var(--lavender);
-  border-color: #d5c9ea;
+  border-color: var(--line-2);
   color: var(--text);
 }
 
 .btn-secondary:active {
-  background: #e8d9f9;
+  background: var(--lavender);
 }
 
+.btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────── */
 .footer-note {
   font-size: 12px;
   color: var(--muted);
@@ -205,7 +269,7 @@ body {
   line-height: 1.4;
 }
 
-/* Responsive design */
+/* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .welcome-card {
     padding: 32px 24px;

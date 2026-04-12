@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="../vendor/sentry.min.js"></script>
+  <script src="../vendor/sentry-init.js"></script>
+  <script>Sentry.setTag('page', 'popup');</script>
 </head>
 <body>
   <div class="popup-shell">
@@ -20,10 +23,10 @@
       <section class="section">
         <label for="new-blocked-site">Domain</label>
         <div class="input-row">
-          <input id="new-blocked-site" type="text" placeholder="e.g., youtube.com" />
+          <input id="new-blocked-site" type="text" placeholder="e.g., youtube.com" aria-describedby="new-site-hint" />
           <button id="add-site-btn" class="btn btn-primary">Block this site</button>
         </div>
-        <p class="helper-text">Enter a domain like youtube.com (no https://)</p>
+        <p class="helper-text" id="new-site-hint">Enter a domain like youtube.com (no https://)</p>
       </section>
 
       <section class="section blocked-sites-section">
@@ -31,12 +34,13 @@
           <h2>Currently Blocked</h2>
           <a href="#" id="open-options-btn" class="manage-link">Manage all</a>
         </div>
-        <p id="blocked-count-badge" class="blocked-count-meta">No sites blocked</p>
+        <p id="blocked-count-badge" class="blocked-count-meta"></p>
         <ul id="blocked-sites-list"></ul>
-        <p class="empty-state" id="empty-blocklist-msg">No blocked sites yet.</p>
+        <p class="empty-state" id="empty-blocklist-msg">Add a domain above to start blocking.</p>
       </section>
     </main>
   </div>
+  <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
   <script src="popup.js"></script>
 </body>
 </html>

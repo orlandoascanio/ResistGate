@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="../vendor/sentry.min.js"></script>
+  <script src="../vendor/sentry-init.js"></script>
+  <script>Sentry.setTag('page', 'friction-page');</script>
 </head>
 <body>
   <div class="container">
@@ -25,11 +28,13 @@
         <div id="pro-precheck" class="pro-precheck hidden"></div>
         <p id="precheck-error" class="error-text precheck-error"></p>
 
-        <div id="ready-confirmation" class="hidden" style="margin-bottom: 20px; text-align: center;">
-          <h3 style="margin-bottom: 10px;">Ready to earn access with ResistGate?</h3>
-          <p style="margin-bottom: 15px;">Complete 5 paragraphs with full accuracy.</p>
-          <button id="confirm-start-challenge" class="btn btn-primary" style="margin-right: 10px;">I'm Ready</button>
-          <button id="cancel-start-challenge" class="btn btn-secondary">Cancel</button>
+        <div id="ready-confirmation" class="ready-confirmation hidden">
+          <h2>Ready to earn access with ResistGate?</h2>
+          <p>Complete 5 paragraphs with full accuracy.</p>
+          <div class="ready-actions">
+            <button id="confirm-start-challenge" class="btn btn-primary">I'm Ready</button>
+            <button id="cancel-start-challenge" class="btn btn-secondary">Cancel</button>
+          </div>
         </div>
 
         <div class="primary-actions" id="primary-actions-group">
@@ -47,6 +52,7 @@
     </div>
   </div>
 
+  <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
   <script src="script.js"></script>
 </body>
 </html>
