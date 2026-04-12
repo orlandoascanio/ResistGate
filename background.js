@@ -327,14 +327,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           chrome.alarms.create(COMMITMENT_ALARM, { when: expiresAt });
           await queueRulesUpdate('activateCommitmentMode');
 
-          if (hasProAccess(settings)) {
-            await appendAnalyticsEvent({
-              type: 'blocked_visit',
-              timestamp: now,
-              domain: 'commitment-mode'
-            });
-          }
-
           sendResponse({ success: true, expiresAt });
           return;
         }
@@ -925,7 +917,7 @@ function sanitizeCommitmentMode(commitmentMode) {
 function sanitizeIntentionPage(intentionPage) {
   const incoming = intentionPage && typeof intentionPage === 'object' ? intentionPage : {};
   const personalGoal = typeof incoming.personalGoal === 'string'
-    ? incoming.personalGoal.slice(0, 200).trim()
+    ? incoming.personalGoal.trim().slice(0, 200)
     : '';
   return {
     enabled: incoming.enabled === true,

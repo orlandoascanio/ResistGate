@@ -3,6 +3,7 @@ let startTime = null;
 let accessDurationMinutes = 15;
 let accessCountdownInterval = null;
 let waitCountdownInterval = null;
+let breathingAnimationTimeout = null;
 let currentOriginalUrl = null;
 let currentSettings = null;
 let manualOverrideState = {
@@ -152,6 +153,11 @@ function startBreathingAnimation() {
   const text = document.getElementById('breathing-text');
   if (!circle || !text) return;
 
+  if (breathingAnimationTimeout) {
+    clearTimeout(breathingAnimationTimeout);
+    breathingAnimationTimeout = null;
+  }
+
   const phases = [
     { label: 'Breathe in', duration: 4000, className: 'breathe-in' },
     { label: 'Hold', duration: 7000, className: 'breathe-hold' },
@@ -161,11 +167,12 @@ function startBreathingAnimation() {
   let phaseIndex = 0;
 
   function runPhase() {
+    if (!document.getElementById('breathing-circle')) return;
     const phase = phases[phaseIndex % phases.length];
     text.textContent = phase.label;
     circle.className = 'breathing-circle ' + phase.className;
     phaseIndex++;
-    setTimeout(runPhase, phase.duration);
+    breathingAnimationTimeout = setTimeout(runPhase, phase.duration);
   }
 
   runPhase();

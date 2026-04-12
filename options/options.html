@@ -262,8 +262,8 @@
         </div>
 
         <label for="commitment-duration-hours">Lock duration (hours)</label>
-        <input id="commitment-duration-hours" type="number" min="1" max="24" step="1" value="2" data-pro-feature="commitmentMode" />
-        <p class="helper">Choose 1–24 hours. Once activated, there is <strong>no way</strong> to disable it early.</p>
+        <input id="commitment-duration-hours" type="number" min="1" max="24" step="1" value="2" data-pro-feature="commitmentMode" aria-describedby="commitment-warning" />
+        <p class="helper" id="commitment-warning">Choose 1–24 hours. Once activated, there is <strong>no way</strong> to disable it early.</p>
 
         <button id="activate-commitment-btn" class="btn btn-primary" data-pro-feature="commitmentMode" style="margin-top: 12px;">Activate Commitment Mode</button>
       </section>
