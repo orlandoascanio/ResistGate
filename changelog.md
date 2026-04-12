@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-04-12
+
+### Added
+- **Commitment Mode (Pro)**: Total lockout for 1–24 hours — no overrides, no challenge completions, no settings changes possible during the lock period. Auto-expires via Chrome alarm. Status visible in popup, options page, and friction page. New message actions: `activateCommitmentMode`, `getCommitmentModeStatus`, `deactivateCommitmentMode` (always refuses early deactivation). Applies globally across **all blocked sites**.
+- **Intention Page (Pro)**: Replaces the generic friction message with the user's personal goal (e.g., "Ship the MVP by Friday"). Includes an optional 4-7-8 breathing exercise animation to turn temptation into a mindfulness moment. Both features are configurable via simple toggles in the options page.
+
+### Changed
+- **Pricing**: Updated subscription tiers to improve conversion:
+  - Monthly: $5.99/mo → **$3.99/mo**
+  - Annual: $34.99/yr → **$29.99/yr**
+  - Lifetime: $79 → **$49.99**
+- **Paywall Feature List**: Added Commitment Mode and Intention Page to the Pro feature highlights on the pricing screen.
+
+---
+
 ## [1.0.0] - 2026-04-11
 
 ### Added
@@ -39,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Release History
+
+**1.1.0** adds the two flagship Pro differentiators and launch-friendly pricing:
+- Commitment Mode: irrevocable global lockout across all blocked sites (1–24 h)
+- Intention Page: personal goal display + optional 4-7-8 breathing animation
+- Revised pricing: $3.99/mo · $29.99/yr · $49.99 lifetime
 
 **1.0.0** is the stable release candidate with full Pro feature support:
 - Core blocking engine with typing challenge friction
