@@ -2,56 +2,66 @@
 
 /**
  * Hardcoded changelog. Each entry maps a version string to an array of
- * { category, text } items displayed on the page.
+ * { category, label, detail } items displayed on the page.
  *
  * Categories: 'new' | 'changed' | 'fixed' | 'security'
  *
  * When shipping a new version, add a block here matching the version in
  * manifest.json before tagging and releasing.
  */
-const CHANGELOG = {
+const changelogEntries = {
   '1.1.0': [
     {
       category: 'new',
-      text: '<strong>Commitment Mode (Pro)</strong> — Total lockout for 1–24 hours with no overrides. Auto-expires via Chrome alarm.'
+      label: 'Commitment Mode (Pro)',
+      detail: '— Total lockout for 1–24 hours with no overrides. Auto-expires via Chrome alarm.'
     },
     {
       category: 'new',
-      text: '<strong>Intention Page (Pro)</strong> — Replaces the generic friction message with your personal goal and an optional 4-7-8 breathing animation.'
+      label: 'Intention Page (Pro)',
+      detail: '— Replaces the generic friction message with your personal goal and an optional 4-7-8 breathing animation.'
     },
     {
       category: 'changed',
-      text: '<strong>Pricing</strong> — Monthly dropped to $3.99/mo, Annual to $29.99/yr, Lifetime to $49.99.'
+      label: 'Pricing',
+      detail: '— Monthly dropped to $3.99/mo, Annual to $29.99/yr, Lifetime to $49.99.'
     },
     {
       category: 'changed',
-      text: '<strong>Paywall</strong> — Added Commitment Mode and Intention Page to the Pro feature highlights.'
+      label: 'Paywall',
+      detail: '— Added Commitment Mode and Intention Page to the Pro feature highlights.'
     }
   ],
   '1.0.0': [
     {
       category: 'new',
-      text: '<strong>Core Engine</strong> — Manifest V3 declarativeNetRequest-based domain blocking.'
+      label: 'Core Engine',
+      detail: '— Manifest V3 declarativeNetRequest-based domain blocking.'
     },
     {
       category: 'new',
-      text: '<strong>Friction Flow</strong> — Interactive typing challenge (5 paragraphs) for unlocking blocked sites.'
+      label: 'Friction Flow',
+      detail: '— Interactive typing challenge (5 paragraphs) for unlocking blocked sites.'
     },
     {
       category: 'new',
-      text: '<strong>Manual Override</strong> — Configurable 10–15 s delay fallback for quick access.'
+      label: 'Manual Override',
+      detail: '— Configurable 10–15 s delay fallback for quick access.'
     },
     {
       category: 'new',
-      text: '<strong>Scheduling</strong> — Day/time-based blocking windows.'
+      label: 'Scheduling',
+      detail: '— Day/time-based blocking windows.'
     },
     {
       category: 'fixed',
-      text: '<strong>Strict Mode Reliability</strong> — Strict Mode now activates globally even without a schedule.'
+      label: 'Strict Mode Reliability',
+      detail: '— Strict Mode now activates globally even without a schedule.'
     },
     {
       category: 'security',
-      text: '<strong>Pro Entitlement</strong> — Cryptographic JWT license validation (RS256) via Web Crypto API with 24-hour periodic refresh.'
+      label: 'Pro Entitlement',
+      detail: '— Cryptographic JWT license validation (RS256) via Web Crypto API with 24-hour periodic refresh.'
     }
   ]
 };
@@ -67,11 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render changelog entries
   const body = document.getElementById('changelog-body');
-  const entries = CHANGELOG[version];
+  const entries = changelogEntries[version];
 
   if (body) {
     if (entries && entries.length > 0) {
-      entries.forEach(({ category, text }) => {
+      entries.forEach(({ category, label, detail }) => {
         const row = document.createElement('div');
         row.className = 'changelog-entry';
         row.setAttribute('role', 'listitem');
@@ -81,12 +91,17 @@ document.addEventListener('DOMContentLoaded', () => {
         pill.dataset.category = category;
         pill.textContent = category.charAt(0).toUpperCase() + category.slice(1);
 
-        const label = document.createElement('p');
-        label.className = 'entry-text';
-        label.innerHTML = text;
+        const textNode = document.createElement('p');
+        textNode.className = 'entry-text';
+
+        const bold = document.createElement('strong');
+        bold.textContent = label;
+
+        textNode.appendChild(bold);
+        textNode.appendChild(document.createTextNode(` ${detail}`));
 
         row.appendChild(pill);
-        row.appendChild(label);
+        row.appendChild(textNode);
         body.appendChild(row);
       });
     } else {
