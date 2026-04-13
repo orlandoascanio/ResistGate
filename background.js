@@ -101,10 +101,14 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Set the survey/uninstall URL (Must be https)
   chrome.runtime.setUninstallURL('https://www.orlandoascanio.com/resistgate/uninstall');
   
-  // Show welcome page on first install
+  // Show welcome page on first install, what's new page on update
   if (details.reason === 'install') {
     chrome.tabs.create({
       url: chrome.runtime.getURL('welcome/welcome.html')
+    });
+  } else if (details.reason === 'update') {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('whats-new/whats-new.html')
     });
   }
 });
