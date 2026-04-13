@@ -629,10 +629,11 @@ describe('Feature Matrix Coverage', () => {
       expect(env.createdTabs.some((t) => t.url.includes('welcome'))).toBe(true);
     });
 
-    it('onInstalled does not create welcome tab on update', async () => {
+    it('onInstalled opens whats-new tab on update', async () => {
       const tabsBefore = env.createdTabs.length;
       await env.triggerInstalled({ reason: 'update' });
-      expect(env.createdTabs.length).toBe(tabsBefore);
+      expect(env.createdTabs.length).toBe(tabsBefore + 1);
+      expect(env.createdTabs[env.createdTabs.length - 1].url).toContain('whats-new');
     });
 
     it('onStartup triggers initialization', async () => {

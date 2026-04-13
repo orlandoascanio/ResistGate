@@ -1,0 +1,291 @@
+/* ── Design tokens (mirrors welcome.css) ────────────────────────── */
+:root {
+  --bg: #f6f7fb;
+  --bg-alt: #f8f9fc;
+  --card: #ffffff;
+
+  --text: #0f0d14;
+  --text-2: #3f3750;
+  --muted: #5f596b;
+
+  --line: #e1e4ed;
+  --line-2: #cec6e8;
+
+  --primary: #4a1d96;
+  --primary-hover: #3d167d;
+  --lavender: #efe7fb;
+
+  --focus-ring: rgba(74, 29, 150, 0.35);
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  /* Category pill accent colors */
+  --pill-new-bg: #ecfdf5;
+  --pill-new-text: #059669;
+  --pill-changed-bg: #eff6ff;
+  --pill-changed-text: #2563eb;
+  --pill-fixed-bg: #fff7ed;
+  --pill-fixed-text: #c2410c;
+  --pill-security-bg: #fdf2f8;
+  --pill-security-text: #9d174d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0b17;
+    --bg-alt: #16101f;
+    --card: #1a1228;
+
+    --text: #ede7f8;
+    --text-2: #c3b5d8;
+    --muted: #8c7fa8;
+
+    --line: #2c1f42;
+    --line-2: #3d2c5a;
+
+    --primary: #8b5cf6;
+    --primary-hover: #7c3aed;
+    --lavender: #26193a;
+
+    --focus-ring: rgba(139, 92, 246, 0.5);
+
+    --pill-new-bg: #052e16;
+    --pill-new-text: #34d399;
+    --pill-changed-bg: #1e3a5f;
+    --pill-changed-text: #60a5fa;
+    --pill-fixed-bg: #431407;
+    --pill-fixed-text: #fb923c;
+    --pill-security-bg: #3b0764;
+    --pill-security-text: #e879f9;
+  }
+}
+
+/* ── Reset ──────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Utility ────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Base ───────────────────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* ── Page container ─────────────────────────────────────────────── */
+.wn-container {
+  width: 100%;
+  max-width: 560px;
+}
+
+/* ── Card ───────────────────────────────────────────────────────── */
+.wn-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 48px 40px;
+  box-shadow: 0 4px 24px rgba(74, 29, 150, 0.07);
+  border: 1px solid var(--line);
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.wn-header {
+  margin-bottom: 28px;
+}
+
+.wn-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.wn-title-row h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: var(--lavender);
+  color: var(--primary);
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.wn-tagline {
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+}
+
+/* ── Changelog body ─────────────────────────────────────────────── */
+.changelog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+/* Entry row */
+.changelog-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Category pill */
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.category-pill[data-category="new"] {
+  background: var(--pill-new-bg);
+  color: var(--pill-new-text);
+}
+
+.category-pill[data-category="changed"] {
+  background: var(--pill-changed-bg);
+  color: var(--pill-changed-text);
+}
+
+.category-pill[data-category="fixed"] {
+  background: var(--pill-fixed-bg);
+  color: var(--pill-fixed-text);
+}
+
+.category-pill[data-category="security"] {
+  background: var(--pill-security-bg);
+  color: var(--pill-security-text);
+}
+
+/* Entry text */
+.entry-text {
+  font-size: 14px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.entry-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Fallback when version has no entry */
+.changelog-fallback {
+  background: var(--lavender);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ── Actions ────────────────────────────────────────────────────── */
+.wn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.btn {
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out,
+              border-color 0.15s ease-out, box-shadow 0.15s ease-out,
+              transform 0.15s ease-out;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  box-shadow: 0 2px 8px rgba(74, 29, 150, 0.22);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.btn-secondary:hover {
+  background: var(--lavender);
+  border-color: var(--line-2);
+  color: var(--text);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Footer note ────────────────────────────────────────────────── */
+.footer-note {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .wn-card {
+    padding: 32px 24px;
+  }
+
+  .wn-title-row h1 {
+    font-size: 26px;
+  }
+
+  .entry-text {
+    font-size: 13px;
+  }
+}

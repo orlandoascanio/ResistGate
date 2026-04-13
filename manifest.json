@@ -24,7 +24,7 @@
   "options_page": "options/options.html",
   "web_accessible_resources": [
     {
-      "resources": ["welcome/welcome.html", "commitment-page/index.html"],
+      "resources": ["welcome/welcome.html", "commitment-page/index.html", "whats-new/whats-new.html"],
       "matches": ["<all_urls>"]
     }
   ],
