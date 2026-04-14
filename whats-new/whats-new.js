@@ -7,61 +7,57 @@
  * Categories: 'new' | 'changed' | 'fixed' | 'security'
  *
  * When shipping a new version, add a block here matching the version in
- * manifest.json before tagging and releasing.
+ * manifest.json before tagging and releasing. The first entry in each
+ * version array is displayed as the primary highlight card.
  */
 const changelogEntries = {
   '1.1.0': [
     {
       category: 'new',
-      label: 'Commitment Mode (Pro)',
-      detail: '— Total lockout for 1–24 hours with no overrides. Auto-expires via Chrome alarm.'
+      label: 'Commitment Mode',
+      detail: 'Total lockout for 1–24 hours with no overrides. When you say you\'re done, you\'re done.'
     },
     {
       category: 'new',
-      label: 'Intention Page (Pro)',
-      detail: '— Replaces the generic friction message with your personal goal and an optional 4-7-8 breathing animation.'
+      label: 'Intention Page',
+      detail: 'Replace the default friction screen with your personal goal. A reminder of why you started.'
     },
     {
       category: 'changed',
-      label: 'Pricing',
-      detail: '— Monthly dropped to $3.99/mo, Annual to $29.99/yr, Lifetime to $49.99.'
-    },
-    {
-      category: 'changed',
-      label: 'Paywall',
-      detail: '— Added Commitment Mode and Intention Page to the Pro feature highlights.'
+      label: 'New pricing',
+      detail: 'Monthly at $3.99, Annual at $29.99, Lifetime at $49.99. More value, lower barrier.'
     }
   ],
   '1.0.0': [
     {
       category: 'new',
-      label: 'Core Engine',
-      detail: '— Manifest V3 declarativeNetRequest-based domain blocking.'
+      label: 'Stronger blocking engine',
+      detail: 'Nowhere to slip through. Sites stay blocked—no workarounds.'
     },
     {
       category: 'new',
-      label: 'Friction Flow',
-      detail: '— Interactive typing challenge (5 paragraphs) for unlocking blocked sites.'
+      label: 'Typing challenge',
+      detail: 'Prove you\'re serious. Complete a typing challenge to unlock blocked sites on your terms.'
     },
     {
       category: 'new',
-      label: 'Manual Override',
-      detail: '— Configurable 10–15 s delay fallback for quick access.'
+      label: 'Quick access control',
+      detail: 'Adjustable delay (10–15s) before you can bypass. Time to reconsider your choices.'
     },
     {
       category: 'new',
-      label: 'Scheduling',
-      detail: '— Day/time-based blocking windows.'
+      label: 'Time-based blocking',
+      detail: 'Block by hour or day. Build discipline on your schedule, not theirs.'
     },
     {
       category: 'fixed',
-      label: 'Strict Mode Reliability',
-      detail: '— Strict Mode now activates globally even without a schedule.'
+      label: 'Strict Mode reliability',
+      detail: 'Now works everywhere, even without a schedule. No more exceptions to your own rules.'
     },
     {
       category: 'security',
-      label: 'Pro Entitlement',
-      detail: '— Cryptographic JWT license validation (RS256) via Web Crypto API with 24-hour periodic refresh.'
+      label: 'License verification',
+      detail: 'Your Pro status is verified every 24 hours. Security you can trust.'
     }
   ]
 };
@@ -81,10 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (body) {
     if (entries && entries.length > 0) {
-      entries.forEach(({ category, label, detail }) => {
-        const row = document.createElement('div');
-        row.className = 'changelog-entry';
-        row.setAttribute('role', 'listitem');
+      entries.forEach(({ category, label, detail }, index) => {
+        const card = document.createElement('div');
+        // First entry is the primary highlight card
+        card.className = index === 0 ? 'changelog-entry primary' : 'changelog-entry';
+        card.setAttribute('role', 'listitem');
+        card.style.animationDelay = `${0.15 + index * 0.06}s`;
 
         const pill = document.createElement('span');
         pill.className = 'category-pill';
@@ -97,22 +95,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const bold = document.createElement('strong');
         bold.textContent = label;
 
-        textNode.appendChild(bold);
-        textNode.appendChild(document.createTextNode(` ${detail}`));
+        const detailSpan = document.createElement('span');
+        detailSpan.textContent = ` — ${detail}`;
 
-        row.appendChild(pill);
-        row.appendChild(textNode);
-        body.appendChild(row);
+        textNode.appendChild(bold);
+        textNode.appendChild(detailSpan);
+
+        card.appendChild(pill);
+        card.appendChild(textNode);
+        body.appendChild(card);
       });
     } else {
       const fallback = document.createElement('div');
       fallback.className = 'changelog-fallback';
-      fallback.textContent = `You're on v${version}. Check the changelog for full release notes.`;
+      fallback.textContent = `You're on v${version}. Check the release notes for full details.`;
       body.appendChild(fallback);
     }
   }
 
-  // Buttons
+  // Button: Open Settings
   const openOptionsBtn = document.getElementById('open-options-btn');
   if (openOptionsBtn) {
     openOptionsBtn.addEventListener('click', () => {
@@ -121,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Button: Close
   const closeBtn = document.getElementById('close-btn');
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {

@@ -73,6 +73,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('primary-actions-group').classList.remove('hidden');
     clearPrecheckError();
   });
+
+  document.getElementById('intention-divider').addEventListener('click', function () {
+    const container = document.querySelector('.container');
+    if (container) container.classList.remove('intention-phase');
+    stopBreathingAnimation();
+    this.classList.add('hidden');
+  });
 });
 
 function loadSettings() {
@@ -191,10 +198,15 @@ function renderIntentionPage() {
   const breathingExercise = document.getElementById('breathing-exercise');
   const pageTitle = document.getElementById('page-title');
   const container = document.querySelector('.container');
+  const divider = document.getElementById('intention-divider');
 
   if (!isPro || intentionPage.enabled !== true) {
     if (intentionSection) intentionSection.classList.add('hidden');
-    if (container) container.classList.remove('has-intention');
+    if (container) {
+      container.classList.remove('has-intention');
+      container.classList.remove('intention-phase');
+    }
+    if (divider) divider.classList.add('hidden');
     return;
   }
 
@@ -219,10 +231,18 @@ function renderIntentionPage() {
 
   if (hasContent) {
     intentionSection.classList.remove('hidden');
-    if (container) container.classList.add('has-intention');
+    if (container) {
+      container.classList.add('has-intention');
+      container.classList.add('intention-phase');
+    }
+    if (divider) divider.classList.remove('hidden');
   } else {
     intentionSection.classList.add('hidden');
-    if (container) container.classList.remove('has-intention');
+    if (container) {
+      container.classList.remove('has-intention');
+      container.classList.remove('intention-phase');
+    }
+    if (divider) divider.classList.add('hidden');
   }
 }
 
@@ -254,6 +274,15 @@ function startBreathingAnimation() {
   }
 
   runPhase();
+}
+
+function stopBreathingAnimation() {
+  if (breathingAnimationTimeout) {
+    clearTimeout(breathingAnimationTimeout);
+    breathingAnimationTimeout = null;
+  }
+  const circle = document.getElementById('breathing-circle');
+  if (circle) circle.className = 'breathing-circle';
 }
 
 function renderProPrecheck() {
@@ -984,6 +1013,7 @@ if (typeof globalThis !== 'undefined') {
     renderIntentionPage,
     renderBundlePanel,
     startBreathingAnimation,
+    stopBreathingAnimation,
     __setCurrentSettingsForTest: (settings) => {
       currentSettings = settings;
     },

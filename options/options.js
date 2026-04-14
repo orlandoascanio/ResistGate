@@ -120,6 +120,10 @@ document.addEventListener('DOMContentLoaded', function () {
     openPricingPage();
   });
 
+  document.getElementById('whats-new-btn').addEventListener('click', function () {
+    chrome.tabs.create({ url: chrome.runtime.getURL('whats-new/whats-new.html') });
+  });
+
   document.getElementById('view-pricing-btn').addEventListener('click', function () {
     hidePaywall();
     openPricingPage();

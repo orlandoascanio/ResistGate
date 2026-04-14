@@ -277,6 +277,12 @@ body {
   align-items: center;
   gap: 10px;
   padding: 20px 0 8px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  font: inherit;
+  transition: opacity 0.2s ease;
 }
 
 .intention-divider::before,
@@ -287,6 +293,16 @@ body {
   background: var(--line);
 }
 
+.intention-divider:hover .intention-divider-label {
+  color: var(--primary);
+}
+
+.intention-divider:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .intention-divider-label {
   font-size: 11px;
   font-weight: 700;
@@ -294,6 +310,37 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+/* ── Intention phase (phase 1: reflect before challenge) ─────────── */
+.intention-phase .content,
+.intention-phase .bundle-panel {
+  display: none !important;
+}
+
+.intention-phase .personal-goal {
+  font-size: 26px;
+  margin-bottom: 32px;
+}
+
+.intention-phase .breathing-exercise {
+  padding: 16px 0;
+  gap: 24px;
+}
+
+.intention-phase .site-info {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 24px;
+}
+
+.intention-phase .message {
+  display: none;
+}
+
+.intention-phase #intention-divider {
+  margin-top: 8px;
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────── */

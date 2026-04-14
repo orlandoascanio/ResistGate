@@ -1,4 +1,4 @@
-/* ── Design tokens (mirrors welcome.css) ────────────────────────── */
+/* ── Design tokens (mirrors the extension) ──────────────────────── */
 :root {
   --bg: #f6f7fb;
   --bg-alt: #f8f9fc;
@@ -13,14 +13,16 @@
 
   --primary: #4a1d96;
   --primary-hover: #3d167d;
+  --primary-subtle: #b996ea;
   --lavender: #efe7fb;
+  --lavender-2: #f4edff;
 
   --focus-ring: rgba(74, 29, 150, 0.35);
 
   --radius: 14px;
   --radius-sm: 10px;
 
-  /* Category pill accent colors */
+  /* Category pill colors */
   --pill-new-bg: #ecfdf5;
   --pill-new-text: #059669;
   --pill-changed-bg: #eff6ff;
@@ -46,7 +48,9 @@
 
     --primary: #8b5cf6;
     --primary-hover: #7c3aed;
+    --primary-subtle: #6d28d9;
     --lavender: #26193a;
+    --lavender-2: #1f1232;
 
     --focus-ring: rgba(139, 92, 246, 0.5);
 
@@ -106,11 +110,19 @@ body {
   padding: 48px 40px;
   box-shadow: 0 4px 24px rgba(74, 29, 150, 0.07);
   border: 1px solid var(--line);
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-color-scheme: dark) {
+  .wn-card {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  }
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
 .wn-header {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
 .wn-title-row {
@@ -150,22 +162,71 @@ body {
 .changelog-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 32px;
 }
 
-/* Entry row */
+/* ── Entry card ─────────────────────────────────────────────────── */
 .changelog-entry {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--card);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Category pill */
+.changelog-entry:hover {
+  border-color: var(--primary-subtle);
+  box-shadow: 0 2px 8px rgba(74, 29, 150, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  .changelog-entry:hover {
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
+  }
+}
+
+/* ── Primary highlight card (first entry) ───────────────────────── */
+.changelog-entry.primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  border-color: transparent;
+  padding: 20px 18px;
+}
+
+.changelog-entry.primary:hover {
+  box-shadow: 0 4px 16px rgba(74, 29, 150, 0.25);
+  border-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .changelog-entry.primary:hover {
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+  }
+}
+
+.changelog-entry.primary .entry-text {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.changelog-entry.primary .entry-text strong {
+  color: white;
+  font-size: 15px;
+}
+
+.changelog-entry.primary .category-pill {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* ── Category pill ──────────────────────────────────────────────── */
 .category-pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 9px;
+  padding: 3px 9px;
   border-radius: 99px;
   font-size: 11px;
   font-weight: 700;
@@ -195,7 +256,7 @@ body {
   color: var(--pill-security-text);
 }
 
-/* Entry text */
+/* ── Entry text ─────────────────────────────────────────────────── */
 .entry-text {
   font-size: 14px;
   color: var(--text-2);
@@ -207,7 +268,7 @@ body {
   font-weight: 600;
 }
 
-/* Fallback when version has no entry */
+/* ── Fallback (no entries for this version) ─────────────────────── */
 .changelog-fallback {
   background: var(--lavender);
   border-radius: var(--radius-sm);
@@ -223,8 +284,10 @@ body {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 16px;
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
 }
 
+/* ── Buttons ────────────────────────────────────────────────────── */
 .btn {
   padding: 12px 20px;
   border-radius: var(--radius-sm);
@@ -233,8 +296,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s ease-out, color 0.15s ease-out,
-              border-color 0.15s ease-out, box-shadow 0.15s ease-out,
-              transform 0.15s ease-out;
+              border-color 0.15s ease-out, box-shadow 0.15s ease-out;
   text-align: center;
 }
 
@@ -262,6 +324,10 @@ body {
   color: var(--text);
 }
 
+.btn:active {
+  transform: scale(0.98);
+}
+
 .btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -273,6 +339,26 @@ body {
   color: var(--muted);
   text-align: center;
   line-height: 1.4;
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+}
+
+/* ── Animations ─────────────────────────────────────────────────── */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
@@ -283,6 +369,10 @@ body {
 
   .wn-title-row h1 {
     font-size: 26px;
+  }
+
+  .changelog-entry {
+    padding: 14px;
   }
 
   .entry-text {

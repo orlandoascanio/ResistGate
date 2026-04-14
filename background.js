@@ -5,6 +5,7 @@ const TEMP_ACCESS_KEY = 'temporaryAccess';
 const ANALYTICS_KEY = 'analytics';
 const OVERRIDE_STATE_KEY = 'overrideState';
 const WELCOME_SHOWN_KEY = 'welcomeShown';
+const WHATS_NEW_SHOWN_KEY = 'whatsNewShown';
 const INSTALLATION_KEY = 'installation';
 
 const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
