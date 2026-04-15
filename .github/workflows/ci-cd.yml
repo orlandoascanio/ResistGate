@@ -61,12 +61,17 @@ jobs:
           zip -r "resistgate-extension-${{ steps.version.outputs.version }}.zip" . \
             -x "node_modules/*" \
                "tests/*" \
+               "docs/*" \
+               "overview/*" \
                ".git/*" \
                ".github/*" \
                ".pi/*" \
+               ".agent/*" \
                ".agents/*" \
                ".opencode/*" \
                ".claude/*" \
+               ".codex/*" \
+               ".qwen/*" \
                ".vscode/*" \
                ".idea/*" \
                "coverage/*" \
@@ -77,6 +82,10 @@ jobs:
                "vitest.config.js" \
                "AGENTS.md" \
                "README.md" \
+               "Overview.md" \
+               "Architecture.md" \
+               "features2.md" \
+               ".impeccable.md" \
                ".gitignore"
 
       - name: Upload artifact
