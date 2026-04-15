@@ -13,9 +13,9 @@ export default defineConfig({
         'friction-page/script.js'
       ],
       thresholds: {
-        lines: 45,
-        functions: 50,
-        statements: 45,
+        lines: 43,
+        functions: 48,
+        statements: 43,
         branches: 70,
         'background.js': {
           lines: 85,

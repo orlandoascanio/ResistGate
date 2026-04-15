@@ -14,13 +14,38 @@ const changelogEntries = {
   '1.1.0': [
     {
       category: 'new',
+      label: 'Strict Mode',
+      detail: 'Locks settings during active schedule with a cooldown to disable. No more impulsive setting changes when focus matters most.'
+    },
+    {
+      category: 'new',
+      label: 'Behavioral Friction',
+      detail: 'Extra steps before accessing blocked sites: task intent questions, countdown timers, and customizable challenge prompts.'
+    },
+    {
+      category: 'new',
+      label: 'Earn-Access (Temptation Bundles)',
+      detail: 'Conditional unlocks — access distracting sites only after completing focus time or at specific times you set.'
+    },
+    {
+      category: 'new',
+      label: 'Focus / Work Timer',
+      detail: 'Built-in timer with session persistence and site-context tracking. Know exactly how long you\'ve been focused.'
+    },
+    {
+      category: 'new',
+      label: 'Block Current Tab',
+      detail: 'One-click blocking from the popup. See a distracting site? Block it instantly without opening settings.'
+    },
+    {
+      category: 'new',
       label: 'Commitment Mode',
-      detail: 'Total lockout for 1–24 hours with no overrides. When you say you\'re done, you\'re done.'
+      detail: 'Total 1–24 hour lockout with no override, no challenge — just pure focus. When you commit, there\'s no going back.'
     },
     {
       category: 'new',
       label: 'Intention Page',
-      detail: 'Replace the default friction screen with your personal goal. A reminder of why you started.'
+      detail: 'Personal goal reminder plus optional 4-7-8 breathing exercise. Turn blocked pages into moments of mindfulness.'
     },
     {
       category: 'changed',
