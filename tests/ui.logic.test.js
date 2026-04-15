@@ -31,10 +31,10 @@ describe('UI copy and state logic', () => {
     const hooks = context.__RESISTGATE_OPTIONS_TEST_HOOKS__;
     expect(hooks).toBeTruthy();
 
-    expect(hooks.getBlockedAttemptsInsight(30)).toBe('High distraction pressure.');
-    expect(hooks.getBlockedAttemptsInsight(0)).toBe('Great control this week.');
-    expect(hooks.getOverridesInsight(8)).toBe('Room to improve.');
-    expect(hooks.getStrictSessionInsight(180)).toBe('Great time spent in strict mode.');
+    expect(hooks.getBlockedAttemptsInsight(30)).toBe('High distraction pressure — your blocker is working hard.');
+    expect(hooks.getBlockedAttemptsInsight(0)).toBe('No interruptions. Your focus game is strong.');
+    expect(hooks.getOverridesInsight(8)).toBe('More overrides than ideal. What patterns do you notice?');
+    expect(hooks.getStrictSessionInsight(180)).toBe('Strong commitment. 3+ hours of deep work.');
     expect(hooks.sanitizePreset('strict')).toBe('strict');
     expect(hooks.sanitizePreset('unknown')).toBe('balanced');
   });

@@ -33,6 +33,15 @@ This update is about earning access — not just blocking it. Every feature here
 
 ### Changed
 - **Friction Page UI**: Intention/Pause zone visually separated from the typing challenge. Personal goal and breathing exercise grouped above a distinct challenge card.
+- **Options Page Polish**:
+  - Refined color palette with deeper purple primary and warmer neutrals
+  - Improved typography hierarchy with tabular numbers and fluid heading sizing
+  - Enhanced tab navigation with contained design and subtle active states
+  - Richer data visualizations with gradient bar fills and smoother animations
+  - Better empty states with icon and helpful messaging
+  - Modal transitions with smooth fade and scale animations
+  - Consistent focus rings and hover states across all interactive elements
+  - Refined analytics insight copy to be more actionable and specific
 - **Pricing**:
   - Monthly: **$3.99/mo**
   - Annual: **$29.99/yr**

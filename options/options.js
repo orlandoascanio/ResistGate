@@ -1102,42 +1102,51 @@ function renderAnalyticsDashboard(dashboard) {
 }
 
 function getBlockedAttemptsInsight(value) {
+  if (value >= 50) {
+    return 'Very high pressure. Consider strengthening your friction settings.';
+  }
   if (value >= 25) {
-    return 'High distraction pressure.';
+    return 'High distraction pressure — your blocker is working hard.';
   }
   if (value >= 10) {
-    return 'You faced many distractions.';
+    return 'Solid resistance. The friction is doing its job.';
   }
   if (value >= 1) {
-    return 'You handled distractions well.';
+    return 'Focused week. Distractions stayed at bay.';
   }
-  return 'Great control this week.';
+  return 'No interruptions. Your focus game is strong.';
 }
 
 function getOverridesInsight(value) {
+  if (value >= 15) {
+    return 'Frequent overrides. Time to revisit your settings or blocklist.';
+  }
   if (value >= 8) {
-    return 'Room to improve.';
+    return 'More overrides than ideal. What patterns do you notice?';
   }
   if (value >= 3) {
-    return 'Try fewer manual overrides.';
+    return 'Some overrides — within normal range for learning.';
   }
   if (value >= 1) {
-    return 'Good self-control overall.';
+    return 'Minimal overrides. Strong self-regulation.';
   }
-  return 'Excellent discipline this week.';
+  return 'Perfect week — no overrides needed.';
 }
 
 function getStrictSessionInsight(value) {
+  if (value >= 300) {
+    return 'Exceptional. Over 5 hours of protected focus time.';
+  }
   if (value >= 180) {
-    return 'Great time spent in strict mode.';
+    return 'Strong commitment. 3+ hours of deep work.';
   }
   if (value >= 60) {
-    return 'Good progress this week.';
+    return 'Building the habit. Aim for longer sessions next week.';
   }
   if (value >= 1) {
-    return 'Try longer strict sessions.';
+    return 'Good start. Consider scheduling longer blocks.';
   }
-  return 'No strict sessions logged yet.';
+  return 'No strict sessions yet — try enabling schedule-based blocking.';
 }
 
 function loadWeeklyReport() {
