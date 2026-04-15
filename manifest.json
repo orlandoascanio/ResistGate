@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ResistGate: Website Blocker + Typing Challenge",
   "version": "1.1.0",
-  "description": "Block distracting sites. Earn access with a typing challenge. ResistGate builds real discipline — not just temporary barriers. Privacy-first.",
+  "description": "Block distracting sites. Earn access with a typing challenge. ResistGate builds real discipline, not just temporary barriers.",
   "icons": {
     "16": "icons/16x16.png",
     "32": "icons/32x32.png",
