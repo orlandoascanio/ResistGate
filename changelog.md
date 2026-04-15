@@ -41,7 +41,7 @@ This update is about earning access — not just blocking it. Every feature here
 
 ---
 
-## [1.0.0] - 2026-04-11
+## [1.0.0] - 2025-04-11
 
 ### Added
 - **Core Engine**: Manifest V3 `declarativeNetRequest` based domain blocking.
