@@ -125,25 +125,17 @@ body {
   animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
-.wn-title-row {
+.wn-meta-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 6px;
-  flex-wrap: wrap;
-}
-
-.wn-title-row h1 {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text);
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .version-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: var(--lavender);
   color: var(--primary);
   border-radius: 99px;
@@ -152,10 +144,24 @@ body {
   letter-spacing: 0.04em;
 }
 
-.wn-tagline {
-  font-size: 14px;
+.release-date {
+  font-size: 13px;
   color: var(--muted);
-  letter-spacing: 0.2px;
+  font-weight: 500;
+}
+
+.wn-header h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.wn-tagline {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.6;
 }
 
 /* ── Changelog body ─────────────────────────────────────────────── */
@@ -164,6 +170,70 @@ body {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 32px;
+}
+
+/* ── Feature Sections ───────────────────────────────────────────── */
+.feature-section {
+  margin-bottom: 28px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.section-title-pro {
+  color: var(--primary);
+  border-bottom-color: var(--primary-subtle);
+}
+
+.feature-card {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  margin-bottom: 12px;
+}
+
+.feature-card-pro {
+  background: var(--lavender-2);
+  border-color: var(--primary-subtle);
+}
+
+.feature-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.feature-tagline {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.feature-description {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.feature-closer {
+  font-size: 14px;
+  color: var(--text-2);
+  font-weight: 500;
+  font-style: italic;
+  margin: 0;
 }
 
 /* ── Entry card ─────────────────────────────────────────────────── */
@@ -340,6 +410,38 @@ body {
   text-align: center;
   line-height: 1.4;
   animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+}
+
+/* ── Footer CTA ─────────────────────────────────────────────────── */
+.footer-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 16px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  animation: slideInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+}
+
+.footer-cta.hidden {
+  display: none;
+}
+
+.footer-cta-text {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.footer-cta-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.footer-cta-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Animations ─────────────────────────────────────────────────── */
