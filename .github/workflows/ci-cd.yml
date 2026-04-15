@@ -33,15 +33,30 @@ jobs:
     name: Package & Release
     runs-on: ubuntu-latest
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Use tag name for tagged releases
+            VERSION="${{ github.ref_name }}"
+          else
+            # Generate version from date and short SHA for main branch
+            VERSION="v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
       - name: Create extension zip
         run: |
-          zip -r "resistgate-extension-${{ github.ref_name }}.zip" . \
+          zip -r "resistgate-extension-${{ steps.version.outputs.version }}.zip" . \
             -x "node_modules/*" \
                "tests/*" \
                ".git/*" \
@@ -51,11 +66,14 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: resistgate-extension-${{ github.ref_name }}
-          path: resistgate-extension-${{ github.ref_name }}.zip
+          name: resistgate-extension-${{ steps.version.outputs.version }}
+          path: resistgate-extension-${{ steps.version.outputs.version }}.zip
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: resistgate-extension-${{ github.ref_name }}.zip
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "ResistGate ${{ steps.version.outputs.version }}"
+          files: resistgate-extension-${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
+          make_latest: true
