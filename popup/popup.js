@@ -274,14 +274,7 @@ function showMessage(text, type = 'info') {
 }
 
 function isPopupProUser(settings) {
-    if (settings?.subscription?.tier !== 'pro') {
-        return false;
-    }
-    const expiresAt = settings.subscription.expiresAt;
-    if (!expiresAt) {
-        return true;
-    }
-    return Date.now() < expiresAt;
+    return settings?.subscription?.tier === 'pro';
 }
 
 function formatPopupCountdown(remainingMs) {

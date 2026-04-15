@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-14
+
+### Changed
+- **Earn Access UI**: Redesigned the temptation bundling configuration panel in the options page:
+  - Removed AI-generated emoji from badges; badge now displays purely typographic status indicators
+  - Removed dashed-border panel in favor of cleaner visual hierarchy with chevron expand/collapse indicator and `aria-expanded` accessibility support
+  - Grouped condition type and time selectors in a 2-column row layout for tighter composition
+  - Rewrote help text with benefit-driven copy ("Earn bonus access by completing longer challenges") and standardized terminology ("access condition", "Access after", "manual overrides")
+  - Improved badge hover transitions and added `focus-visible` outline for keyboard accessibility
+  - Badge-on colors now use design tokens (`--ok-bg`, `--ok`, `--ok-border`) instead of hard-coded green values
+
+---
+
 ## [1.1.0] - 2026-04-12
 
 ### Added

@@ -260,19 +260,15 @@ function renderPlanPill() {
   }
 
   if (isProUser()) {
-    const cycleLabel = cachedSettings.subscription?.billingCycle === 'monthly'
-      ? 'Monthly'
-      : cachedSettings.subscription?.billingCycle === 'yearly'
-        ? 'Yearly'
-        : '';
-    planPill.textContent = cycleLabel ? `Pro ${cycleLabel}` : 'Pro';
+    planPill.textContent = 'Pro';
     planPill.classList.add('pro');
-    openPricingBtn.textContent = 'Manage Pro';
+    openPricingBtn.style.display = 'none';
     return;
   }
 
   planPill.textContent = 'Free';
   planPill.classList.remove('pro');
+  openPricingBtn.style.display = '';
   openPricingBtn.textContent = 'See Pro Plans';
 }
 
@@ -282,24 +278,8 @@ function renderSubscriptionStatus() {
     return;
   }
 
-  const subscription = cachedSettings.subscription || {};
-  const cycleLabel = subscription.billingCycle === 'monthly'
-    ? 'monthly'
-    : subscription.billingCycle === 'yearly'
-      ? 'yearly'
-      : null;
-  const billingEmail = subscription.email ? ` Billing email: ${subscription.email}.` : '';
-  const serverStatus = subscription.subscriptionStatus
-    ? String(subscription.subscriptionStatus).toUpperCase()
-    : 'INACTIVE';
-
   if (isProUser()) {
-    statusNode.textContent = `Pro is active${cycleLabel ? ` on the ${cycleLabel} plan` : ''}.${billingEmail}`;
-    return;
-  }
-
-  if (serverStatus !== 'INACTIVE') {
-    statusNode.textContent = `Your payment went through — Pro should activate shortly. Try closing and reopening this page.${billingEmail}`;
+    statusNode.textContent = 'Pro is active.';
     return;
   }
 
@@ -350,7 +330,6 @@ function renderProFeatureInputs() {
 
   // Intention Page
   document.getElementById('intention-page-enabled').checked = intentionPage.enabled === true;
-  document.getElementById('personal-goal-text').value = intentionPage.personalGoal || '';
   document.getElementById('breathing-exercise-enabled').checked = intentionPage.showBreathingExercise === true;
 
   // Commitment Mode
@@ -535,6 +514,9 @@ function loadBlockedSites(blocklist = []) {
     // Temptation bundle config — badge injected into topRow, panel appended to li
     li.appendChild(buildBundleConfig(entry, topRow));
 
+    // Personal goal config — badge injected into topRow, panel appended to li
+    li.appendChild(buildPersonalGoalConfig(entry, topRow));
+
     listElement.appendChild(li);
   });
 
@@ -549,12 +531,12 @@ function loadBlockedSites(blocklist = []) {
 function formatBundleBadge(bundle) {
   if (!bundle || bundle.enabled !== true) return '+ Earn access';
   if (bundle.conditionType === 'work_timer') {
-    return `\uD83C\uDFAF ${bundle.requiredMinutes || 60}\u202Fmin focus`;
+    return `${bundle.requiredMinutes || 60} min focus`;
   }
   const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
   const period = h >= 12 ? 'PM' : 'AM';
   const hour = h % 12 || 12;
-  return `\u23F0 After ${hour}:${String(m).padStart(2, '0')}\u202F${period}`;
+  return `After ${hour}:${String(m).padStart(2, '0')} ${period}`;
 }
 
 function buildBundleConfig(entry, topRow) {
@@ -568,25 +550,34 @@ function buildBundleConfig(entry, topRow) {
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = `bundle-badge ${isEnabled ? 'bundle-badge--on' : 'bundle-badge--off'}`;
-  badge.setAttribute('title', isEnabled ? 'Edit access condition' : 'Set an earn-access condition');
-  badge.textContent = formatBundleBadge(isEnabled ? bundle : null);
-  // Insert before the Remove button
+  badge.setAttribute('title', isEnabled ? 'Edit earn-access rule' : 'Set an earn-access rule');
+  badge.setAttribute('aria-expanded', 'false');
+
+  const badgeText = document.createElement('span');
+  badgeText.textContent = formatBundleBadge(isEnabled ? bundle : null);
+  const badgeChevron = document.createElement('span');
+  badgeChevron.className = 'bundle-badge-chevron';
+  badgeChevron.textContent = '▼';
+  badge.appendChild(badgeText);
+  badge.appendChild(badgeChevron);
   topRow.insertBefore(badge, topRow.lastElementChild);
 
-  // ── Config panel (collapsed by default) ────────────────────────
+  // ── Config panel (expanded when enabled, collapsed otherwise) ──
   const configPanel = document.createElement('div');
   configPanel.className = 'bundle-config';
-  configPanel.style.display = 'none';
+  configPanel.style.display = isEnabled ? 'grid' : 'none';
+  badge.setAttribute('aria-expanded', String(isEnabled));
 
   badge.addEventListener('click', function () {
     const isOpen = configPanel.style.display !== 'none';
     configPanel.style.display = isOpen ? 'none' : 'grid';
+    badge.setAttribute('aria-expanded', String(!isOpen));
   });
 
   // Helper text at top of panel
   const helpText = document.createElement('p');
   helpText.className = 'bundle-help-text';
-  helpText.textContent = 'Instead of blocking, allow access only after the condition below is met.';
+  helpText.textContent = 'Instead of blocking, this site grants access only when your condition is met — so you decide intentionally.';
 
   // Enable/disable toggle inside the panel
   const toggleLabel = document.createElement('label');
@@ -595,21 +586,29 @@ function buildBundleConfig(entry, topRow) {
   toggleCheck.type = 'checkbox';
   toggleCheck.checked = isEnabled;
   const toggleSpan = document.createElement('span');
-  toggleSpan.textContent = 'Enable Temptation Bundling for this site';
+  toggleSpan.textContent = 'Enable Earn Access for this site';
   toggleLabel.appendChild(toggleCheck);
   toggleLabel.appendChild(toggleSpan);
 
+  // Condition builder row: type + time input
+  const condRow = document.createElement('div');
+  condRow.className = 'bundle-config-row';
+
+  const typeWrapper = document.createElement('div');
   const typeLabel = document.createElement('label');
-  typeLabel.textContent = 'Unlock condition';
+  typeLabel.textContent = 'Access condition';
   const typeSelect = document.createElement('select');
   typeSelect.innerHTML = `
-    <option value="time_of_day">After a certain time of day</option>
-    <option value="work_timer">After N minutes on the work timer</option>
+    <option value="time_of_day">After a specific time (e.g., 5 PM)</option>
+    <option value="work_timer">After focus time is earned</option>
   `;
   typeSelect.value = conditionType;
+  typeWrapper.appendChild(typeLabel);
+  typeWrapper.appendChild(typeSelect);
 
+  const timeWrapper = document.createElement('div');
   const timeLabel = document.createElement('label');
-  timeLabel.textContent = conditionType === 'work_timer' ? 'Minutes of focus required' : 'Unlock after';
+  timeLabel.textContent = conditionType === 'work_timer' ? 'Focus minutes needed' : 'Access after';
 
   const timeInput = document.createElement('input');
   timeInput.type = conditionType === 'work_timer' ? 'number' : 'time';
@@ -619,16 +618,22 @@ function buildBundleConfig(entry, topRow) {
 
   typeSelect.addEventListener('change', function () {
     const isTimer = typeSelect.value === 'work_timer';
-    timeLabel.textContent = isTimer ? 'Minutes of focus required' : 'Unlock after';
+    timeLabel.textContent = isTimer ? 'Focus minutes needed' : 'Access after';
     timeInput.type = isTimer ? 'number' : 'time';
     timeInput.min = isTimer ? '1' : '';
     timeInput.max = isTimer ? '480' : '';
     timeInput.value = isTimer ? String(requiredMinutes) : afterTime;
   });
 
+  timeWrapper.appendChild(timeLabel);
+  timeWrapper.appendChild(timeInput);
+
+  condRow.appendChild(typeWrapper);
+  condRow.appendChild(timeWrapper);
+
   const saveBtn = document.createElement('button');
   saveBtn.className = 'btn btn-primary bundle-save-btn';
-  saveBtn.textContent = 'Save condition';
+  saveBtn.textContent = 'Save rule';
   saveBtn.addEventListener('click', function () {
     const newBundle = {
       enabled: true,
@@ -640,30 +645,38 @@ function buildBundleConfig(entry, topRow) {
     };
     saveBundleForEntry(entry.id, newBundle);
     badge.className = 'bundle-badge bundle-badge--on';
-    badge.textContent = formatBundleBadge(newBundle);
+    badgeText.textContent = formatBundleBadge(newBundle);
+
+    // Show success feedback
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saved';
+    saveBtn.classList.add('bundle-save-btn--saved');
+    setTimeout(function () {
+      saveBtn.textContent = originalText;
+      saveBtn.classList.remove('bundle-save-btn--saved');
+    }, 1500);
   });
 
   toggleCheck.addEventListener('change', function () {
-    const condFields = [typeLabel, typeSelect, timeLabel, timeInput, saveBtn];
-    condFields.forEach((el) => { el.style.display = toggleCheck.checked ? '' : 'none'; });
-    if (!toggleCheck.checked) {
+    const showFields = toggleCheck.checked;
+    condRow.style.display = showFields ? '' : 'none';
+    saveBtn.style.display = showFields ? '' : 'none';
+    if (!showFields) {
       badge.className = 'bundle-badge bundle-badge--off';
-      badge.textContent = formatBundleBadge(null);
+      badgeText.textContent = formatBundleBadge(null);
       saveBundleForEntry(entry.id, { enabled: false, conditionType, afterTime, requiredMinutes });
     }
   });
 
   // Hide condition fields initially if bundle is disabled
   if (!isEnabled) {
-    [typeLabel, typeSelect, timeLabel, timeInput, saveBtn].forEach((el) => { el.style.display = 'none'; });
+    condRow.style.display = 'none';
+    saveBtn.style.display = 'none';
   }
 
   configPanel.appendChild(helpText);
   configPanel.appendChild(toggleLabel);
-  configPanel.appendChild(typeLabel);
-  configPanel.appendChild(typeSelect);
-  configPanel.appendChild(timeLabel);
-  configPanel.appendChild(timeInput);
+  configPanel.appendChild(condRow);
   configPanel.appendChild(saveBtn);
 
   return configPanel;
@@ -677,12 +690,125 @@ function saveBundleForEntry(entryId, bundle) {
     chrome.runtime.sendMessage({ action: 'updateSettings', settings }, function (response) {
       if (response && response.success) {
         cachedSettings = settings;
-        showMessage('Condition saved.', 'success');
+        showMessage('Earn Access rule saved.', 'success');
       } else {
         showMessage(response?.error || 'Unable to save condition.', 'error');
       }
     });
   });
+}
+
+function buildPersonalGoalConfig(entry, topRow) {
+  const goal = entry.personalGoal || '';
+  const hasGoal = goal.trim().length > 0;
+
+  const badge = document.createElement('button');
+  badge.type = 'button';
+  badge.className = `bundle-badge ${hasGoal ? 'bundle-badge--on' : 'bundle-badge--off'}`;
+  badge.setAttribute('data-pro-feature', 'intentionPage');
+  badge.setAttribute('title', hasGoal ? 'Edit personal goal' : 'Set a personal goal');
+
+  const badgeText = document.createElement('span');
+  badgeText.textContent = hasGoal ? goal.slice(0, 25) + (goal.length > 25 ? '...' : '') : '+ Set goal';
+  const badgeChevron = document.createElement('span');
+  badgeChevron.className = 'bundle-badge-chevron';
+  badgeChevron.textContent = '▼';
+  badge.appendChild(badgeText);
+  badge.appendChild(badgeChevron);
+  topRow.insertBefore(badge, topRow.lastElementChild);
+
+  const configPanel = document.createElement('div');
+  configPanel.className = 'bundle-config';
+  configPanel.style.display = 'none';
+
+  badge.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!isProUser()) {
+      showPaywall('intention-goal');
+      return;
+    }
+    const isOpen = configPanel.style.display !== 'none';
+    configPanel.style.display = isOpen ? 'none' : 'grid';
+    badge.setAttribute('aria-expanded', String(!isOpen));
+  });
+
+  const goalLabel = document.createElement('label');
+  goalLabel.textContent = 'Your goal for this site';
+  goalLabel.className = 'bundle-goal-label';
+
+  const goalInput = document.createElement('input');
+  goalInput.type = 'text';
+  goalInput.className = 'sub-field';
+  goalInput.maxLength = 200;
+  goalInput.value = goal;
+  goalInput.placeholder = 'Example: Don\'t watch reels';
+
+  const actions = document.createElement('div');
+  actions.className = 'goal-actions';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary bundle-save-btn';
+  saveBtn.textContent = 'Save goal';
+  saveBtn.addEventListener('click', function () {
+    const newGoal = goalInput.value.trim().slice(0, 200);
+    withLatestSettings(function (settings) {
+      const blEntry = (settings.blocklist || []).find((e) => e.id === entry.id);
+      if (!blEntry) return;
+      if (newGoal) {
+        blEntry.personalGoal = newGoal;
+      } else {
+        delete blEntry.personalGoal;
+      }
+      chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, function (response) {
+        if (response && response.success) {
+          cachedSettings = settings;
+          badgeText.textContent = newGoal ? newGoal.slice(0, 25) + (newGoal.length > 25 ? '...' : '') : '+ Set goal';
+          badge.className = `bundle-badge ${newGoal ? 'bundle-badge--on' : 'bundle-badge--off'}`;
+          badge.setAttribute('title', newGoal ? 'Edit personal goal' : 'Set a personal goal');
+          configPanel.style.display = 'none';
+          badge.setAttribute('aria-expanded', 'false');
+          showMessage(newGoal ? 'Personal goal saved.' : 'Personal goal removed.', 'success');
+          loadBlockedSites(settings.blocklist);
+        } else {
+          showMessage(response?.error || 'Unable to save goal.', 'error');
+        }
+      });
+    });
+  });
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn btn-secondary';
+  removeBtn.textContent = 'Remove';
+  removeBtn.style.marginLeft = '8px';
+  removeBtn.addEventListener('click', function () {
+    goalInput.value = '';
+    withLatestSettings(function (settings) {
+      const blEntry = (settings.blocklist || []).find((e) => e.id === entry.id);
+      if (blEntry) {
+        delete blEntry.personalGoal;
+      }
+      chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, function (response) {
+        if (response && response.success) {
+          cachedSettings = settings;
+          configPanel.style.display = 'none';
+          badge.setAttribute('aria-expanded', 'false');
+          showMessage('Personal goal removed.', 'success');
+          loadBlockedSites(settings.blocklist);
+        } else {
+          showMessage(response?.error || 'Unable to remove goal.', 'error');
+        }
+      });
+    });
+  });
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(removeBtn);
+
+  configPanel.appendChild(goalLabel);
+  configPanel.appendChild(goalInput);
+  configPanel.appendChild(actions);
+
+  return configPanel;
 }
 
 function removeBlockedSite(id) {
@@ -799,7 +925,6 @@ function saveSettings() {
 
       settings.proFeatures.intentionPage = settings.proFeatures.intentionPage || {};
       settings.proFeatures.intentionPage.enabled = document.getElementById('intention-page-enabled').checked;
-      settings.proFeatures.intentionPage.personalGoal = document.getElementById('personal-goal-text').value.trim().slice(0, 200);
       settings.proFeatures.intentionPage.showBreathingExercise = document.getElementById('breathing-exercise-enabled').checked;
     }
 
@@ -994,7 +1119,7 @@ function getOverridesInsight(value) {
     return 'Room to improve.';
   }
   if (value >= 3) {
-    return 'Try fewer manual unlocks.';
+    return 'Try fewer manual overrides.';
   }
   if (value >= 1) {
     return 'Good self-control overall.';
@@ -1186,33 +1311,6 @@ function openPricingPage(email) {
   });
 }
 
-function refreshEntitlementStatus() {
-  chrome.runtime.sendMessage({ action: 'refreshEntitlementNow' }, function (response) {
-    if (!(response && response.success)) {
-      showMessage(response?.error || 'Unable to refresh Pro access right now.', 'error');
-      return;
-    }
-
-    loadSettings(function (loaded) {
-      if (!loaded) {
-        return;
-      }
-
-      if (response.pro) {
-        showMessage('Pro is up to date.', 'success');
-      } else {
-        showMessage('No active Pro subscription found. Visit the pricing page to upgrade.', 'success');
-      }
-
-      if (queuedProScreen && isProUser()) {
-        const target = queuedProScreen;
-        queuedProScreen = null;
-        handleTabRequest(target);
-      }
-    });
-  });
-}
-
 function getSelectedScheduleDays() {
   const selected = [];
   document.querySelectorAll('#schedule-days input[type="checkbox"]').forEach((checkbox) => {
@@ -1333,15 +1431,7 @@ function initDetailsAnimation() {
 }
 
 function isProUser() {
-  if (cachedSettings?.subscription?.tier !== 'pro') {
-    return false;
-  }
-  const expiresAt = cachedSettings.subscription.expiresAt;
-  if (!expiresAt) {
-    // No expiry set: legacy record or install-token path — treat as valid.
-    return true;
-  }
-  return Date.now() < expiresAt;
+  return cachedSettings?.subscription?.tier === 'pro';
 }
 
 function withLatestSettings(onSuccess) {

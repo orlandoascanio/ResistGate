@@ -5,8 +5,8 @@
 **Shipped:** April 11, 2026 — Now in production with active users collecting real-world feedback.
 
 ### v1 Baseline Metrics
-- ✅ All 81 tests passing (88.5% coverage)
-- ✅ Free + Pro tiers with license-based entitlement (RS256 JWT)
+- ✅ All 121 tests passing
+- ✅ Free + Pro tiers (simplified — no license keys, no expiration checks)
 - ✅ Actively gathering user feedback and behavior data
 - ✅ Stable core engine proven in production
 
@@ -16,9 +16,8 @@
 
 - **Free** = Block distractions + typing challenge + temporary access
 - **Pro** = Strict mode + analytics + weekly report + earn-access bonus
-- **$5/month** (or equivalent in local currency)
-- **$50/year** (pay once, 12-month access)
-- 24-hour license entitlement refresh via Chrome alarms
+- **$50 one-time** (pay once, lifetime access)
+- Pro activation is permanent — once activated via website, user stays Pro forever (no license keys, no expiration checks)
 
 ---
 
@@ -40,7 +39,6 @@
 - ✅ **Focus Score** — Weekly discipline score (0-100 formula based on override count + manual disables)
 - ✅ **Weekly Report** — Auto-generated feedback with trend comparison
 - ✅ **Earn-Access Bonus** — Extra minutes awarded for completing extended challenge sessions
-- ✅ **License-based Entitlement** — RS256 JWT verification with 24-hour refresh alarm
 - ✅ **Event Logging** — Track all blocking, access, override, and challenge events
 
 ---
@@ -69,6 +67,18 @@ After first 10+ paying users validate the core value, prioritize:
 - **AI Coach** (Optional) — Behavioral insights based on override patterns (post-MVP, evaluate privacy tradeoffs)
 - **Portable Data** — Export lifetime discipline stats for privacy-preserving sharing
 - **Platform Expansion** — Firefox, Safari, Edge support
+
+### Subscription Management (Required before scale)
+- **Downgrade Path for Cancellations/Refunds** — Currently, once a user activates Pro, they stay Pro forever (no license verification, no expiration). This is intentional for simplicity, but creates a problem if you ever need to handle:
+  - Refund requests
+  - Subscription cancellations
+  - Chargebacks
+  - Fraudulent activations
+- **Solution needed**: Add a manual or automated downgrade mechanism. Options:
+  1. **Manual admin tool** — Secure endpoint to revoke specific users by extension ID
+  2. **Periodic entitlement check** — Lightweight ping to verify subscription status (respect privacy)
+  3. **Self-serve downgrade** — User can deactivate Pro and revert to Free
+- **Priority**: Medium — Not urgent until you have significant paying users, but must exist before handling customer service at scale.
 
 ---
 
@@ -103,13 +113,13 @@ After first 10+ paying users validate the core value, prioritize:
 **Key Metrics to Watch:**
 - Free → Pro conversion rate (target: 5-10%)
 - Friction challenge completion rate (target: 80%+)
-- License activation success rate (target: 99%)
+- Pro activation success rate (target: 99%)
 - Churn rate first 7 days (target: < 30%)
 - Support tickets per 1000 users (target: < 10)
 
 ### Month 2-3 (Iteration Phase)
 Based on real user data, prioritize v1.1 hotfixes:
-- **High-impact bugs** (crashes, data loss, license failures) → deploy immediately
+- **High-impact bugs** (crashes, data loss, activation failures) → deploy immediately
 - **UX friction** (unclear copy, confusing flows) → iterate next patch
 - **Performance issues** (slow challenges, slow dashboard) → optimize
 - **Feature requests** (most requested by paying users) → evaluate for v1.1
@@ -132,7 +142,6 @@ After first 100-500 real users:
 | Free Users (Week 1) | 50-200 | Growth trajectory |
 | Pro Conversion Rate | 5-10% | Revenue viability |
 | Friction Completion Rate | 75%+ | Core mechanic works |
-| License Refresh Success | 99%+ | Entitlement stability |
 | 7-Day Retention | 40%+ | Free tier stickiness |
 | 30-Day Retention (Pro) | 80%+ | Pro value confirmation |
 | Churn Rate (Pro) | <5%/month | Paying user stability |
@@ -144,7 +153,7 @@ After first 100-500 real users:
 **Red Flag (Act immediately):**
 - Rating drops below 3.5 stars
 - Crash rate > 1 per 1000 sessions
-- License verification fails > 1%
+- Pro activation failures > 1%
 - Pro churn > 20%/month
 
 **Green Light (Plan v2):**
@@ -165,14 +174,13 @@ After first 100-500 real users:
 
 ### v1 is LOCKED — No new features to core engine
 - Only critical bugfixes (crashes, data loss, security)
-- Entitlement system is production-hardened
 - Friction challenge is stable
 - Analytics events are immutable
 
 ### v1.1 Hotfixes (If Needed)
 Monitor user feedback for:
 - **Crashes** → Deploy within 24h
-- **License verification failures** → Deploy immediately
+- **Pro activation failures** → Deploy immediately
 - **Copy/UX confusion** (top issue in reviews) → next patch
 - **Performance regressions** (challenge feels slow) → optimize
 
@@ -185,7 +193,7 @@ Monitor user feedback for:
 
 ### Code Quality (Non-negotiable)
 - All changes require full test suite passing
-- Entitlement security review before any deploy
+- Security review for activation flow changes
 - No data schema changes without migration plan
 - Backwards-compatible storage updates only
 
@@ -206,7 +214,7 @@ Monitor user feedback for:
 - Alarms accuracy +/- 1 second
 
 ### Security
-- License keys validated via RS256 JWT (non-negotiable)
+- No license keys or external verification (privacy-first, trust-based model)
 - No user data sent externally without explicit consent
 - All PII stored only in `chrome.storage.local`
 - Periodic security audit (quarterly minimum)

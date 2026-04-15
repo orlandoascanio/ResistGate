@@ -134,9 +134,7 @@ Special extended shapes:
 | `getSettings` | Return full sanitized settings object |
 | `getManualOverrideStatus` | Return current override state |
 | `updateSettings` | Validate, apply Strict Mode logic, save, re-queue rules |
-| `activateLicense` | Verify RS256 JWT license key via Web Crypto API |
 | `openPricingPage` | Open `orlandoascanio.com/en/pricing` in a new tab |
-| `refreshEntitlementNow` | Manual trigger of entitlement refresh |
 | `getAnalyticsDashboard` | Return analytics data (Pro only) |
 | `getWeeklyReport` | Return weekly report data (Pro only) |
 
@@ -150,11 +148,14 @@ Special extended shapes:
 |---|---|
 | `resistgate-block-expire-*` | Per-site blocking window expiry |
 | `resistgate-access-expire-*` | Temporary access window expiry |
-| `resistgate-entitlement-refresh` | Fires every 1440 minutes to re-verify Pro entitlement |
+| `resistgate-bundle-unlock-*` | Temptation bundle unlock timers (time-of-day condition) |
+| `resistgate-commitment-expire` | Commitment mode auto-expiry |
+| `resistgate-daily-reset` | Midnight daily badge counter reset |
 
 ### Pro Gating
-- `hasProAccess(settings)` in `background.js`: checks `settings.subscription.tier === 'pro'` and optional `expiresAt`.
+- `hasProAccess(settings)` in `background.js`: checks `settings.subscription.tier === 'pro'`.
 - `isProUser()` in `options/options.js`: same logic against locally loaded settings.
+- `isPopupProUser(settings)` in `popup/popup.js`: same logic for popup context.
 - All Pro-only features must guard with one of these before executing.
 
 ## Testing Guidelines
@@ -214,5 +215,5 @@ To cut a release: create and push a tag matching `v*` (e.g., `git tag v1.2.0 && 
 - Request only the minimum necessary permissions in `manifest.json`.
 - All user data stays in `chrome.storage.local`; do not introduce external network calls unless the feature explicitly requires them (and document the dependency clearly).
 - External message origins are validated against `TRUSTED_EXTERNAL_ORIGINS` (`orlandoascanio.com`); do not relax this check.
-- License verification uses RS256 JWT via the Web Crypto API with an embedded public key; do not replace this with a weaker verification method.
-- Never log sensitive fields (license keys, tokens, email addresses) to `console`.
+- Pro activation is exclusively via `activateProFromWebsite` from a trusted external origin — never accept Pro elevation from an internal (`sendMessage`) call.
+- Never log sensitive fields (tokens, email addresses) to `console`.

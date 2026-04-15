@@ -11,21 +11,12 @@ const INSTALLATION_KEY = 'installation';
 const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
 const ACCESS_ALARM_PREFIX = 'resistgate-access-expire-';
 const COMMITMENT_ALARM = 'resistgate-commitment-expire';
-const ENTITLEMENT_REFRESH_ALARM = 'resistgate-entitlement-refresh';
 const DAILY_RESET_ALARM = 'resistgate-daily-reset';
 const BUNDLE_UNLOCK_ALARM_PREFIX = 'resistgate-bundle-unlock-';
 const DAILY_COUNT_KEY = 'dailyBlockCount';
 const RESISTANCE_COUNTERS_KEY = 'resistanceCounters';
 const WORK_TIMER_KEY = 'workTimer';
 const MAX_ANALYTICS_EVENTS = 3000;
-const RESISTGATE_SITE_URL = 'https://www.orlandoascanio.com';
-const RESISTGATE_PRICING_PATH = '/en/pricing';
-const RESISTGATE_PRODUCT_SLUG = 'resistgate';
-const TRUSTED_EXTERNAL_ORIGINS = new Set([
-  'http://localhost:3000',
-  'https://www.orlandoascanio.com',
-  'https://orlandoascanio.com'
-]);
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -44,15 +35,7 @@ const DEFAULT_SETTINGS = {
     }
   },
   subscription: {
-    tier: 'free',
-    productSlug: RESISTGATE_PRODUCT_SLUG,
-    billingCycle: null,
-    upgradedAt: null,
-    email: null,
-    subscriptionStatus: 'inactive',
-    installToken: null,
-    licenseKey: null,
-    expiresAt: null
+    tier: 'free'
   },
   proFeatures: {
     accountabilityPreset: 'balanced',
@@ -145,10 +128,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         console.error('Commitment mode expiry failed:', err);
       }
     })();
-  }
-
-  if (alarm.name === ENTITLEMENT_REFRESH_ALARM) {
-    void refreshEntitlement();
   }
 
   if (alarm.name === DAILY_RESET_ALARM) {
@@ -288,24 +267,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
-        case 'activateLicense': {
-          const result = await verifyAndStoreLicense(request.licenseKey);
-          sendResponse(result);
-          return;
-        }
-
-        case 'openPricingPage': {
-          const result = await openPricingPage(request.email);
-          sendResponse(result);
-          return;
-        }
-
-        case 'refreshEntitlementNow': {
-          const result = await refreshEntitlement({ manual: true });
-          sendResponse(result);
-          return;
-        }
-
         case 'getAnalyticsDashboard': {
           const settings = await getSettings();
           if (!hasProAccess(settings)) {
@@ -417,6 +378,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        case 'openPricingPage': {
+          const url = 'https://www.orlandoascanio.com/en/pricing?source=extension';
+          await chrome.tabs.create({ url });
+          sendResponse({ success: true, url });
+          return;
+        }
+
         default:
           sendResponse({ success: false, error: 'Unknown action' });
       }
@@ -429,32 +397,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-if (chrome.runtime?.onMessageExternal?.addListener) {
-  chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-    if (!request || request.action !== 'activateProFromWebsite') {
-      sendResponse({ success: false, error: 'Unknown external action.' });
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (!request || typeof request.action !== 'string') {
+    sendResponse({ success: false, error: 'Invalid request' });
+    return false;
+  }
+
+  const TRUSTED_ORIGINS = new Set([
+    'https://www.orlandoascanio.com',
+    'https://orlandoascanio.com'
+  ]);
+
+  try {
+    if (!sender?.url || !TRUSTED_ORIGINS.has(new URL(sender.url).origin)) {
+      sendResponse({ success: false, error: 'Unauthorized sender' });
       return false;
     }
+  } catch {
+    sendResponse({ success: false, error: 'Unauthorized sender' });
+    return false;
+  }
 
-    if (!isTrustedExternalSender(sender)) {
-      sendResponse({ success: false, error: 'Unauthorized activation origin.' });
-      return false;
-    }
-
+  if (request.action === 'activateProFromWebsite') {
     void (async () => {
       try {
         await initializeExtension('external-message');
-        const result = await activateProFromWebsite(request.activationToken);
-        sendResponse(result);
+        const settings = await getSettings();
+        settings.subscription = { tier: 'pro' };
+        await saveSettings(settings);
+        await queueRulesUpdate('activate-pro');
+        await chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html?activation=success') });
+        sendResponse({ success: true, subscription: settings.subscription });
       } catch (error) {
-        console.error('External activation failed:', error);
-        sendResponse({ success: false, error: error?.message || 'Unable to activate ResistGate Pro.' });
+        console.error('Pro activation failed:', error);
+        sendResponse({ success: false, error: error?.message || 'Activation failed' });
       }
     })();
-
     return true;
-  });
-}
+  }
+
+  sendResponse({ success: false, error: 'Unknown action' });
+  return false;
+});
 
 async function initializeExtension(reason) {
   if (initialized) {
@@ -495,9 +479,6 @@ async function initializeExtension(reason) {
     if (JSON.stringify(existingInstallation || {}) !== JSON.stringify(normalizedInstallation)) {
       await saveInstallation(normalizedInstallation);
     }
-
-    // Register daily entitlement refresh alarm
-    chrome.alarms.create(ENTITLEMENT_REFRESH_ALARM, { periodInMinutes: 1440 });
 
     // Register daily badge reset alarm (fires at midnight, repeats every 24h)
     const nextMidnight = new Date();
@@ -992,26 +973,8 @@ function sanitizeSettings(settings) {
     }
   };
 
-  const incomingSubscription = incoming.subscription || {};
-  const tier = incomingSubscription.tier === 'pro' ? 'pro' : 'free';
-  const rawBillingCycle = incomingSubscription.billingCycle === 'monthly'
-    ? 'monthly'
-    : incomingSubscription.billingCycle === 'yearly'
-      ? 'yearly'
-      : incomingSubscription.billingCycle === 'lifetime'
-        ? 'lifetime'
-        : null;
-
   const subscription = {
-    tier,
-    productSlug: sanitizeProductSlug(incomingSubscription.productSlug) || RESISTGATE_PRODUCT_SLUG,
-    billingCycle: tier === 'pro' ? rawBillingCycle : null,
-    upgradedAt: tier === 'pro' ? Number(incomingSubscription.upgradedAt) || null : null,
-    email: sanitizeEmail(incomingSubscription.email),
-    subscriptionStatus: sanitizeSubscriptionStatus(incomingSubscription.subscriptionStatus),
-    installToken: tier === 'pro' ? sanitizeOpaqueString(incomingSubscription.installToken) : null,
-    licenseKey: tier === 'pro' ? sanitizeOpaqueString(incomingSubscription.licenseKey) : null,
-    expiresAt: tier === 'pro' ? sanitizeTimestamp(incomingSubscription.expiresAt) : null
+    tier: (incoming.subscription?.tier === 'pro') ? 'pro' : 'free'
   };
 
   const incomingBehavioral = incoming.proFeatures?.behavioralFriction || {};
@@ -1052,6 +1015,16 @@ function sanitizeSettings(settings) {
     commitmentMode: sanitizeCommitmentMode(incoming.proFeatures?.commitmentMode),
     intentionPage: sanitizeIntentionPage(incoming.proFeatures?.intentionPage)
   };
+
+  const globalGoal = proFeatures.intentionPage.personalGoal;
+  if (globalGoal) {
+    for (const entry of blocklist) {
+      if (!entry.personalGoal) {
+        entry.personalGoal = globalGoal;
+      }
+    }
+    proFeatures.intentionPage.personalGoal = '';
+  }
 
   return {
     enabled: incoming.enabled !== false,
@@ -1300,6 +1273,12 @@ function sanitizeBlocklist(blocklist) {
       delete entry.temptationBundle;
     }
 
+    if (typeof rawEntry.personalGoal === 'string' && rawEntry.personalGoal.trim()) {
+      entry.personalGoal = rawEntry.personalGoal.trim().slice(0, 200);
+    } else if (rawEntry.personalGoal !== undefined) {
+      delete entry.personalGoal;
+    }
+
     deduped.push(entry);
   }
 
@@ -1307,189 +1286,10 @@ function sanitizeBlocklist(blocklist) {
 }
 
 function hasProAccess(settings) {
-  if (settings?.subscription?.tier !== 'pro') {
-    return false;
-  }
-  const expiresAt = settings?.subscription?.expiresAt;
-  if (!expiresAt) {
-    // If no expiresAt is set but it's "pro", we assume valid (e.g. legacy or test)
-    // but with the new license system they should have expiresAt.
-    // For local dev/testing without a key, you might want this to be true,
-    // but real production would enforce it. We'll enforce it if it exists.
-    return true;
-  }
-  return Date.now() < expiresAt;
+  return settings?.subscription?.tier === 'pro';
 }
 
-// embedded public key for verification
-const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6F21dqquWLFFjF8rqusv
-Fp4BnFxlQF5z/2Zdv9NObnCXKIPsXqGMxpaMpgX0/RzfybFfaQL51kTI720j5nHW
-7JZaWQexoicYL9EK0gDBVV/kT/R2byZB9v4f6C6AASR3iXqhRmA2YYBWKC8BFGZm
-zhJTx+2DnkIPF2MaeCuII83uQFtvjXm8YvCaJsVwDOCn0pNq+NOgT0CNaDvcAHM1
-BekH2mKnR51IjnX0c/R31W69LsWUwh/jgSGZkh+c8kVd+3Y0D//rPBaSynxvQmrd
-zH+PHyVcwgtl87P5Nc1H+/5siyxmEv29VRr9dEUNCFL6hDUvf879/9Jl7UbHF9Dh
-RQIDAQAB
------END PUBLIC KEY-----`;
 
-function str2ab(str) {
-  const buf = new ArrayBuffer(str.length);
-  const bufView = new Uint8Array(buf);
-  for (let i = 0, strLen = str.length; i < strLen; i++) {
-    bufView[i] = str.charCodeAt(i);
-  }
-  return buf;
-}
-
-function base64UrlDecode(str) {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) {
-    base64 += '=';
-  }
-  return atob(base64);
-}
-
-function base64UrlDecodeToBuffer(str) {
-  const decoded = base64UrlDecode(str);
-  return str2ab(decoded);
-}
-
-async function importPublicKey() {
-  const pemHeader = "-----BEGIN PUBLIC KEY-----";
-  const pemFooter = "-----END PUBLIC KEY-----";
-  const pemContents = PUBLIC_KEY_PEM.substring(
-    PUBLIC_KEY_PEM.indexOf(pemHeader) + pemHeader.length,
-    PUBLIC_KEY_PEM.indexOf(pemFooter)
-  ).replace(/\s/g, '');
-  const binaryDer = str2ab(atob(pemContents));
-
-  return await crypto.subtle.importKey(
-    "spki",
-    binaryDer,
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256",
-    },
-    true,
-    ["verify"]
-  );
-}
-
-async function verifyAndStoreLicense(rawKey) {
-  try {
-    if (!rawKey || typeof rawKey !== 'string') {
-      throw new Error('Invalid license key format.');
-    }
-
-    const parts = rawKey.split('.');
-    if (parts.length !== 3) {
-      throw new Error('Invalid license key format.');
-    }
-
-    const [headerB64, payloadB64, signatureB64] = parts;
-    const dataToVerify = str2ab(`${headerB64}.${payloadB64}`);
-    const signatureBuffer = base64UrlDecodeToBuffer(signatureB64);
-    const publicKey = await importPublicKey();
-
-    const isValid = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      publicKey,
-      signatureBuffer,
-      dataToVerify
-    );
-
-    if (!isValid) {
-      throw new Error('Invalid license signature.');
-    }
-
-    const payloadStr = base64UrlDecode(payloadB64);
-    const payload = JSON.parse(payloadStr);
-
-    if (payload.tier !== 'pro') {
-      throw new Error('License is not for a Pro tier.');
-    }
-
-    if (payload.expiresAt && Date.now() > payload.expiresAt) {
-      throw new Error('License has expired.');
-    }
-
-    const settings = await getSettings();
-    settings.subscription = {
-      tier: 'pro',
-      productSlug: RESISTGATE_PRODUCT_SLUG,
-      billingCycle: settings.subscription.billingCycle || null,
-      upgradedAt: settings.subscription.upgradedAt || Date.now(),
-      email: payload.email || settings.subscription.email || null,
-      subscriptionStatus: 'ACTIVE',
-      installToken: settings.subscription.installToken || null,
-      licenseKey: rawKey,
-      expiresAt: payload.expiresAt || null
-    };
-    await saveSettings(settings);
-
-    return { success: true, subscription: settings.subscription };
-  } catch (error) {
-    console.error('License verification failed:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-async function refreshEntitlement(options = {}) {
-  try {
-    const settings = await getSettings();
-    if (!settings?.subscription?.installToken) {
-      if (options.manual) {
-        return { success: false, error: 'No active Pro install token found yet.' };
-      }
-      return { success: false, skipped: true };
-    }
-
-    const result = await fetchEntitlementJson('/api/entitlement/sync', {
-      installToken: settings.subscription.installToken
-    });
-
-    if (!result.pro) {
-      settings.subscription = {
-        tier: 'free',
-        productSlug: RESISTGATE_PRODUCT_SLUG,
-        billingCycle: null,
-        upgradedAt: null,
-        email: result.email || settings.subscription.email || null,
-        subscriptionStatus: result.subscriptionStatus || 'inactive',
-        installToken: null,
-        licenseKey: null,
-        expiresAt: null
-      };
-      await saveSettings(settings);
-      await queueRulesUpdate('entitlement-refresh-downgrade');
-      console.log('Entitlement sync downgraded this install to free tier.');
-      return { success: true, pro: false, subscription: settings.subscription };
-    } else {
-      const resultProductSlug = sanitizeProductSlug(result.productSlug) || RESISTGATE_PRODUCT_SLUG;
-      if (resultProductSlug !== RESISTGATE_PRODUCT_SLUG) {
-        throw new Error('Entitlement sync returned a different product.');
-      }
-
-      settings.subscription = {
-        ...settings.subscription,
-        tier: 'pro',
-        productSlug: resultProductSlug,
-        billingCycle: result.billingCycle === 'monthly' ? 'monthly' : result.billingCycle === 'yearly' ? 'yearly' : result.billingCycle === 'lifetime' ? 'lifetime' : settings.subscription.billingCycle,
-        upgradedAt: settings.subscription.upgradedAt || Date.now(),
-        email: result.email || settings.subscription.email || null,
-        subscriptionStatus: result.subscriptionStatus || 'ACTIVE',
-        installToken: settings.subscription.installToken,
-        expiresAt: result.expiresAt ? sanitizeTimestamp(result.expiresAt) : settings.subscription.expiresAt
-      };
-      await saveSettings(settings);
-      console.log('Entitlement sync completed successfully.');
-      return { success: true, pro: true, subscription: settings.subscription };
-    }
-  } catch (err) {
-    console.error('Error refreshing entitlement:', err);
-    return { success: false, error: err?.message || 'Unable to refresh Pro access.' };
-  }
-}
 
 function isStrictFocusActive(settings, now) {
   if (!settings?.proFeatures?.strictModeEnabled) {
@@ -1727,14 +1527,7 @@ function sanitizeChallengePrompt(value) {
   return value.trim().slice(0, 120);
 }
 
-function sanitizeEmail(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
 
-  const normalized = value.trim().toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : null;
-}
 
 function sanitizeAccountabilityPreset(value) {
   if (value === 'light' || value === 'strict') {
@@ -1766,23 +1559,7 @@ function sanitizeOpaqueString(value) {
   return trimmed ? trimmed.slice(0, 512) : null;
 }
 
-function sanitizeProductSlug(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
 
-  const normalized = value.trim().toLowerCase();
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized) ? normalized : null;
-}
-
-function sanitizeSubscriptionStatus(value) {
-  if (typeof value !== 'string') {
-    return 'inactive';
-  }
-
-  const trimmed = value.trim().toUpperCase();
-  return trimmed || 'inactive';
-}
 
 function generateDeviceId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1904,88 +1681,7 @@ async function appendAnalyticsEvent(event) {
   await saveAnalytics(analytics);
 }
 
-async function fetchEntitlementJson(path, body) {
-  const response = await fetch(`${RESISTGATE_SITE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data?.error || 'ResistGate could not reach the entitlement service.');
-  }
-
-  return data;
-}
-
-async function activateProFromWebsite(activationToken) {
-  if (!activationToken || typeof activationToken !== 'string') {
-    throw new Error('Missing activation token.');
-  }
-
-  const installation = await getInstallation();
-  const result = await fetchEntitlementJson('/api/entitlement/activate-install', {
-    activationToken,
-    deviceId: installation.deviceId
-  });
-
-  const productSlug = sanitizeProductSlug(result.productSlug) || RESISTGATE_PRODUCT_SLUG;
-  if (productSlug !== RESISTGATE_PRODUCT_SLUG) {
-    throw new Error('This checkout belongs to a different product.');
-  }
-
-  if (result.pro !== true || !result.installToken) {
-    throw new Error('The entitlement service did not return an active Pro install token.');
-  }
-
-  const settings = await getSettings();
-  settings.subscription = {
-    tier: result.pro === true ? 'pro' : 'free',
-    productSlug,
-    billingCycle: result.billingCycle === 'monthly' ? 'monthly' : result.billingCycle === 'yearly' ? 'yearly' : result.billingCycle === 'lifetime' ? 'lifetime' : null,
-    upgradedAt: result.pro === true ? Date.now() : null,
-    email: sanitizeEmail(result.email),
-    subscriptionStatus: sanitizeSubscriptionStatus(result.subscriptionStatus || 'ACTIVE'),
-    installToken: sanitizeOpaqueString(result.installToken),
-    licenseKey: null,
-    expiresAt: null
-  };
-  await saveSettings(settings);
-  await queueRulesUpdate('activate-pro-from-website');
-  await chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html?activation=success') });
-
-  return { success: true, subscription: settings.subscription };
-}
-
-async function openPricingPage(email) {
-  const installation = await getInstallation();
-  const url = new URL(RESISTGATE_PRICING_PATH, RESISTGATE_SITE_URL);
-  url.searchParams.set('productSlug', RESISTGATE_PRODUCT_SLUG);
-  url.searchParams.set('source', 'extension');
-  url.searchParams.set('extensionId', chrome.runtime.id);
-  url.searchParams.set('deviceId', installation.deviceId);
-  if (email && typeof email === 'string' && email.trim()) {
-    url.searchParams.set('email', email.trim());
-  }
-
-  await chrome.tabs.create({ url: url.toString() });
-  return { success: true, url: url.toString() };
-}
-
-function isTrustedExternalSender(sender) {
-  try {
-    if (!sender?.url) {
-      return false;
-    }
-
-    return TRUSTED_EXTERNAL_ORIGINS.has(new URL(sender.url).origin);
-  } catch {
-    return false;
-  }
-}
 
 async function getAnalyticsDashboard() {
   const analytics = await getAnalytics();
@@ -2236,11 +1932,6 @@ if (typeof globalThis !== 'undefined') {
     buildWeekSummary,
     getWeeklyFeedbackLine,
     hasProAccess,
-    sanitizeSubscriptionStatus,
-    isTrustedExternalSender,
-    str2ab,
-    base64UrlDecode,
-    base64UrlDecodeToBuffer,
     removeExpiredBlocks,
     removeExpiredTemporaryAccess,
     sanitizeCommitmentMode,

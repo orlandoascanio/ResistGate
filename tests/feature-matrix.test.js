@@ -112,7 +112,7 @@ describe('Feature Matrix Coverage', () => {
   describe('Pro: Strict Mode Lock', () => {
     it('returns pending cooldown when trying to disable strict mode first time', () => {
       const current = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        subscription: { tier: 'pro' },
         proFeatures: { strictModeEnabled: true, strictModeDisableDelaySeconds: 30 }
       });
       const next = clone(current);
@@ -126,7 +126,7 @@ describe('Feature Matrix Coverage', () => {
     it('disables strict mode after cooldown expires', () => {
       const now = Date.now();
       const current = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        subscription: { tier: 'pro' },
         proFeatures: {
           strictModeEnabled: true,
           strictModeDisableDelaySeconds: 30,
@@ -144,7 +144,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('blocks config updates during active strict schedule window', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.proFeatures.strictModeEnabled = true;
@@ -167,7 +167,7 @@ describe('Feature Matrix Coverage', () => {
   describe('Pro: Override Cooldown', () => {
     it('starts with base manual override delay', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const status = await env.sendMessage({ action: 'getManualOverrideStatus' });
       expect(status.success).toBe(true);
@@ -176,7 +176,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('increases required delay after successful overrides', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
@@ -197,7 +197,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('locks manual override after threshold is exceeded', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
@@ -239,7 +239,7 @@ describe('Feature Matrix Coverage', () => {
       expect(hooks.isEarnAccessActive(freeSettings)).toBe(false);
 
       const proSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        subscription: { tier: 'pro' },
         proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
       });
       expect(hooks.isEarnAccessActive(proSettings)).toBe(true);
@@ -247,7 +247,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('rejects manual override when earn-access is active', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
@@ -268,7 +268,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('requires minimum challenge duration when earn-access is active', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
@@ -300,7 +300,7 @@ describe('Feature Matrix Coverage', () => {
   describe('Pro: Analytics Dashboard', () => {
     it('computes blocked attempts, overrides, and strict session minutes', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
@@ -329,7 +329,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('returns top blocked domains sorted and limited to 5', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const now = Date.now();
       const domains = ['a.com', 'b.com', 'b.com', 'c.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'];
@@ -348,7 +348,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('always returns a 7-day override trend series', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const res = await env.sendMessage({ action: 'getAnalyticsDashboard' });
       expect(res.dashboard.overrideFrequencyTrend).toHaveLength(7);
@@ -358,7 +358,7 @@ describe('Feature Matrix Coverage', () => {
   describe('Pro: Focus Score and Weekly Report', () => {
     it('uses score formula 100 - overrides*5 - manualDisable*10', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
@@ -376,7 +376,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('clamps score to 0 at lower bound', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const now = Date.now();
       const events = [];
@@ -394,7 +394,7 @@ describe('Feature Matrix Coverage', () => {
 
     it('returns weekly trend delta and a feedback line', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
@@ -418,26 +418,11 @@ describe('Feature Matrix Coverage', () => {
       expect(hooks.hasProAccess(freeSettings)).toBe(false);
     });
 
-    it('hasProAccess returns true for pro tier with no expiresAt', () => {
+    it('hasProAccess returns true for pro tier', () => {
       const proSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' }
+        subscription: { tier: 'pro' }
       });
       expect(hooks.hasProAccess(proSettings)).toBe(true);
-    });
-
-    it('hasProAccess returns true for pro tier with future expiresAt', () => {
-      const proSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly', expiresAt: Date.now() + 100_000 }
-      });
-      expect(hooks.hasProAccess(proSettings)).toBe(true);
-    });
-
-    it('hasProAccess returns false for pro tier with expired expiresAt', () => {
-      // Bypass sanitizeSettings (which strips expiresAt for free) by constructing directly
-      const expiredProSettings = {
-        subscription: { tier: 'pro', expiresAt: Date.now() - 1000 }
-      };
-      expect(hooks.hasProAccess(expiredProSettings)).toBe(false);
     });
 
     it('hasProAccess returns false for null/undefined input', () => {
@@ -478,7 +463,7 @@ describe('Feature Matrix Coverage', () => {
       expect(events).toHaveLength(0);
     });
 
-    it('sanitizeSettings forces Pro-only subscription fields to null for free tier', () => {
+    it('sanitizeSettings strips unknown subscription fields for free tier', () => {
       const sanitized = hooks.sanitizeSettings({
         subscription: {
           tier: 'free',
@@ -490,107 +475,45 @@ describe('Feature Matrix Coverage', () => {
         }
       });
       expect(sanitized.subscription.tier).toBe('free');
-      expect(sanitized.subscription.billingCycle).toBeNull();
-      expect(sanitized.subscription.upgradedAt).toBeNull();
-      expect(sanitized.subscription.installToken).toBeNull();
-      expect(sanitized.subscription.licenseKey).toBeNull();
-      expect(sanitized.subscription.expiresAt).toBeNull();
+      expect(sanitized.subscription).not.toHaveProperty('billingCycle');
+      expect(sanitized.subscription).not.toHaveProperty('upgradedAt');
+      expect(sanitized.subscription).not.toHaveProperty('installToken');
+      expect(sanitized.subscription).not.toHaveProperty('licenseKey');
+      expect(sanitized.subscription).not.toHaveProperty('expiresAt');
     });
 
-    it('sanitizeSubscriptionStatus uppercases valid strings and defaults invalid', () => {
-      expect(hooks.sanitizeSubscriptionStatus('active')).toBe('ACTIVE');
-      expect(hooks.sanitizeSubscriptionStatus('PAST_DUE')).toBe('PAST_DUE');
-      expect(hooks.sanitizeSubscriptionStatus(null)).toBe('inactive');
-      expect(hooks.sanitizeSubscriptionStatus('')).toBe('inactive');
-      expect(hooks.sanitizeSubscriptionStatus(42)).toBe('inactive');
-    });
-  });
-
-  describe('Pro: License & Entitlement', () => {
-    it('activateLicense returns error for missing key', async () => {
-      const res = await env.sendMessage({ action: 'activateLicense', licenseKey: null });
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('Invalid license key format');
-    });
-
-    it('activateLicense returns error for key with wrong number of parts', async () => {
-      const res = await env.sendMessage({ action: 'activateLicense', licenseKey: 'only.two' });
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('Invalid license key format');
-    });
-
-    it('activateLicense returns error for invalid JWT signature', async () => {
-      // A 3-part JWT with invalid base64url payload — crypto.subtle.verify will return false or throw
-      // We use a fake key that has 3 parts but invalid signature
-      const fakeKey = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWVyIjoicHJvIn0.invalidsig';
-      const res = await env.sendMessage({ action: 'activateLicense', licenseKey: fakeKey });
-      expect(res.success).toBe(false);
-      expect(typeof res.error).toBe('string');
-    });
-
-    it('refreshEntitlementNow returns error when no installToken is set', async () => {
-      // Default state has no installToken (free tier), so manual refresh should error
-      const res = await env.sendMessage({ action: 'refreshEntitlementNow' });
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('No active Pro install token');
+    it('sanitizeSettings preserves pro tier without extra fields', () => {
+      const sanitized = hooks.sanitizeSettings({
+        subscription: {
+          tier: 'pro',
+          billingCycle: 'yearly',
+          installToken: 'sometoken',
+          licenseKey: 'somekey'
+        }
+      });
+      expect(sanitized.subscription.tier).toBe('pro');
+      expect(sanitized.subscription).not.toHaveProperty('billingCycle');
+      expect(sanitized.subscription).not.toHaveProperty('installToken');
+      expect(sanitized.subscription).not.toHaveProperty('licenseKey');
     });
   });
 
-  describe('Pro: External Message Validation', () => {
-    it('isTrustedExternalSender returns true for trusted origins', () => {
-      expect(hooks.isTrustedExternalSender({ url: 'http://localhost:3000/en/pricing' })).toBe(true);
-      expect(hooks.isTrustedExternalSender({ url: 'https://www.orlandoascanio.com/activate' })).toBe(true);
-      expect(hooks.isTrustedExternalSender({ url: 'https://orlandoascanio.com/en/pricing' })).toBe(true);
+  describe('Pro: hasProAccess', () => {
+    it('returns false when tier is free', () => {
+      expect(hooks.hasProAccess({ subscription: { tier: 'free' } })).toBe(false);
     });
 
-    it('isTrustedExternalSender returns false for untrusted origins', () => {
-      expect(hooks.isTrustedExternalSender({ url: 'https://evil.com/activate' })).toBe(false);
-      expect(hooks.isTrustedExternalSender({ url: 'http://orlandoascanio.com/activate' })).toBe(false);
+    it('returns true when tier is pro', () => {
+      expect(hooks.hasProAccess({ subscription: { tier: 'pro' } })).toBe(true);
     });
 
-    it('isTrustedExternalSender returns false for missing or invalid URL', () => {
-      expect(hooks.isTrustedExternalSender({})).toBe(false);
-      expect(hooks.isTrustedExternalSender(null)).toBe(false);
-      expect(hooks.isTrustedExternalSender({ url: 'not-a-url' })).toBe(false);
-    });
-
-    it('external message with unknown action returns error', async () => {
-      const res = await env.sendExternalMessage(
-        { action: 'unknownAction' },
-        { url: 'https://www.orlandoascanio.com/activate' }
-      );
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('Unknown external action');
-    });
-
-    it('external message from untrusted origin is rejected', async () => {
-      const res = await env.sendExternalMessage(
-        { action: 'activateProFromWebsite', activationToken: 'sometoken' },
-        { url: 'https://evil.com/activate' }
-      );
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('Unauthorized activation origin');
+    it('returns false when subscription is missing', () => {
+      expect(hooks.hasProAccess({})).toBe(false);
+      expect(hooks.hasProAccess(null)).toBe(false);
     });
   });
 
-  describe('Pro: Utility Functions', () => {
-    it('str2ab converts ASCII string to ArrayBuffer', () => {
-      const buf = hooks.str2ab('hello');
-      expect(buf.byteLength).toBe(5);
-    });
-
-    it('base64UrlDecode decodes padded and unpadded base64url strings', () => {
-      // "hello" in base64 = "aGVsbG8"
-      const decoded = hooks.base64UrlDecode('aGVsbG8');
-      expect(decoded).toBe('hello');
-    });
-
-    it('base64UrlDecodeToBuffer returns an ArrayBuffer', () => {
-      const buf = hooks.base64UrlDecodeToBuffer('aGVsbG8');
-      expect(buf instanceof ArrayBuffer).toBe(true);
-      expect(buf.byteLength).toBe(5);
-    });
-
+  describe('Free: Block Expiry', () => {
     it('removeExpiredBlocks filters out entries whose unblockAt has passed', () => {
       const now = Date.now();
       const blocklist = [
@@ -648,10 +571,7 @@ describe('Feature Matrix Coverage', () => {
       // No error thrown means handler ran successfully
     });
 
-    it('onAlarm fires refreshEntitlement for entitlement-refresh alarm', async () => {
-      await env.triggerAlarm({ name: 'resistgate-entitlement-refresh' });
-      // No error thrown means handler ran successfully
-    });
+    
 
     it('onAlarm ignores null/undefined alarm names', async () => {
       await env.triggerAlarm(null);
@@ -744,7 +664,7 @@ describe('Feature Matrix Coverage', () => {
     it('isCommitmentModeActive returns true during active commitment', () => {
       const now = Date.now();
       const settings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        subscription: { tier: 'pro' },
         proFeatures: {
           commitmentMode: {
             active: true,
@@ -760,7 +680,7 @@ describe('Feature Matrix Coverage', () => {
     it('isCommitmentModeActive returns false when expired', () => {
       const now = Date.now();
       const settings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro', billingCycle: 'monthly' },
+        subscription: { tier: 'pro' },
         proFeatures: {
           commitmentMode: {
             active: true,
@@ -810,18 +730,80 @@ describe('Feature Matrix Coverage', () => {
 
     it('intention page settings are saved and retrieved via message actions', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro', expiresAt: Date.now() + 100000 };
+      settingsObj.subscription = { tier: 'pro' };
       settingsObj.proFeatures.intentionPage = {
         enabled: true,
-        personalGoal: 'Stay focused on the project',
         showBreathingExercise: true
       };
       await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
       const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
       expect(saved.proFeatures.intentionPage.enabled).toBe(true);
-      expect(saved.proFeatures.intentionPage.personalGoal).toBe('Stay focused on the project');
       expect(saved.proFeatures.intentionPage.showBreathingExercise).toBe(true);
+    });
+
+    it('migrates global personalGoal to blocklist entries', () => {
+      const result = hooks.sanitizeSettings({
+        blocklist: [
+          { id: '1', urlPattern: 'instagram.com', createdAt: Date.now() },
+          { id: '2', urlPattern: 'reddit.com', createdAt: Date.now(), personalGoal: 'Stop doom scrolling' }
+        ],
+        proFeatures: {
+          intentionPage: { enabled: true, personalGoal: 'Stay focused', showBreathingExercise: false }
+        }
+      });
+      expect(result.proFeatures.intentionPage.personalGoal).toBe('');
+      const igEntry = result.blocklist.find(e => e.urlPattern === 'instagram.com');
+      const rdEntry = result.blocklist.find(e => e.urlPattern === 'reddit.com');
+      expect(igEntry.personalGoal).toBe('Stay focused');
+      expect(rdEntry.personalGoal).toBe('Stop doom scrolling');
+    });
+
+    it('does not re-distribute personalGoal on subsequent sanitizations', () => {
+      const first = hooks.sanitizeSettings({
+        blocklist: [
+          { id: '1', urlPattern: 'instagram.com', createdAt: Date.now() }
+        ],
+        proFeatures: {
+          intentionPage: { enabled: true, personalGoal: 'Stay focused', showBreathingExercise: false }
+        }
+      });
+      expect(first.blocklist[0].personalGoal).toBe('Stay focused');
+      expect(first.proFeatures.intentionPage.personalGoal).toBe('');
+
+      const second = hooks.sanitizeSettings(first);
+      expect(second.blocklist[0].personalGoal).toBe('Stay focused');
+      expect(second.proFeatures.intentionPage.personalGoal).toBe('');
+    });
+
+    it('sanitizeBlocklist preserves personalGoal on entries', () => {
+      const result = hooks.sanitizeBlocklist([{
+        id: '1',
+        urlPattern: 'instagram.com',
+        personalGoal: 'Stop watching reels',
+        createdAt: Date.now()
+      }]);
+      expect(result[0].personalGoal).toBe('Stop watching reels');
+    });
+
+    it('sanitizeBlocklist truncates long personalGoal to 200 chars', () => {
+      const result = hooks.sanitizeBlocklist([{
+        id: '1',
+        urlPattern: 'instagram.com',
+        personalGoal: 'x'.repeat(300),
+        createdAt: Date.now()
+      }]);
+      expect(result[0].personalGoal.length).toBe(200);
+    });
+
+    it('sanitizeBlocklist removes empty personalGoal', () => {
+      const result = hooks.sanitizeBlocklist([{
+        id: '1',
+        urlPattern: 'instagram.com',
+        personalGoal: '   ',
+        createdAt: Date.now()
+      }]);
+      expect(result[0].personalGoal).toBeUndefined();
     });
   });
 

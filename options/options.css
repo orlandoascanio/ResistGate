@@ -1068,22 +1068,30 @@ details[open] .advanced-tuning .tuning-body,
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
+  padding: 3px 8px 3px 10px;
   border-radius: 99px;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bundle-badge:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .bundle-badge:hover {
-  opacity: 0.75;
+  opacity: 1;
 }
 
 .bundle-badge--on {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #86efac;
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: var(--ok-border);
 }
 
 .bundle-badge--off {
@@ -1092,20 +1100,40 @@ details[open] .advanced-tuning .tuning-body,
   border-color: var(--line-2);
 }
 
+.bundle-badge--off:hover {
+  background: var(--lavender-2);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.bundle-badge-chevron {
+  font-size: 9px;
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.bundle-badge[aria-expanded="true"] .bundle-badge-chevron {
+  transform: rotate(180deg);
+}
+
 .bundle-help-text {
   font-size: 12px;
   color: var(--muted);
-  margin: 0 0 4px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
+
 .bundle-toggle-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
   cursor: pointer;
   user-select: none;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .bundle-toggle-row input[type="checkbox"] {
@@ -1115,12 +1143,15 @@ details[open] .advanced-tuning .tuning-body,
 
 .bundle-config {
   display: grid;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg-alt);
-  border: 1px dashed var(--line-2);
-  border-radius: 8px;
-  margin-top: 4px;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+
+.bundle-config-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
 }
 
 .bundle-config select,
@@ -1130,20 +1161,51 @@ details[open] .advanced-tuning .tuning-body,
   font-size: 13px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   background: var(--card);
   color: var(--text);
   width: 100%;
 }
 
+.bundle-config select:focus,
+.bundle-config input:focus {
+  outline: 2px solid var(--focus-ring);
+  border-color: var(--primary);
+}
+
 .bundle-config label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 5px;
 }
 
 .bundle-save-btn {
   font-size: 12px;
-  padding: 6px 12px;
-  align-self: flex-start;
+  padding: 8px 14px;
+  align-self: flex-end;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.bundle-save-btn--saved {
+  background-color: var(--ok-bg) !important;
+  color: var(--ok) !important;
+  border-color: var(--ok-border) !important;
+}
+
+.bundle-goal-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+
+.goal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
 }

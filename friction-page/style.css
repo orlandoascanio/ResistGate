@@ -19,6 +19,7 @@
   /* Brand */
   --primary: #4a1d96;
   --primary-hover: #3d167d;
+  --primary-active: #2d0f5e;
   --primary-subtle: #b996ea;
   --lavender: #efe7fb;
   --lavender-2: #f4edff;
@@ -27,15 +28,45 @@
   --ok: #0f766e;
   --err: #b42318;
 
+  /* Disabled states */
+  --disabled-bg: #d1d5db;
+  --disabled-text: #9ca3af;
+  --disabled-border: #d1d5db;
+  --disabled-opacity: 0.5;
+
   /* Focus ring */
   --focus-ring: rgba(74, 29, 150, 0.35);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 
   /* Shadows */
   --shadow-card: 0 12px 28px rgba(74, 29, 150, 0.08);
+  --shadow-lg: 0 20px 40px rgba(74, 29, 150, 0.12);
+  --shadow-button-hover: 0 4px 12px rgba(74, 29, 150, 0.25);
+  --shadow-button-active: 0 2px 6px rgba(74, 29, 150, 0.2);
 
   /* Radius */
-  --radius: 14px;
-  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-medium: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Easing */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,15 +86,24 @@
 
     --primary: #8b5cf6;
     --primary-hover: #7c3aed;
-    --primary-subtle: #6d28d9;
+    --primary-active: #6d28d9;
+    --primary-subtle: #a78bfa;
     --lavender: #26193a;
     --lavender-2: #1f1232;
 
     --ok: #34d399;
     --err: #f87171;
 
+    /* Disabled states (dark mode) */
+    --disabled-bg: #4b5563;
+    --disabled-text: #6b7280;
+    --disabled-border: #4b5563;
+
     --focus-ring: rgba(139, 92, 246, 0.5);
     --shadow-card: 0 12px 28px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
+    --shadow-button-hover: 0 4px 12px rgba(139, 92, 246, 0.3);
+    --shadow-button-active: 0 2px 6px rgba(139, 92, 246, 0.25);
   }
 }
 
@@ -96,428 +136,562 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 24px;
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.5 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font: 16px/1.6 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Container ──────────────────────────────────────────────────── */
 .container {
   width: 100%;
-  max-width: 760px;
+  max-width: 680px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: var(--space-8) var(--space-6);
   box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-slow), transform var(--transition-slow);
 }
 
-/* ── Header ─────────────────────────────────────────────────────── */
-.header {
-  margin-bottom: 16px;
-  text-align: center;
+.container:hover {
+  box-shadow: var(--shadow-lg);
 }
 
-.header h1 {
-  font-size: 28px;
-  font-weight: 800;
-  margin-bottom: 8px;
+/* ── Phase System ───────────────────────────────────────────────── */
+.phase-section {
+  display: none;
 }
 
-.message {
-  color: var(--muted);
-  margin-bottom: 8px;
+/* Phase visibility controlled by container class */
+.phase-intention .phase-intention-content,
+.phase-precheck .phase-precheck-content,
+.phase-challenge .phase-challenge-content,
+.phase-success .phase-success-content {
+  display: block;
+  animation: fadeIn var(--transition-slow) ease-out;
 }
 
-.site-info {
-  font-size: 18px;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Phase Labels ───────────────────────────────────────────────── */
+.phase-label {
+  display: inline-block;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 16px;
 }
 
-/* ── Intention Page ────────────────────────────────────────────── */
-.intention-section {
-  margin-bottom: 16px;
+/* ── Phase 1: Intention ─────────────────────────────────────────── */
+.intention-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.intention-context {
+  margin-bottom: 8px;
 }
 
 .personal-goal {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
-  color: var(--primary);
-  background: var(--lavender);
-  border-left: 4px solid var(--primary);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  text-align: left;
+  line-height: 1.4;
+  color: var(--text);
+  margin: 0 0 24px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.personal-goal:empty {
+  display: none;
 }
 
 .breathing-exercise {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: var(--space-4);
+  margin: var(--space-6) 0 var(--space-8);
 }
 
-.breathing-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.breathing-circle {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: var(--primary-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  /* Transition is controlled per phase so timing matches each duration */
-}
-
-.breathing-circle.breathe-in {
-  transform: scale(1.3);
-  background: var(--primary);
-  transition: transform 4s ease-in-out, background-color 1.5s ease;
-}
-
-.breathing-circle.breathe-hold {
-  transform: scale(1.3);
-  background: var(--primary-hover);
-  /* transform doesn't change — only color shifts */
-  transition: background-color 0.8s ease;
-}
-
-.breathing-circle.breathe-out {
-  transform: scale(1);
-  background: var(--primary-subtle);
-  /* 8s matches the 8000ms phase duration in the JS */
-  transition: transform 8s ease-in-out, background-color 2s ease;
-}
-
-.breathing-hint {
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-/* ── Intention-enhanced layout ──────────────────────────────────── */
-.has-intention .header {
-  background: var(--lavender-2);
-  border-radius: var(--radius) var(--radius) 0 0;
-  /* No bottom margin — the intention-divider handles that spacing */
-  margin: -24px -24px 0 -24px;
-  padding: 44px 28px 32px;
-  border-bottom: 1px solid var(--line-2);
-}
-
-/* Title steps back — the goal is the headline */
-.has-intention .header h1 {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 14px;
-}
-
-/* Personal goal becomes the centerpiece — large, clean, no decoration box */
-.has-intention .personal-goal {
-  font-size: 23px;
-  font-weight: 700;
-  line-height: 1.4;
-  text-align: center;
-  color: var(--text);
-  background: none;
-  border-left: none;
-  border-top: none;
-  padding: 0 8px;
-  margin-bottom: 24px;
-  letter-spacing: -0.01em;
-}
-
-/* Site name becomes secondary — no longer competes with the goal */
-.has-intention .site-info {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  margin-top: 16px;
-  margin-bottom: 4px;
-}
-
-.has-intention .message {
-  font-size: 13px;
-}
-
-.has-intention .breathing-exercise {
-  padding: 4px 0 8px;
-  gap: 20px;
-}
-
-.has-intention .breathing-circle {
-  width: 160px;
-  height: 160px;
-  font-size: 16px;
-  /* Double ring: inner lavender halo, outer subtle border */
-  box-shadow: 0 0 0 14px var(--lavender), 0 0 0 15px var(--line-2);
-}
-
-/* ── Intention divider ──────────────────────────────────────────── */
-.intention-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px 0 8px;
-  cursor: pointer;
-  border: none;
-  background: none;
-  width: 100%;
-  font: inherit;
-  transition: opacity 0.2s ease;
-}
-
-.intention-divider::before,
-.intention-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-.intention-divider:hover .intention-divider-label {
-  color: var(--primary);
-}
-
-.intention-divider:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 4px;
-  border-radius: 4px;
-}
-
-.intention-divider-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-/* ── Intention phase (phase 1: reflect before challenge) ─────────── */
-.intention-phase .content,
-.intention-phase .bundle-panel {
-  display: none !important;
-}
-
-.intention-phase .personal-goal {
-  font-size: 26px;
-  margin-bottom: 32px;
-}
-
-.intention-phase .breathing-exercise {
-  padding: 16px 0;
-  gap: 24px;
-}
-
-.intention-phase .site-info {
-  font-size: 12px;
-  opacity: 0.7;
-  margin-top: 24px;
-}
-
-.intention-phase .message {
-  display: none;
-}
-
-.intention-phase #intention-divider {
-  margin-top: 8px;
-}
-
-/* ── Reduced motion ─────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  .breathing-circle.breathe-in,
-  .breathing-circle.breathe-hold,
-  .breathing-circle.breathe-out {
-    transition: none;
-    transform: none;
-  }
+.breathing-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  transition: transform var(--transition-medium);
 }
 
 @media (max-width: 640px) {
-  .has-intention .header {
-    margin: -18px -18px 0 -18px;
-    padding: 32px 18px 24px;
+  .breathing-ring {
+    width: 100px;
+    height: 100px;
+  }
+
+  .breathing-ring-core {
+    inset: 16px;
   }
 }
 
-/* ── Buttons ────────────────────────────────────────────────────── */
-.unlock-btn,
-.btn {
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 11px 14px;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.unlock-btn {
-  width: 100%;
-  background: var(--primary);
-  color: #fff;
-}
-
-.unlock-btn:hover {
-  background: var(--primary-hover);
-}
-
-.unlock-btn:disabled,
-.btn:disabled {
-  background: #9ca3af;
-  border-color: #9ca3af;
-  color: #fff;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn-secondary {
+.breathing-ring-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background: var(--lavender);
-  color: var(--text-3);
-  border: 1px solid var(--line);
-  text-decoration: none;
-  text-align: center;
+  transform: scale(1);
+  opacity: 0.5;
+  transition: transform 4s ease-out, opacity 4s ease-out;
+  will-change: transform, opacity;
 }
 
-.btn-tertiary {
-  background: transparent;
+.breathing-ring-core {
+  position: absolute;
+  inset: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(1);
+  transition: transform 4s ease-out;
+  will-change: transform;
+}
+
+.breathing-count {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.breathing-count.tick {
+  animation: count-tick 0.25s var(--ease-out-quart);
+}
+
+@keyframes count-tick {
+  0% {
+    transform: scale(1.15);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.breathing-phase-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0;
+  line-height: 1;
+  min-height: 20px;
+  transition: opacity 0.18s var(--ease-out-quart);
+}
+
+.breathing-phase-label.fading {
+  opacity: 0;
+}
+
+.breathing-label {
+  font-size: 13px;
   color: var(--muted);
-  border: 1px dashed var(--line-2);
-  text-decoration: none;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.intention-meta {
+  margin-top: 24px;
+}
+
+.site-info {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.helper-text {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Phase 2: Precheck ──────────────────────────────────────────── */
+.precheck-header {
   text-align: center;
+  margin-bottom: 28px;
 }
 
-.btn-tertiary:hover {
-  color: var(--text-2);
-  border-color: var(--primary-subtle);
-  background: var(--bg-subtle);
-}
-
-.btn:focus-visible,
-.unlock-btn:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* ── Ready confirmation block ───────────────────────────────────── */
-.ready-confirmation {
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.ready-confirmation h2 {
-  font-size: 18px;
+.precheck-header h2 {
+  font-size: 24px;
   font-weight: 700;
   margin-bottom: 8px;
+  color: var(--text);
 }
 
-.ready-confirmation p {
+.precheck-subtitle {
+  font-size: 15px;
   color: var(--muted);
-  margin-bottom: 16px;
 }
 
-.ready-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-/* ── Action groups ──────────────────────────────────────────────── */
-.primary-actions {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-/* ── Pro precheck ───────────────────────────────────────────────── */
-.pro-precheck {
-  border: 1px solid var(--line);
-  background: var(--bg-subtle);
+/* ── Bundle Panel ───────────────────────────────────────────────── */
+.bundle-panel {
+  background: var(--progress-bg);
+  border: 1px solid var(--ok);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  margin-bottom: 10px;
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-6);
+  text-align: center;
+  transition: box-shadow var(--transition-medium);
+}
+
+.bundle-panel:hover {
+  box-shadow: 0 4px 16px rgba(15, 118, 110, 0.08);
+}
+
+.bundle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--progress-text);
+  margin-bottom: var(--space-3);
+  line-height: 1.4;
+}
+
+.bundle-progress-wrap {
+  background: var(--progress-bg);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+.bundle-progress-bar {
+  height: 100%;
+  background: var(--progress);
+  border-radius: 99px;
+  transition: width var(--transition-slow);
+}
+
+.bundle-progress-text {
+  font-size: 12px;
+  color: var(--progress-text);
+}
+
+/* ── Pro Precheck ───────────────────────────────────────────────── */
+.pro-precheck {
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.precheck-section {
+  margin-bottom: var(--space-4);
+}
+
+.precheck-section:last-child {
+  margin-bottom: 0;
 }
 
 .pro-precheck label {
   display: block;
   font-size: 13px;
   font-weight: 700;
-  margin-bottom: 4px;
+  color: var(--text-2);
+  margin-bottom: var(--space-2);
+}
+
+.precheck-prompt {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: var(--space-2);
+  line-height: 1.5;
 }
 
 .precheck-input {
-  margin-bottom: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color var(--transition-fast), outline var(--transition-fast);
+}
+
+.precheck-input:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 0;
+  border-color: var(--primary);
+}
+
+.precheck-input::placeholder {
+  color: var(--muted);
+}
+
+.typing-input {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+  background: var(--card);
+  color: var(--text);
+  line-height: 1.5;
+  transition: border-color var(--transition-fast), outline var(--transition-fast);
+}
+
+.typing-input:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 0;
+  border-color: var(--primary);
+}
+
+.wait-progress {
+  background: var(--line);
+  border-radius: 99px;
+  height: 6px;
+  overflow: hidden;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.wait-progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 99px;
+  width: 0%;
+  transition: width 1s linear, background-color var(--transition-fast);
+}
+
+.wait-progress-bar:hover {
+  background: var(--primary-hover);
+}
+
+.wait-progress-text {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .precheck-error {
-  min-height: 18px;
-  margin-bottom: 8px;
-}
-
-.helper-text {
-  margin-top: 6px;
-  color: var(--muted);
+  min-height: 20px;
+  margin-bottom: var(--space-4);
   font-size: 13px;
+  color: var(--err);
+  text-align: center;
+  transition: opacity var(--transition-fast);
 }
 
-/* ── Alternative actions ────────────────────────────────────────── */
-.alternative-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 12px;
+/* ── Buttons ────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast),
+              box-shadow var(--transition-fast);
 }
 
-/* ── Challenge elements ─────────────────────────────────────────── */
+.btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.btn:disabled {
+  background: var(--disabled-bg) !important;
+  color: var(--disabled-text) !important;
+  border-color: var(--disabled-border) !important;
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Primary button */
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--primary-active);
+  transform: translateY(0);
+  box-shadow: var(--shadow-button-active);
+}
+
+/* Secondary button */
+.btn-secondary {
+  background: var(--lavender);
+  color: var(--text-3);
+  border: 1px solid var(--line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--lavender-2);
+  border-color: var(--line-2);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: var(--bg-subtle);
+  transform: translateY(0);
+}
+
+.btn-secondary:focus-visible {
+  outline-color: var(--primary);
+}
+
+/* Tertiary button */
+.btn-tertiary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line-2);
+}
+
+.btn-tertiary:hover:not(:disabled) {
+  color: var(--text-2);
+  border-color: var(--primary-subtle);
+  background: var(--bg-subtle);
+  transform: translateY(-1px);
+}
+
+.btn-tertiary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-tertiary:focus-visible {
+  outline-color: var(--primary);
+}
+
+.btn-large {
+  padding: 16px 28px;
+  font-size: 15px;
+  min-width: 200px;
+}
+
+/* Text button for secondary actions */
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.btn-text:hover:not(:disabled) {
+  color: var(--text-2);
+}
+
+.btn-text:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-text:focus-visible {
+  outline: var(--focus-ring-width) solid var(--primary);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-xs);
+}
+
+.btn-text:disabled {
+  color: var(--disabled-text) !important;
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* ── Phase Actions ──────────────────────────────────────────────── */
+.phase-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.secondary-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* ── Phase 3: Challenge Active ──────────────────────────────────── */
+.phase-challenge-content {
+  max-width: 100%;
+}
+
 .challenge-container {
-  margin-top: 4px;
+  text-align: center;
 }
 
 .step-badge {
   display: inline-block;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--primary);
   background: var(--lavender);
-  padding: 4px 10px;
+  padding: 6px 14px;
   border-radius: 999px;
 }
 
 .instruction-text {
   color: var(--muted);
-  margin-bottom: 12px;
+  margin-bottom: 20px;
+  font-size: 15px;
 }
 
 .quote-box {
@@ -525,176 +699,277 @@ body {
   border: 1px solid var(--line);
   border-left: 4px solid var(--primary);
   border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  text-align: left;
+  transition: box-shadow var(--transition-medium);
+}
+
+.quote-box:hover {
+  box-shadow: 0 4px 12px rgba(74, 29, 150, 0.06);
 }
 
 .quote-text {
-  font-size: 17px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
 }
 
-.typing-input {
+.challenge-typing-input {
   width: 100%;
-  min-height: 120px;
+  min-height: 140px;
   resize: vertical;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 12px;
+  padding: 16px;
   font: inherit;
+  font-size: 15px;
+  line-height: 1.6;
   background: var(--card);
   color: var(--text);
+  margin-bottom: 12px;
+  transition: border-color var(--transition-fast), outline var(--transition-fast);
 }
 
-.typing-input:focus {
-  outline: 2px solid var(--focus-ring);
+.challenge-typing-input:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 0;
   border-color: var(--primary);
 }
 
-.typing-input.has-error {
-  border-color: #e9a6a1;
-  background: #fff7f6;
+.challenge-typing-input.has-error {
+  border-color: var(--err);
+  background: var(--error-bg);
 }
 
-.error-text {
-  margin-top: 8px;
+.challenge-typing-input.has-error:focus {
+  outline-color: rgba(180, 35, 24, 0.3);
+}
+
+.typing-error {
+  min-height: 20px;
+  margin-bottom: var(--space-4);
   font-size: 13px;
   color: var(--err);
-  min-height: 18px;
+  text-align: center;
+  transition: opacity var(--transition-fast);
 }
 
-.stats-row {
+.challenge-stats {
   display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
+  justify-content: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-6);
+  padding: var(--space-3);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
   color: var(--muted);
-  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stat-value {
-  color: var(--text);
+  font-size: 18px;
   font-weight: 700;
+  color: var(--text);
+}
+
+.stat-value.accurate {
+  color: var(--ok);
+}
+
+.stat-value.error {
+  color: var(--err);
 }
 
 .challenge-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.challenge-actions .btn {
+  min-width: 120px;
+}
+
+.challenge-actions .btn-primary {
+  min-width: 160px;
 }
 
 .challenge-actions .btn-secondary {
   flex: 1;
+  max-width: 140px;
 }
 
-.challenge-actions .unlock-btn {
+.challenge-actions .btn-primary {
   flex: 2;
+  max-width: 200px;
 }
 
-/* ── Success state ──────────────────────────────────────────────── */
-.success-message h2 {
-  color: var(--ok);
-  margin-bottom: 8px;
+/* ── Phase 4: Success ───────────────────────────────────────────── */
+.phase-success-content {
+  text-align: center;
 }
 
 .success-message {
-  max-width: 520px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.success-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ok);
+  color: #fff;
+  font-size: 32px;
+  font-weight: 700;
+  border-radius: 50%;
+  margin-bottom: 8px;
+  animation: success-enter 0.4s var(--ease-out-expo) both;
+}
+
+@keyframes success-enter {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-message h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .success-message p {
-  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.bonus-text {
+  color: var(--ok) !important;
+  font-weight: 600;
 }
 
 .access-timer {
-  margin-top: 8px;
-  margin-bottom: 2px;
+  font-size: 18px !important;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--primary) !important;
+  margin: 8px 0;
+}
+
+.time-invested {
+  font-size: 13px !important;
+}
+
+.success-prompt {
+  margin: 8px 0 16px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .success-icon,
+  .breathing-count.tick {
+    animation: none;
+  }
+  
+  .breathing-count.tick {
+    transform: none;
+    opacity: 1;
+  }
+  
+  .breathing-ring-pulse,
+  .breathing-ring-core {
+    transition: none;
+  }
+  
+  .container,
+  .btn,
+  .phase-section,
+  .breathing-phase-label {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
-
 @media (max-width: 640px) {
+  body {
+    padding: var(--space-3);
+  }
+
   .container {
-    padding: 18px;
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-sm);
   }
 
-  .header h1 {
-    font-size: 24px;
+  .personal-goal {
+    font-size: 22px;
   }
 
-  .primary-actions,
-  .alternative-actions,
-  .challenge-actions,
-  .ready-actions {
-    grid-template-columns: 1fr;
-    display: grid;
+  .precheck-header h2 {
+    font-size: 20px;
   }
 
-  .challenge-actions .unlock-btn,
-  .challenge-actions .btn-secondary {
+  .challenge-stats {
+    gap: var(--space-5);
+    padding: var(--space-3);
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .challenge-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .challenge-actions .btn {
     width: 100%;
+    min-width: auto;
   }
-}
 
-/* ── Temptation Bundle panel ────────────────────────────────────── */
-.bundle-panel {
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  text-align: center;
-}
+  .phase-actions {
+    gap: var(--space-3);
+  }
 
-@media (prefers-color-scheme: dark) {
+  .pro-precheck {
+    padding: var(--space-4);
+  }
+
+  .quote-box {
+    padding: var(--space-4);
+  }
+
   .bundle-panel {
-    background: rgba(134, 239, 172, 0.07);
-    border-color: #4ade80;
+    padding: var(--space-3) var(--space-4);
   }
 }
 
-.bundle-label {
-  font-size: 15px;
-  font-weight: 600;
-  color: #166534;
-  margin-bottom: 12px;
-  line-height: 1.4;
-}
-
-@media (prefers-color-scheme: dark) {
-  .bundle-label { color: #86efac; }
-}
-
-.bundle-progress-wrap {
-  background: #dcfce7;
-  border-radius: 99px;
-  height: 8px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .bundle-progress-wrap { background: rgba(134, 239, 172, 0.15); }
-}
-
-.bundle-progress-bar {
-  height: 100%;
-  background: #22c55e;
-  border-radius: 99px;
-  transition: width 0.4s ease;
-}
-
-.bundle-progress-text {
-  font-size: 12px;
-  color: #15803d;
-}
-
-@media (prefers-color-scheme: dark) {
-  .bundle-progress-text { color: #4ade80; }
+/* ── Error text utility ─────────────────────────────────────────── */
+.error-text {
+  color: var(--err);
 }

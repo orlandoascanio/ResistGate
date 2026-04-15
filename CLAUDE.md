@@ -53,10 +53,9 @@ ResistGate is a **Manifest V3 Chrome extension** with no bundler. Every JS file 
    - `resistgate-access-expire-*` — temporary access window expiry
    - `resistgate-bundle-unlock-*` — temptation bundle unlock timers
    - `resistgate-commitment-expire` — commitment mode auto-expiry
-   - `resistgate-entitlement-refresh` — periodic (1440 min) JWT re-validation
    - `resistgate-daily-reset` — midnight daily badge counter reset
 
-6. **Pro entitlement**: verified via RS256 JWT `licenseKey` stored in settings. `hasProAccess(settings)` is the canonical check — reads `subscription.tier === 'pro'` AND validates expiry. `isProUser()` in `options/options.js` is the UI-side equivalent. External activation via `chrome.runtime.onMessageExternal` accepts `activateProFromWebsite` from trusted origins only.
+6. **Pro entitlement**: stored as `subscription.tier = 'pro'` in `chrome.storage.local`. `hasProAccess(settings)` is the canonical check — reads `subscription.tier === 'pro'`. `isProUser()` in `options/options.js` and `isPopupProUser()` in `popup/popup.js` are the UI-side equivalents. Activation happens exclusively via `chrome.runtime.onMessageExternal` — the website sends `activateProFromWebsite` from a trusted origin (`orlandoascanio.com`) after checkout; background sets `tier = 'pro'` and opens the options page with `?activation=success`.
 
 ### Message actions (background.js switch)
 
@@ -69,9 +68,7 @@ ResistGate is a **Manifest V3 Chrome extension** with no bundler. Every JS file 
 | `getSettings` | No | Return full sanitized settings |
 | `getManualOverrideStatus` | No | Return current override state |
 | `updateSettings` | No | Validate, apply Strict Mode logic, save, re-queue rules |
-| `activateLicense` | No | Verify RS256 JWT license key via Web Crypto API |
 | `openPricingPage` | No | Open pricing page in new tab |
-| `refreshEntitlementNow` | No | Manual trigger of entitlement refresh |
 | `getAnalyticsDashboard` | Yes | Return analytics dashboard data |
 | `getWeeklyReport` | Yes | Return weekly report data |
 | `activateCommitmentMode` | Yes | Start irrevocable global lockout (1–24 h) |
@@ -162,6 +159,6 @@ To cut a release: `git tag v1.X.Y && git push origin v1.X.Y`
 ## Security notes
 
 - External message origins validated against `TRUSTED_EXTERNAL_ORIGINS` (`orlandoascanio.com` only) — do not relax.
-- License verification uses RS256 JWT via Web Crypto API with embedded public key — do not replace with weaker verification.
-- Never log sensitive fields (license keys, tokens, email addresses).
+- Pro activation is exclusively via `activateProFromWebsite` from trusted origins; never trust a locally-sent message to self-elevate to Pro.
+- Never log sensitive fields (tokens, email addresses) to `console`.
 - All user data stays in `chrome.storage.local`; no external network calls in core logic.

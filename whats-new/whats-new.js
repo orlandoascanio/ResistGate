@@ -53,11 +53,6 @@ const changelogEntries = {
       category: 'fixed',
       label: 'Strict Mode reliability',
       detail: 'Now works everywhere, even without a schedule. No more exceptions to your own rules.'
-    },
-    {
-      category: 'security',
-      label: 'License verification',
-      detail: 'Your Pro status is verified every 24 hours. Security you can trust.'
     }
   ]
 };

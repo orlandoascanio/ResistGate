@@ -1,9 +1,11 @@
-// Friction Page Script
+// Friction Page Script - Phased Progressive Disclosure
 let startTime = null;
 let accessDurationMinutes = 15;
 let accessCountdownInterval = null;
 let waitCountdownInterval = null;
-let breathingAnimationTimeout = null;
+let breathingAnimationInterval = null;
+let breathingPhaseInterval = null;
+let breathingPhaseTimeout = null;
 let currentOriginalUrl = null;
 let currentSettings = null;
 let currentWorkTimer = null;
@@ -17,6 +19,16 @@ let challengeMeta = {
   customChallengeAnswered: false,
   earnAccessEnabled: true
 };
+
+// Phase management
+const PHASES = {
+  INTENTION: 'intention',
+  PRECHECK: 'precheck',
+  CHALLENGE: 'challenge',
+  SUCCESS: 'success'
+};
+
+let currentPhase = PHASES.INTENTION;
 
 document.addEventListener('DOMContentLoaded', function () {
   const urlParams = new URLSearchParams(window.location.search);
@@ -40,47 +52,50 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
     });
-    const searchBtn = document.getElementById('search-instead-btn');
-    if (searchBtn) {
-      searchBtn.href = 'https://www.google.com/search?q=' + encodeURIComponent(hostname);
-    }
   } else {
-    blockedSite.textContent = 'Unknown destination or unparseable URL.';
-    document.querySelector('.message').textContent = 'The requested URL could not be verified. You can still complete the challenge if you believe this is correct.';
+    blockedSite.textContent = 'Unknown destination';
   }
 
   loadSettings();
 
+  // Phase 1: Continue to Challenge
+  document.getElementById('continue-to-challenge').addEventListener('click', function () {
+    transitionToPhase(PHASES.PRECHECK);
+  });
+
+  // Phase 2: Start Challenge
   document.getElementById('start-unlock-challenge').addEventListener('click', function () {
     handleStartChallenge();
   });
 
+  // Manual Override
   document.getElementById('manual-override-btn').addEventListener('click', function () {
     handleManualOverride();
   });
-
-  document.getElementById('close-tab-btn').addEventListener('click', function () {
-    window.close();
-  });
-
-  document.getElementById('confirm-start-challenge').addEventListener('click', function () {
-    startTime = Date.now();
-    startTypingChallenge(currentOriginalUrl);
-  });
-
-  document.getElementById('cancel-start-challenge').addEventListener('click', function () {
-    document.getElementById('ready-confirmation').classList.add('hidden');
-    document.getElementById('primary-actions-group').classList.remove('hidden');
-    clearPrecheckError();
-  });
-
-  document.getElementById('intention-divider').addEventListener('click', function () {
-    const container = document.querySelector('.container');
-    if (container) container.classList.remove('intention-phase');
-    stopBreathingAnimation();
-    this.classList.add('hidden');
-  });
 });
+
+function setPhase(phase) {
+  const container = document.getElementById('main-container');
+  container.className = 'container';
+  container.classList.add(`phase-${phase}`);
+  currentPhase = phase;
+}
+
+function transitionToPhase(phase) {
+  // Stop breathing animation when leaving intention phase
+  if (currentPhase === PHASES.INTENTION && phase !== PHASES.INTENTION) {
+    stopBreathingAnimation();
+  }
+  
+  setPhase(phase);
+  
+  // Phase-specific initialization
+  if (phase === PHASES.PRECHECK) {
+    renderBundlePanel();
+    renderProPrecheck();
+    refreshManualOverrideStatus();
+  }
+}
 
 function loadSettings() {
   chrome.runtime.sendMessage({ action: 'getSettings' }, function (response) {
@@ -96,10 +111,7 @@ function loadSettings() {
 
     chrome.runtime.sendMessage({ action: 'getWorkTimerState' }, function (wtResponse) {
       currentWorkTimer = (wtResponse && wtResponse.success) ? wtResponse.state : null;
-      renderBundlePanel();
       renderIntentionPage();
-      renderProPrecheck();
-      refreshManualOverrideStatus();
     });
   });
 }
@@ -158,7 +170,7 @@ function renderBundlePanel() {
   if (bundle.conditionType === 'time_of_day') {
     const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
     const label12 = formatTime12(h, m);
-    labelEl.textContent = `⏳ You can visit this site after ${label12} today.`;
+    labelEl.textContent = `You can visit this site after ${label12} today.`;
     const now = new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
     const targetMins = h * 60 + m;
@@ -176,11 +188,11 @@ function renderBundlePanel() {
     const done = currentWorkTimer ? Math.floor(currentWorkTimer.effectiveMinutes) : 0;
     const left = Math.max(0, required - done);
     const progress = Math.min(100, Math.round((done / required) * 100));
-    labelEl.textContent = `🎯 You can visit this site after ${required} min of focused work today.`;
+    labelEl.textContent = `You can visit this site after ${required} min of focused work today.`;
     bar.style.width = `${progress}%`;
     progressText.textContent = done >= required
       ? 'Condition met — start the challenge to access the site.'
-      : `${done} / ${required} min logged — ${left} min to go. Start your work timer in the popup.`;
+      : `${done} / ${required} min logged — ${left} min to go.`;
   }
 }
 
@@ -193,100 +205,162 @@ function formatTime12(h, m) {
 function renderIntentionPage() {
   const isPro = currentSettings?.subscription?.tier === 'pro';
   const intentionPage = currentSettings?.proFeatures?.intentionPage || {};
-  const intentionSection = document.getElementById('intention-section');
-  const goalDisplay = document.getElementById('personal-goal-display');
+  const personalGoalDisplay = document.getElementById('personal-goal-display');
   const breathingExercise = document.getElementById('breathing-exercise');
-  const pageTitle = document.getElementById('page-title');
-  const container = document.querySelector('.container');
-  const divider = document.getElementById('intention-divider');
+  const intentionLabel = document.getElementById('intention-label');
+
+  let perDomainGoal = '';
+
+  if (isPro && intentionPage.enabled === true) {
+    const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
+    if (safeTargetUrl) {
+      const hostname = new URL(safeTargetUrl).hostname.replace(/^www\./, '');
+      const entry = (currentSettings.blocklist || []).find((e) => {
+        const p = (e.urlPattern || '').toLowerCase();
+        return hostname.endsWith(p) || p.endsWith(hostname);
+      });
+      if (entry?.personalGoal && entry.personalGoal.trim()) {
+        perDomainGoal = entry.personalGoal.trim();
+      }
+    }
+  }
 
   if (!isPro || intentionPage.enabled !== true) {
-    if (intentionSection) intentionSection.classList.add('hidden');
-    if (container) {
-      container.classList.remove('has-intention');
-      container.classList.remove('intention-phase');
-    }
-    if (divider) divider.classList.add('hidden');
+    intentionLabel.textContent = 'Pause before proceeding';
+    personalGoalDisplay.textContent = 'You blocked this for a reason.';
+    breathingExercise.classList.add('hidden');
     return;
   }
 
-  let hasContent = false;
-
-  if (intentionPage.personalGoal) {
-    pageTitle.textContent = 'Remember your goal.';
-    goalDisplay.textContent = intentionPage.personalGoal;
-    goalDisplay.classList.remove('hidden');
-    hasContent = true;
+  if (perDomainGoal) {
+    intentionLabel.textContent = 'Remember your goal';
+    personalGoalDisplay.textContent = perDomainGoal;
   } else {
-    goalDisplay.classList.add('hidden');
+    intentionLabel.textContent = 'Pause before proceeding';
+    personalGoalDisplay.textContent = 'You blocked this for a reason.';
   }
 
   if (intentionPage.showBreathingExercise) {
     breathingExercise.classList.remove('hidden');
     startBreathingAnimation();
-    hasContent = true;
   } else {
     breathingExercise.classList.add('hidden');
   }
-
-  if (hasContent) {
-    intentionSection.classList.remove('hidden');
-    if (container) {
-      container.classList.add('has-intention');
-      container.classList.add('intention-phase');
-    }
-    if (divider) divider.classList.remove('hidden');
-  } else {
-    intentionSection.classList.add('hidden');
-    if (container) {
-      container.classList.remove('has-intention');
-      container.classList.remove('intention-phase');
-    }
-    if (divider) divider.classList.add('hidden');
-  }
 }
 
+const BREATHING_PHASES = [
+  { name: 'Inhale', seconds: 4, pulseScale: 1.3, pulseOpacity: 0.8, coreScale: 1.1, easing: 'ease-out' },
+  { name: 'Hold', seconds: 7, pulseScale: 1.3, pulseOpacity: 0.8, coreScale: 1.1, easing: 'linear' },
+  { name: 'Exhale', seconds: 8, pulseScale: 1, pulseOpacity: 0.5, coreScale: 1, easing: 'ease-in' }
+];
+
 function startBreathingAnimation() {
-  const circle = document.getElementById('breathing-circle');
-  const text = document.getElementById('breathing-text');
-  if (!circle || !text) return;
+  const pulse = document.querySelector('.breathing-ring-pulse');
+  const core = document.querySelector('.breathing-ring-core');
+  const countEl = document.getElementById('breathing-count');
+  const phaseLabelEl = document.getElementById('breathing-phase-label');
+  if (!pulse || !core || !countEl) return;
 
-  if (breathingAnimationTimeout) {
-    clearTimeout(breathingAnimationTimeout);
-    breathingAnimationTimeout = null;
-  }
-
-  const phases = [
-    { label: 'Breathe in', duration: 4000, className: 'breathe-in' },
-    { label: 'Hold', duration: 7000, className: 'breathe-hold' },
-    { label: 'Breathe out', duration: 8000, className: 'breathe-out' }
-  ];
+  stopBreathingAnimation();
 
   let phaseIndex = 0;
 
-  function runPhase() {
-    if (!document.getElementById('breathing-circle')) return;
-    const phase = phases[phaseIndex % phases.length];
-    text.textContent = phase.label;
-    circle.className = 'breathing-circle ' + phase.className;
-    phaseIndex++;
-    breathingAnimationTimeout = setTimeout(runPhase, phase.duration);
+  function applyPhase(phase) {
+    const duration = phase.seconds;
+    pulse.style.transitionDuration = duration + 's';
+    pulse.style.transitionTimingFunction = phase.easing;
+    core.style.transitionDuration = duration + 's';
+    core.style.transitionTimingFunction = phase.easing;
+
+    pulse.style.transform = 'scale(' + phase.pulseScale + ')';
+    pulse.style.opacity = String(phase.pulseOpacity);
+    core.style.transform = 'scale(' + phase.coreScale + ')';
   }
+
+  function runPhase() {
+    const phase = BREATHING_PHASES[phaseIndex % BREATHING_PHASES.length];
+    let remaining = phase.seconds;
+
+    countEl.textContent = remaining;
+
+    if (phaseLabelEl) {
+      phaseLabelEl.classList.add('fading');
+      requestAnimationFrame(function () {
+        phaseLabelEl.textContent = phase.name;
+        requestAnimationFrame(function () {
+          phaseLabelEl.classList.remove('fading');
+        });
+      });
+    }
+
+    applyPhase(phase);
+
+    if (breathingPhaseInterval) {
+      clearInterval(breathingPhaseInterval);
+    }
+
+    breathingPhaseInterval = setInterval(function () {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(breathingPhaseInterval);
+        breathingPhaseInterval = null;
+        phaseIndex += 1;
+        breathingPhaseTimeout = setTimeout(runPhase, 80);
+        return;
+      }
+      countEl.textContent = remaining;
+      countEl.classList.remove('tick');
+      void countEl.offsetWidth;
+      countEl.classList.add('tick');
+    }, 1000);
+  }
+
+  pulse.style.transform = 'scale(1)';
+  pulse.style.opacity = '0.5';
+  core.style.transform = 'scale(1)';
+  void pulse.offsetWidth;
 
   runPhase();
 }
 
 function stopBreathingAnimation() {
-  if (breathingAnimationTimeout) {
-    clearTimeout(breathingAnimationTimeout);
-    breathingAnimationTimeout = null;
+  const pulse = document.querySelector('.breathing-ring-pulse');
+  const core = document.querySelector('.breathing-ring-core');
+  const countEl = document.getElementById('breathing-count');
+  const phaseLabelEl = document.getElementById('breathing-phase-label');
+
+  if (breathingPhaseInterval) {
+    clearInterval(breathingPhaseInterval);
+    breathingPhaseInterval = null;
   }
-  const circle = document.getElementById('breathing-circle');
-  if (circle) circle.className = 'breathing-circle';
+  if (breathingPhaseTimeout) {
+    clearTimeout(breathingPhaseTimeout);
+    breathingPhaseTimeout = null;
+  }
+
+  if (pulse) {
+    pulse.style.transitionDuration = '0s';
+    pulse.style.transform = 'scale(1)';
+    pulse.style.opacity = '0.5';
+  }
+  if (core) {
+    core.style.transitionDuration = '0s';
+    core.style.transform = 'scale(1)';
+  }
+  if (countEl) {
+    countEl.textContent = '4';
+  }
+  if (phaseLabelEl) {
+    phaseLabelEl.textContent = '';
+  }
 }
 
 function renderProPrecheck() {
   const proPrecheck = document.getElementById('pro-precheck');
+  const taskSection = document.getElementById('precheck-task-section');
+  const challengeSection = document.getElementById('precheck-challenge-section');
+  const waitSection = document.getElementById('precheck-wait-section');
+  
   if (!currentSettings) {
     proPrecheck.classList.add('hidden');
     return;
@@ -297,47 +371,41 @@ function renderProPrecheck() {
 
   if (!isPro || friction.enabled !== true) {
     proPrecheck.classList.add('hidden');
-    proPrecheck.innerHTML = '';
     return;
   }
 
-  const sections = [];
+  let hasAnySection = false;
 
+  // Task intent section
   if (friction.requireTaskIntent !== false) {
-    sections.push(`
-      <label for="task-intent-input">What do you need to do here?</label>
-      <textarea id="task-intent-input" class="typing-input precheck-input" rows="3" placeholder="Describe your specific goal on this site"></textarea>
-    `);
+    taskSection.classList.remove('hidden');
+    hasAnySection = true;
+  } else {
+    taskSection.classList.add('hidden');
   }
 
+  // Custom challenge section
   if (friction.customChallengePrompt) {
-    sections.push(`
-      <label for="custom-challenge-input">Quick Check</label>
-      <p class="helper-text">${escapeHtml(friction.customChallengePrompt)}</p>
-      <input id="custom-challenge-input" class="precheck-input" type="text" maxlength="120" placeholder="Type your answer" />
-    `);
+    document.getElementById('custom-challenge-prompt').textContent = friction.customChallengePrompt;
+    challengeSection.classList.remove('hidden');
+    hasAnySection = true;
+  } else {
+    challengeSection.classList.add('hidden');
   }
 
+  // Timed wait section
   if (friction.timedWaitEnabled === true) {
-    sections.push(`
-      <p class="helper-text">A ${friction.timedWaitSeconds || 20}-second pause will run before the challenge. Use this time to reconsider.</p>
-    `);
+    waitSection.classList.remove('hidden');
+    hasAnySection = true;
+  } else {
+    waitSection.classList.add('hidden');
   }
 
-  if (isEarnAccessRuleActive()) {
-    sections.push(`
-      <p class="helper-text">Manual override is disabled. Complete at least ${getEarnAccessMinChallengeSeconds()} seconds of the challenge to unlock.</p>
-    `);
-  }
-
-  if (sections.length === 0) {
+  if (hasAnySection) {
+    proPrecheck.classList.remove('hidden');
+  } else {
     proPrecheck.classList.add('hidden');
-    proPrecheck.innerHTML = '';
-    return;
   }
-
-  proPrecheck.innerHTML = sections.join('');
-  proPrecheck.classList.remove('hidden');
 }
 
 function renderManualOverrideState() {
@@ -353,7 +421,8 @@ function renderManualOverrideState() {
   const locked = manualOverrideState.locked === true;
   const earnAccessActive = isEarnAccessRuleActive();
 
-  manualOverrideButton.disabled = strictActive || locked || earnAccessActive;
+  const isDisabled = strictActive || locked || earnAccessActive;
+  manualOverrideButton.disabled = isDisabled;
 
   if (strictActive) {
     hint.textContent = 'Strict Mode is active. Manual override is disabled for this blocking window.';
@@ -361,16 +430,16 @@ function renderManualOverrideState() {
   }
 
   if (earnAccessActive) {
-    hint.textContent = `Manual override is disabled. Complete at least ${getEarnAccessMinChallengeSeconds()} seconds of the challenge to unlock access.`;
+    hint.textContent = `Complete at least ${getEarnAccessMinChallengeSeconds()}s of the challenge to unlock access.`;
     return;
   }
 
   if (locked) {
-    hint.textContent = `Manual override is temporarily locked. Try again in ${manualOverrideState.remainingSeconds}s.`;
+    hint.textContent = `Manual override locked. Try again in ${manualOverrideState.remainingSeconds}s.`;
     return;
   }
 
-  hint.textContent = `Manual override unlocks access after ${delaySeconds} seconds.`;
+  hint.textContent = `Manual override requires a ${delaySeconds}-second wait.`;
 }
 
 function handleStartChallenge() {
@@ -390,25 +459,72 @@ function handleStartChallenge() {
 
   let waitSeconds = precheck.timedWaitSeconds;
 
-  // Apply a default 5 second countdown if no timed wait is configured
-  // (i.e. free tier or timed wait not active on pro)
+  // Apply a default 3 second countdown for better UX
   if (waitSeconds <= 0) {
-    waitSeconds = 5;
+    waitSeconds = 3;
   }
 
   if (waitSeconds > 0) {
     startTimedWait(waitSeconds, function () {
-      startChallengeFlow();
+      startTypingChallenge(currentOriginalUrl);
     });
     return;
   }
 
-  startChallengeFlow();
+  startTypingChallenge(currentOriginalUrl);
 }
 
-function startChallengeFlow() {
-  document.getElementById('primary-actions-group').classList.add('hidden');
-  document.getElementById('ready-confirmation').classList.remove('hidden');
+function startTimedWait(seconds, onComplete) {
+  const challengeBtn = document.getElementById('start-unlock-challenge');
+  const waitSection = document.getElementById('precheck-wait-section');
+  const waitBar = document.getElementById('wait-progress-bar');
+  const waitText = document.getElementById('wait-progress-text');
+  
+  // Show wait section
+  if (waitSection) {
+    waitSection.classList.remove('hidden');
+    document.getElementById('pro-precheck').classList.remove('hidden');
+  }
+  
+  challengeBtn.disabled = true;
+  challengeBtn.textContent = `Starting in ${seconds}s...`;
+
+  let remaining = seconds;
+  
+  if (waitBar) {
+    waitBar.style.width = '0%';
+    // Force reflow
+    waitBar.offsetHeight;
+    waitBar.style.transition = `width ${seconds}s linear`;
+    waitBar.style.width = '100%';
+  }
+  
+  if (waitText) {
+    waitText.textContent = `Pausing for ${remaining} seconds...`;
+  }
+
+  if (waitCountdownInterval) {
+    clearInterval(waitCountdownInterval);
+  }
+
+  waitCountdownInterval = setInterval(function () {
+    remaining -= 1;
+
+    if (remaining <= 0) {
+      clearInterval(waitCountdownInterval);
+      waitCountdownInterval = null;
+
+      challengeBtn.disabled = false;
+      challengeBtn.textContent = 'Start Challenge';
+      onComplete();
+      return;
+    }
+
+    challengeBtn.textContent = `Starting in ${remaining}s...`;
+    if (waitText) {
+      waitText.textContent = `Pausing for ${remaining} seconds...`;
+    }
+  }, 1000);
 }
 
 function handleManualOverride() {
@@ -444,7 +560,7 @@ function handleManualOverride() {
     challengeBtn.disabled = true;
 
     let remaining = delaySeconds;
-    manualBtn.textContent = `Manual Override (${remaining}s)`;
+    manualBtn.textContent = `Wait ${remaining}s`;
 
     if (waitCountdownInterval) {
       clearInterval(waitCountdownInterval);
@@ -475,7 +591,7 @@ function handleManualOverride() {
         return;
       }
 
-      manualBtn.textContent = `Manual Override (${remaining}s)`;
+      manualBtn.textContent = `Wait ${remaining}s`;
     }, 1000);
   });
 }
@@ -501,7 +617,7 @@ function collectPrecheckMeta() {
   if (requireTaskIntent && taskIntent.length < 4) {
     return {
       valid: false,
-      error: 'Type a specific task before starting.',
+      error: 'Describe what you\'re here to do.',
       timedWaitSeconds: 0
     };
   }
@@ -514,7 +630,7 @@ function collectPrecheckMeta() {
     if (customAnswer.length < 2) {
       return {
         valid: false,
-        error: 'Answer the custom prompt before continuing.',
+        error: 'Complete the check to continue.',
         timedWaitSeconds: 0
       };
     }
@@ -535,49 +651,15 @@ function collectPrecheckMeta() {
   };
 }
 
-function startTimedWait(seconds, onComplete) {
-  const challengeBtn = document.getElementById('start-unlock-challenge');
-  const manualBtn = document.getElementById('manual-override-btn');
-
-  challengeBtn.disabled = true;
-  manualBtn.disabled = true;
-
-  let remaining = seconds;
-  showPrecheckError(`Timed wait: ${remaining}s before challenge can begin.`);
-
-  if (waitCountdownInterval) {
-    clearInterval(waitCountdownInterval);
-  }
-
-  waitCountdownInterval = setInterval(function () {
-    remaining -= 1;
-
-    if (remaining <= 0) {
-      clearInterval(waitCountdownInterval);
-      waitCountdownInterval = null;
-
-      clearPrecheckError();
-      challengeBtn.disabled = false;
-      manualBtn.disabled = isStrictFocusWindowActive();
-      onComplete();
-      return;
-    }
-
-    showPrecheckError(`Timed wait: ${remaining}s before challenge can begin.`);
-  }, 1000);
-}
-
 function startTypingChallenge(originalUrl) {
-  document.querySelector('.challenge-selection').style.display = 'none';
+  startTime = Date.now();
+  transitionToPhase(PHASES.CHALLENGE);
   showTypingChallenge(originalUrl);
 }
 
 function showTypingChallenge(originalUrl) {
-  const container = document.querySelector('.content');
+  const container = document.getElementById('phase-challenge');
   container.innerHTML = '';
-
-  const challengeDiv = document.createElement('div');
-  challengeDiv.className = 'challenge-container';
 
   const productivityTexts = [
     'Every minute wasted on distractions is a minute stolen from your potential. Protect your time like it is your most valuable asset.',
@@ -604,39 +686,35 @@ function showTypingChallenge(originalUrl) {
   function displayCurrentParagraph() {
     const currentText = selectedParagraphs[currentParagraphIndex];
 
-    challengeDiv.innerHTML = `
-      <div style="text-align: center; margin-bottom: 20px;">
-        <span class="step-badge">Challenge ${currentParagraphIndex + 1} of 5</span>
-        <p class="instruction-text">Type the paragraph exactly as shown to continue.</p>
-      </div>
-
-      <div class="quote-box">
-        <p class="quote-text">${currentText}</p>
-      </div>
-
-      <textarea id="typing-input" class="typing-input" placeholder="Start typing here..."></textarea>
-      <p id="typing-error" class="error-text"></p>
-
-      <div class="stats-row">
-        <div class="stat-item">
-          <span>Progress:</span>
-          <span class="stat-value"><span id="char-count">0</span> / ${currentText.length}</span>
+    container.innerHTML = `
+      <div class="challenge-container">
+        <span class="step-badge">Paragraph ${currentParagraphIndex + 1} of 5</span>
+        <p class="instruction-text">Type the text exactly as shown to continue.</p>
+        
+        <div class="quote-box">
+          <p class="quote-text">${escapeHtml(currentText)}</p>
         </div>
-        <div class="stat-item">
-          <span>Accuracy:</span>
-          <span id="accuracy" class="stat-value">100%</span>
+        
+        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..."></textarea>
+        <p id="typing-error" class="typing-error"></p>
+        
+        <div class="challenge-stats">
+          <div class="stat-item">
+            <span class="stat-label">Progress</span>
+            <span class="stat-value"><span id="char-count">0</span> / ${currentText.length}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Accuracy</span>
+            <span id="accuracy" class="stat-value accurate">100%</span>
+          </div>
         </div>
-      </div>
-
-      <div class="challenge-actions">
-        <button id="cancel-challenge" class="btn btn-secondary">Quit</button>
-        <button id="reset-typing" class="btn btn-secondary">Reset</button>
-        <button id="submit-typing" class="unlock-btn" disabled>Submit</button>
+        
+        <div class="challenge-actions">
+          <button id="cancel-challenge" class="btn btn-secondary">Quit</button>
+          <button id="submit-typing" class="btn btn-primary" disabled>Continue</button>
+        </div>
       </div>
     `;
-
-    container.innerHTML = '';
-    container.appendChild(challengeDiv);
 
     const typingInput = document.getElementById('typing-input');
     const charCount = document.getElementById('char-count');
@@ -648,7 +726,7 @@ function showTypingChallenge(originalUrl) {
     typingInput.addEventListener('contextmenu', (e) => e.preventDefault());
     typingInput.addEventListener('paste', (e) => {
       e.preventDefault();
-      alert('No shortcuts in ResistGate. Earn it.');
+      showPrecheckError('No shortcuts in ResistGate. Earn it.');
     });
 
     typingInput.addEventListener('keydown', function (e) {
@@ -676,7 +754,7 @@ function showTypingChallenge(originalUrl) {
 
       const accuracy = typedText.length > 0 ? Math.round((correctChars / typedText.length) * 100) : 100;
       accuracySpan.textContent = `${accuracy}%`;
-      accuracySpan.style.color = accuracy === 100 ? 'var(--ok)' : 'var(--err)';
+      accuracySpan.className = 'stat-value ' + (accuracy === 100 ? 'accurate' : 'error');
 
       const prefix = currentText.slice(0, typedText.length);
       const hasError = typedText !== prefix;
@@ -686,7 +764,7 @@ function showTypingChallenge(originalUrl) {
 
       const isCorrect = typedText === currentText;
       submitBtn.disabled = !isCorrect;
-      submitBtn.textContent = isCorrect ? 'Continue' : 'Submit';
+      submitBtn.textContent = isCorrect ? 'Continue' : 'Continue';
     });
 
     submitBtn.addEventListener('click', function () {
@@ -699,17 +777,6 @@ function showTypingChallenge(originalUrl) {
           displayCurrentParagraph();
         }
       }
-    });
-
-    document.getElementById('reset-typing').addEventListener('click', function () {
-      typingInput.value = '';
-      typingInput.focus();
-      charCount.textContent = '0';
-      accuracySpan.textContent = '100%';
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Submit';
-      typingInput.classList.remove('has-error');
-      errorText.textContent = '';
     });
 
     document.getElementById('cancel-challenge').addEventListener('click', function () {
@@ -731,8 +798,8 @@ function completeChallenge(duration, originalUrl) {
 
   if (isEarnAccessRuleActive() && timeSpent < getEarnAccessMinChallengeSeconds()) {
     reportAnalyticsEvent('challenge_failed');
-    alert(`Earn-Access requires at least ${getEarnAccessMinChallengeSeconds()}s challenge time. Try again.`);
-    location.reload();
+    showPrecheckError(`Earn-Access requires at least ${getEarnAccessMinChallengeSeconds()}s challenge time. Try again.`);
+    setTimeout(() => location.reload(), 2000);
     return;
   }
 
@@ -786,58 +853,31 @@ function requestTemporaryAccess({ targetUrl, duration, timeSpent, meta, successD
 }
 
 function renderSuccessState({ targetUrl, duration, timeSpent, bonusMinutes, expiresAt }) {
-  const content = document.querySelector('.content');
-  content.innerHTML = '';
-
-  const successMessage = document.createElement('div');
-  successMessage.className = 'success-message';
-
-  const title = document.createElement('h2');
-  title.textContent = 'Access Ready';
-  successMessage.appendChild(title);
-
-  const completedText = document.createElement('p');
-  completedText.textContent = 'You earned access to this site.';
-  successMessage.appendChild(completedText);
-
-  const durationText = document.createElement('p');
-  durationText.textContent = `Access is open for ${duration} minutes.`;
-  successMessage.appendChild(durationText);
-
+  transitionToPhase(PHASES.SUCCESS);
+  
+  document.getElementById('success-duration').textContent = `Access is open for ${duration} minutes.`;
+  
+  const bonusEl = document.getElementById('success-bonus');
   if (bonusMinutes > 0) {
-    const bonusText = document.createElement('p');
-    bonusText.textContent = `Bonus time added: +${bonusMinutes} min.`;
-    successMessage.appendChild(bonusText);
-  }
-
-  const accessTimerText = document.createElement('p');
-  accessTimerText.className = 'access-timer';
-  successMessage.appendChild(accessTimerText);
-
-  const timeText = document.createElement('p');
-  if (timeSpent > 0) {
-    timeText.textContent = `Time invested: ${formatTime(timeSpent)}`;
+    bonusEl.textContent = `Bonus time added: +${bonusMinutes} min`;
+    bonusEl.classList.remove('hidden');
   } else {
-    timeText.textContent = 'Access granted via manual override.';
+    bonusEl.classList.add('hidden');
   }
-  successMessage.appendChild(timeText);
-
-  const promptText = document.createElement('p');
-  promptText.textContent = 'Open the site when you are ready.';
-  successMessage.appendChild(promptText);
-
-  const continueLink = document.createElement('a');
-  continueLink.className = 'btn btn-primary';
-  continueLink.style.display = 'inline-block';
-  continueLink.style.marginTop = '20px';
+  
+  const timeInvestedEl = document.getElementById('success-time-invested');
+  if (timeSpent > 0) {
+    timeInvestedEl.textContent = `Time invested: ${formatTime(timeSpent)}`;
+  } else {
+    timeInvestedEl.textContent = 'Access granted via manual override.';
+  }
+  
+  const continueLink = document.getElementById('continue-to-site');
   continueLink.href = targetUrl;
-  continueLink.textContent = 'Continue to Site';
-  successMessage.appendChild(continueLink);
-
-  content.appendChild(successMessage);
-
+  
+  const timerEl = document.getElementById('access-timer');
   const resolvedExpiry = expiresAt || (Date.now() + (parseInt(duration, 10) * 60 * 1000));
-  startAccessCountdown(accessTimerText, resolvedExpiry);
+  startAccessCountdown(timerEl, resolvedExpiry);
 }
 
 function getEarnAccessBonus(timeSpentSeconds) {
@@ -893,7 +933,6 @@ function isStrictFocusWindowActive() {
 
   const schedule = currentSettings.freeExperience?.schedule;
   if (!schedule || schedule.enabled !== true) {
-    // No schedule configured means strict mode is always active (matches background.js:isStrictFocusActive).
     return true;
   }
 
@@ -1001,6 +1040,7 @@ function reportAnalyticsEvent(type) {
   });
 }
 
+// Test hooks
 if (typeof globalThis !== 'undefined') {
   globalThis.__RESISTGATE_FRICTION_TEST_HOOKS__ = {
     collectPrecheckMeta,
@@ -1014,11 +1054,17 @@ if (typeof globalThis !== 'undefined') {
     renderBundlePanel,
     startBreathingAnimation,
     stopBreathingAnimation,
+    BREATHING_PHASES,
+    transitionToPhase,
+    PHASES,
     __setCurrentSettingsForTest: (settings) => {
       currentSettings = settings;
     },
     __setCurrentWorkTimerForTest: (wt) => {
       currentWorkTimer = wt;
+    },
+    __setOriginalUrlForTest: (url) => {
+      currentOriginalUrl = url;
     }
   };
 }

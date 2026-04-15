@@ -138,7 +138,7 @@ describe('Friction page flow logic', () => {
 
     const result = localHooks.collectPrecheckMeta();
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('Type a specific task');
+    expect(result.error).toContain('Describe what you\'re here to do');
   });
 
   it('collectPrecheckMeta requires custom prompt answer when custom prompt is set', async () => {
@@ -169,7 +169,7 @@ describe('Friction page flow logic', () => {
 
     const result = localHooks.collectPrecheckMeta();
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('Answer the custom prompt');
+    expect(result.error).toContain('Complete the check to continue');
   });
 
   it('collectPrecheckMeta returns full valid payload when inputs are complete', async () => {
@@ -206,5 +206,101 @@ describe('Friction page flow logic', () => {
     expect(result.timedWaitSeconds).toBe(25);
     expect(result.customChallengeAnswered).toBe(true);
     expect(result.earnAccessEnabled).toBe(true);
+  });
+
+  it('renderIntentionPage uses per-domain goal from blocklist entry', async () => {
+    const env = createChromeMock();
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          mockElements[id] = {
+            textContent: '',
+            classList: { add: () => {}, remove: () => {} },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: env.chrome,
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.instagram.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: false }
+      },
+      blocklist: [
+        { id: '1', urlPattern: 'instagram.com', personalGoal: 'Stop watching reels' }
+      ]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.instagram.com');
+
+    localHooks.PHASES.INTENTION = 'intention';
+    localHooks.renderIntentionPage();
+
+    expect(mockElements['personal-goal-display'].textContent).toBe('Stop watching reels');
+    expect(mockElements['intention-label'].textContent).toBe('Remember your goal');
+  });
+
+  it('renderIntentionPage shows default message when blocklist entry has no goal', async () => {
+    const env = createChromeMock();
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          mockElements[id] = {
+            textContent: '',
+            classList: { add: () => {}, remove: () => {} },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: env.chrome,
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.reddit.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: false }
+      },
+      blocklist: [
+        { id: '1', urlPattern: 'reddit.com' }
+      ]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.reddit.com');
+
+    localHooks.PHASES.INTENTION = 'intention';
+    localHooks.renderIntentionPage();
+
+    expect(mockElements['personal-goal-display'].textContent).toBe('You blocked this for a reason.');
+    expect(mockElements['intention-label'].textContent).toBe('Pause before proceeding');
   });
 });

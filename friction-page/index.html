@@ -13,66 +13,108 @@
   <script>Sentry.setTag('page', 'friction-page');</script>
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1 id="page-title">You blocked this for a reason.</h1>
-      <div id="intention-section" class="intention-section hidden">
-        <p id="personal-goal-display" class="personal-goal"></p>
+  <div class="container phase-intention" id="main-container">
+    <!-- Phase 1: Intention -->
+    <section class="phase-section phase-intention-content" id="phase-intention">
+      <header class="intention-header">
+        <div class="intention-context">
+          <h1 id="page-title">You blocked this for a reason.</h1>
+          <span id="intention-label" class="phase-label">Remember your goal</span>
+        </div>
+        
+        <blockquote class="personal-goal">
+          <span id="personal-goal-display"></span>
+        </blockquote>
+        
         <div id="breathing-exercise" class="breathing-exercise hidden">
-          <p class="breathing-label">Take a moment to breathe</p>
-          <div class="breathing-circle" id="breathing-circle">
-            <span id="breathing-text">Breathe in</span>
+          <div class="breathing-ring" id="breathing-ring" aria-hidden="true">
+            <div class="breathing-ring-pulse"></div>
+            <div class="breathing-ring-core">
+              <span id="breathing-count" class="breathing-count">4</span>
+            </div>
           </div>
-          <p class="breathing-hint">4 seconds in · 7 seconds hold · 8 seconds out</p>
+          <p id="breathing-phase-label" class="breathing-phase-label">Inhale</p>
+          <p class="breathing-label">4 – 7 – 8 breathing</p>
         </div>
+        
+        <div class="intention-meta">
+          <p class="site-info"><span id="blocked-site">Loading...</span></p>
+          <p id="resistance-count" class="helper-text"></p>
+        </div>
+      </header>
+      
+      <div class="phase-actions">
+        <button id="continue-to-challenge" class="btn btn-primary btn-large">Continue to Challenge</button>
       </div>
-      <p class="site-info"><span id="blocked-site">Loading...</span></p>
-      <p id="resistance-count" class="helper-text" style="margin-top:4px;"></p>
-      <p class="message" id="page-message">
-        This is an intentional pause. Complete the challenge to unlock access —
-        or close this tab and stay focused.
-      </p>
-    </header>
+    </section>
 
-  <button id="intention-divider" class="intention-divider hidden" aria-label="Proceed to challenge">
-    <span class="intention-divider-label">When you're ready</span>
-  </button>
-
-    <div id="bundle-panel" class="bundle-panel hidden">
-      <p id="bundle-label" class="bundle-label"></p>
-      <div class="bundle-progress-wrap">
-        <div id="bundle-progress-bar" class="bundle-progress-bar" style="width:0%"></div>
+    <!-- Phase 2: Challenge Prep (Precheck) -->
+    <section class="phase-section phase-precheck-content" id="phase-precheck">
+      <header class="precheck-header">
+        <span class="phase-label">Prepare</span>
+        <h2>Ready to earn access?</h2>
+        <p class="precheck-subtitle">Complete 5 paragraphs with full accuracy.</p>
+      </header>
+      
+      <!-- Bundle panel for temptation bundle -->
+      <div id="bundle-panel" class="bundle-panel hidden">
+        <p id="bundle-label" class="bundle-label"></p>
+        <div class="bundle-progress-wrap">
+          <div id="bundle-progress-bar" class="bundle-progress-bar" style="width:0%"></div>
+        </div>
+        <p id="bundle-progress-text" class="bundle-progress-text"></p>
       </div>
-      <p id="bundle-progress-text" class="bundle-progress-text"></p>
-    </div>
-
-    <div class="content">
-      <div class="challenge-selection">
-        <div id="pro-precheck" class="pro-precheck hidden"></div>
-        <p id="precheck-error" class="error-text precheck-error"></p>
-
-        <div id="ready-confirmation" class="ready-confirmation hidden">
-          <h2>Ready to earn access with ResistGate?</h2>
-          <p>Complete 5 paragraphs with full accuracy.</p>
-          <div class="ready-actions">
-            <button id="confirm-start-challenge" class="btn btn-primary">I'm Ready</button>
-            <button id="cancel-start-challenge" class="btn btn-secondary">Cancel</button>
+      
+      <!-- Pro precheck section -->
+      <div id="pro-precheck" class="pro-precheck hidden">
+        <div id="precheck-task-section" class="precheck-section hidden">
+          <label for="task-intent-input">Your goal on this site</label>
+          <textarea id="task-intent-input" class="typing-input precheck-input" rows="2" placeholder="What do you need to accomplish?"></textarea>
+        </div>
+        <div id="precheck-challenge-section" class="precheck-section hidden">
+          <label for="custom-challenge-input">Your personal reminder</label>
+          <p id="custom-challenge-prompt" class="precheck-prompt"></p>
+          <input id="custom-challenge-input" class="precheck-input" type="text" maxlength="120" placeholder="Your response" />
+        </div>
+        <div id="precheck-wait-section" class="precheck-section hidden">
+          <label>Pausing before challenge</label>
+          <div class="wait-progress">
+            <div id="wait-progress-bar" class="wait-progress-bar"></div>
           </div>
+          <p id="wait-progress-text" class="wait-progress-text"></p>
         </div>
-
-        <div class="primary-actions" id="primary-actions-group">
-          <button id="start-unlock-challenge" class="unlock-btn">Start Challenge</button>
-          <button id="manual-override-btn" class="btn btn-secondary">Manual Override</button>
+      </div>
+      <p id="precheck-error" class="error-text precheck-error"></p>
+      
+      <div class="phase-actions">
+        <button id="start-unlock-challenge" class="btn btn-primary btn-large">Start Challenge</button>
+        
+        <div class="secondary-actions">
+          <button id="manual-override-btn" class="btn-text" disabled>Manual Override</button>
+          <span id="manual-override-hint" class="hint-text"></span>
         </div>
-
-        <p id="manual-override-hint" class="helper-text"></p>
       </div>
+    </section>
 
-      <div class="alternative-actions">
-        <a id="search-instead-btn" href="https://www.google.com" class="btn btn-tertiary">Search instead</a>
-        <button id="close-tab-btn" class="btn btn-secondary">Close Tab</button>
+    <!-- Phase 3: Challenge Active -->
+    <section class="phase-section phase-challenge-content" id="phase-challenge">
+      <!-- Challenge UI will be dynamically inserted here -->
+    </section>
+
+    <!-- Phase 4: Success -->
+    <section class="phase-section phase-success-content" id="phase-success">
+      <div class="success-message">
+        <div class="success-icon">&#10003;</div>
+        <h2>Access Ready</h2>
+        <p>You earned access to this site.</p>
+        <p id="success-duration"></p>
+        <p id="success-bonus" class="bonus-text"></p>
+        <p id="access-timer" class="access-timer"></p>
+        <p id="success-time-invested" class="time-invested"></p>
+        <p class="success-prompt">Open the site when you are ready.</p>
+        <a id="continue-to-site" class="btn btn-primary btn-large" href="#">Continue to Site</a>
       </div>
-    </div>
+    </section>
   </div>
 
   <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>

@@ -22,6 +22,19 @@ It blocks distracting sites and requires a friction challenge before granting te
 
 ---
 
+## Technical & Trust Features (All Tiers)
+
+| Feature | Details |
+|---|---|
+| Manifest V3 + service-worker | Future-proof Chrome extension architecture |
+| 100% local storage | `chrome.storage.local` — zero external tracking |
+| 81 automated tests | 88.5% coverage, CI-enforced on every PR |
+| Sentry error monitoring | No personal data collected |
+| Alarm-based scheduling | Survives browser restarts |
+| Clean, accessible UI | Plus Jakarta Sans, ARIA labels, responsive |
+
+---
+
 ## Current implementation status
 
 ### ✅ Fully implemented
@@ -35,8 +48,18 @@ It blocks distracting sites and requires a friction challenge before granting te
 | Temporary access grant + auto-expiry via alarms | `background.js` |
 | Schedule-based blocking (days + time window) | `background.js` |
 | Popup: add/remove/preview blocklist (up to 5 shown) | `popup/popup.js` |
+| Quick-add: "Block current tab" button | `popup/popup.js` |
 | Options page: full blocklist management + settings | `options/options.js` |
 | Free/Pro tier split, plan pill, paywall modal | `options/options.js`, `options/options.html` |
+| Daily resistance badge (toolbar, resets at midnight) | `background.js` |
+| Per-site resistance counters (daily tracking) | `background.js` |
+| Focus/work timer with session persistence | `background.js`, `popup/popup.js` |
+| Accountability presets (Light / Balanced / Strict) | `options/options.js` |
+| Settings sanitization + storage normalization on boot | `background.js` |
+| Test hooks exposed for unit testing | `background.js`, `popup/popup.js`, `friction-page/script.js`, `options/options.js` |
+| Vitest test suite (unit + integration + flow) | `tests/` |
+| Pricing screen | `options/options.html`, `options/options.js` |
+| `activateProPlan` message handler (local flag, no Stripe) | `background.js` |
 | Pro: strict mode lock (prevent settings changes during schedule) | `background.js`, `options/options.js` |
 | Pro: strict mode disable cooldown | `background.js` |
 | Pro: override cooldown system (threshold → lock) | `background.js` |
@@ -45,11 +68,11 @@ It blocks distracting sites and requires a friction challenge before granting te
 | Pro: analytics event logging (blocked, granted, override, etc.) | `background.js` |
 | Pro: analytics dashboard (7-day, top domains, override trend) | `background.js`, `options/options.js` |
 | Pro: weekly discipline report + focus score | `background.js`, `options/options.js` |
-| Settings sanitization + storage normalization on boot | `background.js` |
-| Test hooks exposed for unit testing | `background.js`, `popup/popup.js`, `friction-page/script.js` |
-| Vitest test suite (unit + integration + flow) | `tests/` |
-| Pricing screen (monthly $5 / yearly $50) | `options/options.html`, `options/options.js` |
-| `activateProPlan` message handler (local flag, no Stripe) | `background.js` |
+| Pro: commitment mode (1–24 h lockout, no override, no challenge) | `background.js`, `commitment-page/` |
+| Pro: intention page (personal goal per domain + 4-7-8 breathing) | `background.js`, `friction-page/script.js` |
+| Pro: temptation bundles (time-of-day + work-timer conditions) | `background.js`, `options/options.js` |
+| License-based entitlement via RS256 JWT | `background.js` |
+| Sentry error monitoring | `vendor/sentry-init.js` |
 
 ### ⚠️ Partially implemented / stub
 
@@ -62,9 +85,11 @@ It blocks distracting sites and requires a friction challenge before granting te
 | Feature | Notes |
 |---|---|
 | `chrome.storage.sync` for cross-device settings | All storage uses `chrome.storage.local` |
-| Trend charts / streak tracking / heatmaps | Post-v1 per ROADMAP |
-| Email weekly report | Post-v1 per ROADMAP |
-| PDF export | Post-v1 per ROADMAP |
+| Trend charts / streak tracking / heatmaps | Per ROADMAP |
+| Email weekly report delivery | Per ROADMAP |
+| PDF export of reports | Per ROADMAP |
+| Custom paragraph content for typing challenge | Per ROADMAP |
+| Custom motivational quotes for friction page | Per ROADMAP |
 
 ---
 
@@ -172,9 +197,47 @@ PAYPAL_PLAN_MAP={"resistgate":{"monthly":"P-...","yearly":"P-..."},"another-prod
 
 ---
 
+## Feature Overview
+
+### Free Tier Features (v1.1.0)
+
+| Feature | Description | SEO Keywords |
+|---|---|---|
+| Domain Blocking | Block any domain or wildcard via `declarativeNetRequest` | website blocker, site blocker chrome, block youtube chrome |
+| Typing Challenge (Friction Page) | 5-paragraph test requiring 100% accuracy; paste disabled | typing challenge blocker, friction browser extension |
+| Temporary Access Grant | Configurable time-limited access; auto-reblocks via alarms | temporary access control, timed website blocker |
+| Manual Override with Delay | 10–15 s configurable countdown before access (no challenge) | override blocker, anti-procrastination |
+| Schedule-Based Blocking | Active days (Mon–Sun) + time windows | scheduled website blocker, focus hours |
+| Quick-Add Popup UI | Popup for adding/removing domains + "Block current tab" button | quick website blocker, chrome extension popup |
+| Full Settings Page | Complete blocklist, schedule, and access-duration management | website blocker settings |
+| Block Current Tab | One-click from popup | block current tab |
+| Daily Resistance Badge | Toolbar badge shows daily blocked attempts (resets at midnight) | resistance counter chrome |
+| Focus / Work Timer | Built-in timer with session persistence and site-context tracking | focus timer chrome, pomodoro blocker |
+| Resistance Counters | Per-site daily resistance tracking | distraction tracker |
+
+### Pro Tier Features (v1.1.0)
+
+| Feature | Description | SEO Keywords |
+|---|---|---|
+| Strict Mode Lock | Locks settings during active schedule; cooldown to disable | strict website blocker, discipline mode |
+| Override Cooldown System | Progressive lock after override threshold | override limit, cooldown blocker |
+| Focus Analytics Dashboard | 7-day blocked attempts, override trends, top distracting domains | focus analytics, distraction analytics |
+| Focus Score (0–100) | Weekly discipline score based on overrides + disables | focus score, productivity score |
+| Weekly Discipline Report | Auto-generated with week-over-week trends and personalized feedback | weekly focus report |
+| Earn-Access Bonus Minutes | Extra access time for completing extended challenges | earn screen time |
+| Behavioral Friction (Precheck) | Task intent input → timed wait → custom challenge | behavioral friction, intention-based blocking |
+| Commitment Mode | Total 1–24 h lockout (no override, no challenge) | commitment mode, focus lock |
+| Intention Page | Personal goal/reminder + optional 4-7-8 breathing exercise | intention page blocker |
+| Temptation Bundles | Conditional unlocks (after work-timer minutes or specific time) | temptation bundling |
+| Accountability Presets | Light / Balanced / Strict friction levels | accountability presets |
+| License-Based Entitlement | RS256 JWT + 24 h auto-refresh | secure pro license |
+| Event Logging | Full audit of blocks, overrides, challenges for analytics | activity logging |
+
+---
+
 ## Release Status
 
-**Version 1.0.0** — Live on Chrome Web Store with active users.
+**Version 1.1.0** — Live on Chrome Web Store with active users.
 
 - ✅ Deployed to Chrome Web Store
 - ✅ All 81 tests passing (vitest)
@@ -182,6 +245,19 @@ PAYPAL_PLAN_MAP={"resistgate":{"monthly":"P-...","yearly":"P-..."},"another-prod
 - ✅ License-based Pro entitlement via RS256 JWT
 - ✅ Free tier + Pro monetization active
 - ✅ Collecting real user feedback and analytics
+
+### Pricing (Live)
+
+| Plan | Price |
+|---|---|
+| Pro Monthly | $3.99/mo |
+| Pro Yearly | $29.99/yr |
+| Pro Lifetime | $49.99 |
+
+### Competitive Positioning
+
+- **vs Cold Turkey / Freedom**: Clear "friction, not walls" approach — users earn access through typing challenge rather than permanent blocks
+- **vs Amethyst**: Ready for cross-promotion — attention data collected can reinforce ResistGate's discipline philosophy
 
 ---
 
