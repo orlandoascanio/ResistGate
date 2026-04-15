@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [1.1.0] - 2025-04-15
+## [1.1.0] - 2026-04-15
 
 This update is about earning access — not just blocking it. Every feature here is backed by behavioral science. Not productivity theater.
 
@@ -41,7 +41,7 @@ This update is about earning access — not just blocking it. Every feature here
 
 ---
 
-## [1.0.0] - 2025-04-11
+## [1.0.0] - 2026-04-11
 
 ### Added
 - **Core Engine**: Manifest V3 `declarativeNetRequest` based domain blocking.
