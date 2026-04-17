@@ -16,8 +16,9 @@
 
 - **Free** = Block distractions + typing challenge + temporary access
 - **Pro** = Strict mode + analytics + weekly report + earn-access bonus
-- **$50 one-time** (pay once, lifetime access)
-- Pro activation is permanent — once activated via website, user stays Pro forever (no license keys, no expiration checks)
+- **$3.99/month** or **$29.99/year** or **$49.99 lifetime** (pay once, own forever)
+- Pro activates via PayPal checkout on orlandoascanio.com; no license keys, no expiration checks
+- Monthly and yearly are PayPal subscriptions (cancel anytime); lifetime is one-time payment
 
 ---
 

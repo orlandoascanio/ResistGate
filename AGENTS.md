@@ -152,11 +152,68 @@ Special extended shapes:
 | `resistgate-commitment-expire` | Commitment mode auto-expiry |
 | `resistgate-daily-reset` | Midnight daily badge counter reset |
 
+### Pricing (Live)
+
+| Plan | Price |
+|---|---|
+| Free | $0 — no account required |
+| Pro Monthly | $3.99/mo |
+| Pro Yearly | $29.99/yr |
+| Pro Lifetime | $49.99 one-time |
+
+Monthly and yearly are PayPal subscriptions (cancel anytime). Lifetime is a one-time payment.
+Checkout lives in `Profesional-Portfolio/client/app/[locale]/pricing/page.tsx` and `PayPalSubscribeCard.tsx`.
+Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/resistgate.ts`.
+
 ### Pro Gating
 - `hasProAccess(settings)` in `background.js`: checks `settings.subscription.tier === 'pro'`.
 - `isProUser()` in `options/options.js`: same logic against locally loaded settings.
 - `isPopupProUser(settings)` in `popup/popup.js`: same logic for popup context.
 - All Pro-only features must guard with one of these before executing.
+
+### Free vs Pro Tier Split (Authoritative)
+
+**Free tier (available to all users):**
+- Domain blocking via `declarativeNetRequest` (unlimited sites)
+- Schedule-based blocking (days + time windows)
+- Typing challenge gate (5 paragraphs, 100% accuracy, paste disabled)
+- Temporary access with configurable duration + auto-reblock
+- Manual override with configurable 10–15s delay countdown
+- Quick-add popup UI (add/remove sites, block current tab)
+- Full settings page (blocklist, schedule, access duration)
+- Daily resistance badge (toolbar, resets at midnight)
+- Per-site resistance counters
+- Focus/work timer with session persistence
+- Work timer (start/stop, tracked minutes per day)
+- Temptation bundle condition checking (time-of-day + work-timer) — checking only; setup is Pro
+
+**Pro tier (requires `subscription.tier === 'pro'`):**
+- Strict mode lock (prevents settings changes during active schedule)
+- Strict mode disable cooldown (10–300s configurable delay)
+- Commitment mode (1–24h total lockout, no override, no challenge)
+- Override cooldown system (progressive lock after threshold)
+- Behavioral friction system (task intent input, timed wait, earn-access mode)
+- Intention page (personal goal/reminder per domain + 4-7-8 breathing)
+- Earn-access bonus minutes (extra time for extended challenge completion)
+- Accountability presets (Light / Balanced / Strict)
+- Focus analytics dashboard (7-day blocked attempts, override trends, top domains)
+- Focus Score (0–100 weekly discipline score)
+- Weekly discipline report (auto-generated, week-over-week trends)
+- Full analytics event logging (`blocked_visit`, `access_granted`, `override_attempt`, etc.)
+- Temptation bundle setup and configuration (creation in options)
+- Custom challenge prompt (personalized reminder message)
+
+**Message actions gated by Pro (`hasProAccess` check):**
+| Action | Gate |
+|---|---|
+| `getAnalyticsDashboard` | Pro only |
+| `getWeeklyReport` | Pro only |
+| `activateCommitmentMode` | Pro only |
+
+**UI elements gated by Pro (`isProUser` / `isPopupProUser`):**
+- Options: Analytics tab, Weekly Report tab, Strict Mode toggle, Accountability preset selector, Behavioral friction configuration, Commitment mode activation, Override cooldown config, Temptation bundle setup, Intention page config
+- Popup: Pro plan pill
+- Friction page: Pro precheck panel (task intent, timed wait, earn-access, custom challenge prompt)
 
 ## Testing Guidelines
 The project has a full automated test suite using **Vitest 2.1.8**. All tests must pass (including coverage thresholds) before a PR is merged — CI enforces this.
