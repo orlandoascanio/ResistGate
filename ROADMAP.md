@@ -1,12 +1,14 @@
 # ResistGate Roadmap
 
-## Current Status: v1.0.0 ✅ Live on Chrome Web Store
+## Current Status: v1.1.0 ✅ Live on Chrome Web Store
 
-**Shipped:** April 11, 2026 — Now in production with active users collecting real-world feedback.
+**v1.0.0 shipped:** April 11, 2026 — Core engine + Pro tier.
+**v1.1.0 shipped:** April 15, 2026 — Temptation bundling, focus timer, commitment mode, intention page.
 
-### v1 Baseline Metrics
-- ✅ All 121 tests passing
-- ✅ Free + Pro tiers (simplified — no license keys, no expiration checks)
+### v1.1 Baseline Metrics
+- ✅ 121 tests passing (4 test files, Vitest 2.1.8)
+- ✅ `background.js`: 88.5% line coverage, 96% function coverage
+- ✅ Free + Pro tiers — no license keys, no expiration checks (trust-based, PayPal-activated)
 - ✅ Actively gathering user feedback and behavior data
 - ✅ Stable core engine proven in production
 
@@ -29,18 +31,26 @@
 - ✅ Schedule-based blocking (days + time windows)
 - ✅ Friction challenge (5 paragraphs, 100% accuracy, paste disabled)
 - ✅ Temporary access grant + auto-expiry (via alarms)
-- ✅ Manual override with configurable 10-15s delay countdown
-- ✅ Popup for quick add/remove sites
+- ✅ Manual override with configurable 10–15s delay countdown
+- ✅ Popup for quick add/remove sites + block current tab
 - ✅ Options page with full blocklist management
+- ✅ Daily resistance badge (toolbar, resets at midnight) + per-site resistance counters
+- ✅ **Temptation Bundling** — Pair distracting sites with a time-of-day or work-timer condition; site unlocks automatically when condition is met
+- ✅ **Focus Timer** — Track focused work minutes; feeds temptation bundle work-timer conditions
 
 ### Pro Tier (Fully Implemented)
 - ✅ **Strict Mode Lock** — Prevent settings changes during active schedule; require cooldown to disable
 - ✅ **Override Cooldown System** — Track overrides; lock manual access after threshold exceeded
-- ✅ **Focus Analytics Dashboard** — 7-day view of blocked attempts, overrides, top domains
-- ✅ **Focus Score** — Weekly discipline score (0-100 formula based on override count + manual disables)
-- ✅ **Weekly Report** — Auto-generated feedback with trend comparison
+- ✅ **Accountability Presets** — Light / Balanced / Strict one-click configuration
+- ✅ **Behavioral Friction Precheck** — Task intent, timed wait, custom challenge prompt, earn-access gate
 - ✅ **Earn-Access Bonus** — Extra minutes awarded for completing extended challenge sessions
-- ✅ **Event Logging** — Track all blocking, access, override, and challenge events
+- ✅ **Intention Page** — Per-site personal goal reminder + optional 4-7-8 breathing exercise
+- ✅ **Commitment Mode (1–24h)** — Total lockout with live countdown; no override, no challenge bypass
+- ✅ **Commitment Page** — Dedicated full-screen lockout UI (`commitment-page/`) shown instead of typing challenge
+- ✅ **Focus Analytics Dashboard** — 7-day view of blocked attempts, overrides, top domains
+- ✅ **Focus Score** — Weekly discipline score (0–100, formula: 100 − overrides×5 − manual-disables×10)
+- ✅ **Weekly Report** — Auto-generated feedback with week-over-week trend comparison
+- ✅ **Event Logging** — Track all blocking, access, override, and challenge events (max 3,000 events)
 
 ---
 

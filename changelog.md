@@ -75,12 +75,10 @@ This update is about earning access — not just blocking it. Every feature here
 - **Strict Mode Reliability**: Fixed an issue where Strict Mode failed to lock if no schedule was active. Strict mode now acts globally when enabled without a schedule.
 
 ### Security
-- **Pro Entitlement**: Replaced mock local storage upgrade with cryptographic JWT license validation (RS256) using Web Crypto API.
-- Added 24-hour periodic entitlement refresh via `chrome.alarms` to detect expired or revoked licenses.
-- License key input validation and secure storage in `chrome.storage.local`.
-- Verified all data stays in `chrome.storage.local`.
-- No remote analytics or external network dependencies in core logic.
-- All user data isolated per browser profile (uses `chrome.storage.local`, not `sync`).
+- **Trusted-origin external messaging**: Pro activation is accepted only from `https://www.orlandoascanio.com` and `https://orlandoascanio.com`; all other external origins are rejected with an `Unauthorized sender` error.
+- All user data (settings, analytics, blocklist, override state, work timer) stays in `chrome.storage.local` — never `chrome.storage.sync`, no cloud backend.
+- No remote analytics or user-data network calls in core extension logic. Network traffic is limited to Sentry error telemetry (extension pages only) and the separate PayPal checkout flow on orlandoascanio.com.
+- All data is isolated per browser profile (per `chrome.storage.local` semantics).
 
 ---
 
@@ -93,9 +91,9 @@ This update is about earning access — not just blocking it. Every feature here
 - Intention Page (Pro): Personal goal reminder + 4-7-8 breathing exercise
 - Pricing: $3.99/mo · $29.99/yr · $49.99 lifetime
 
-**1.0.0** is the stable release candidate with full Pro feature support:
+**1.0.0** is the initial release with full Pro feature support:
 - Core blocking engine with typing challenge friction
-- Free & Pro tier split with license-based entitlement
+- Free & Pro tier split; Pro activates via PayPal checkout on orlandoascanio.com (no license keys, no expiration checks)
 - Analytics dashboard and weekly discipline report (Pro only)
-- All test suites passing (81 tests, 88.5% coverage on `background.js`)
-- Ready for Chrome Web Store submission
+- All test suites passing (88.5% line coverage on `background.js`)
+- Chrome Web Store submission
