@@ -10,10 +10,10 @@ This release makes ResistGate feel less static and more usable day to day. It ad
 
 ### Added (Free)
 - **Feedback links**: A small `Help improve ResistGate` button now lives in the popup and options page. It opens a dedicated feedback survey that sends directly into the site dashboard, so improvements can come from real user input.
-- **Graduated Challenges**: Free users can now pick the level of friction that fits the moment.
+- **Graduated Challenges**: Free users can now pick the level of friction that fits the moment, with a wider prompt bank so the hard mode does not feel repetitive.
   - **Easy**: short character sequence
   - **Moderate**: one or two sentences
-  - **Hard**: the original five-paragraph challenge
+  - **Hard**: the original five-paragraph challenge, now pulled from a larger set of unique paragraphs
 
 ### Fixed
 - **Pro settings access**: Fixed the bug that let free users reach Pro-only settings. The options page now keeps Pro controls behind entitlement.
