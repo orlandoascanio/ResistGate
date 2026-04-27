@@ -61,4 +61,98 @@ describe('UI copy and state logic', () => {
     expect(hooks.getBlockedCountMeta(8)).toBe('8 blocked');
     expect(hooks.normalizeDomainInput('HTTPS://WWW.YOUTUBE.COM/')).toBe('www.youtube.com');
   });
+
+  it('wires the whats-new buttons through an external script', async () => {
+    const makeElement = () => {
+      const listeners = new Map();
+
+      return {
+        disabled: false,
+        hidden: false,
+        textContent: '',
+        dataset: {},
+        classList: {
+          add: () => {},
+          remove: () => {},
+          toggle: () => {}
+        },
+        addEventListener: (type, handler) => {
+          listeners.set(type, handler);
+        },
+        getHandler: (type) => listeners.get(type)
+      };
+    };
+
+    const elements = {
+      '#version-badge': makeElement(),
+      '#release-date': makeElement(),
+      '#open-options-btn': makeElement(),
+      '#close-btn': makeElement(),
+      '#close-icon-btn': makeElement(),
+      '#upgrade-link': makeElement(),
+      '#footer-cta': makeElement(),
+      '#status-message': makeElement()
+    };
+
+    let domContentLoadedHandler = null;
+    let windowClosed = false;
+    let openOptionsCalled = false;
+    const sentMessages = [];
+
+    const context = await loadScriptInVm('whats-new/whats-new.js', {
+      chrome: {
+        runtime: {
+          getManifest: () => ({ version: '9.9.9' }),
+          openOptionsPage: (callback) => {
+            openOptionsCalled = true;
+            callback?.();
+          },
+          sendMessage: (payload, callback) => {
+            sentMessages.push(payload);
+            callback({ settings: { subscription: { tier: 'free' } } });
+          },
+          lastError: null
+        }
+      },
+      document: {
+        addEventListener: (type, handler) => {
+          if (type === 'DOMContentLoaded') {
+            domContentLoadedHandler = handler;
+          }
+        },
+        querySelector: (selector) => elements[selector] || null
+      },
+      window: {
+        close: () => {
+          windowClosed = true;
+        },
+        setTimeout: (callback) => {
+          callback();
+          return 1;
+        }
+      }
+    });
+
+    expect(context.__RESISTGATE_WHATSNEW_TEST_HOOKS__).toBeTruthy();
+    expect(typeof domContentLoadedHandler).toBe('function');
+
+    domContentLoadedHandler();
+
+    expect(elements['#version-badge'].textContent).toBe('v9.9.9');
+
+    elements['#open-options-btn'].getHandler('click')({ currentTarget: elements['#open-options-btn'] });
+    expect(openOptionsCalled).toBe(true);
+    expect(windowClosed).toBe(true);
+
+    windowClosed = false;
+    elements['#upgrade-link'].getHandler('click')({ preventDefault: () => {}, currentTarget: elements['#upgrade-link'] });
+    await Promise.resolve();
+    expect(sentMessages).toContainEqual({ action: 'openPricingPage' });
+    expect(windowClosed).toBe(true);
+
+    windowClosed = false;
+    context.__RESISTGATE_WHATSNEW_TEST_HOOKS__.handleClose();
+    expect(windowClosed).toBe(true);
+    expect(elements['#status-message'].textContent).toBe('You can close this tab now.');
+  });
 });
