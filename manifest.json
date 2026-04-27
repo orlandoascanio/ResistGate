@@ -39,6 +39,6 @@
     "<all_urls>"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://*.ingest.sentry.io https://*.ingest.us.sentry.io"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.posthog.com https://*.i.posthog.com"
   }
 }

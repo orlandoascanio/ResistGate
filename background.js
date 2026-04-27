@@ -18,6 +18,18 @@ const RESISTANCE_COUNTERS_KEY = 'resistanceCounters';
 const WORK_TIMER_KEY = 'workTimer';
 const PENDING_OUTCOME_TAP_KEY = 'pendingOutcomeTap';
 const MAX_ANALYTICS_EVENTS = 3000;
+const POSTHOG_PROJECT_TOKEN = 'phc_u3HfEJ9tnozSthBr37cVGdbC6UYkR6caDHEesudUXMa3';
+const POSTHOG_HOST = 'https://us.i.posthog.com';
+const POSTHOG_EVENT_ALLOWLIST = new Set([
+  'install',
+  'onboarding_start',
+  'blocklist_created',
+  'first_block_hit',
+  'challenge_completed',
+  'access_granted',
+  'return_day_1',
+  'uninstall_reason_submit'
+]);
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -88,6 +100,9 @@ chrome.runtime.onInstalled.addListener((details) => {
   
   // Show welcome page on first install, what's new page on update
   if (details.reason === 'install') {
+    void trackPosthogEventOnce('install', {
+      installReason: details.reason
+    });
     chrome.tabs.create({
       url: chrome.runtime.getURL('welcome/welcome.html')
     });
@@ -228,6 +243,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'updateSettings': {
           const currentSettings = await getSettings();
           const nextSettings = sanitizeSettings(request.settings || {});
+          const currentBlocklistLength = Array.isArray(currentSettings.blocklist)
+            ? currentSettings.blocklist.length
+            : 0;
+          const nextBlocklistLength = Array.isArray(nextSettings.blocklist)
+            ? nextSettings.blocklist.length
+            : 0;
 
           if (isCommitmentModeActive(currentSettings, Date.now())) {
             throw new Error('Commitment Mode is active. All settings are locked until it expires.');
@@ -256,6 +277,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           const transition = applyStrictModeUpdate(currentSettings, nextSettings, Date.now());
           await saveSettings(transition.settings);
+          if (currentBlocklistLength < 3 && nextBlocklistLength >= 3) {
+            await trackPosthogEventOnce('blocklist_created', {
+              blocklistSize: nextBlocklistLength
+            });
+          }
           if (transition.justDisabled && hasProAccess(transition.settings)) {
             await appendAnalyticsEvent({
               type: 'manual_disable',
@@ -488,8 +514,25 @@ async function initializeExtension(reason) {
 
     const existingInstallation = await getInstallationRaw();
     const normalizedInstallation = sanitizeInstallation(existingInstallation || {});
+    let installationChanged = false;
+    if (!normalizedInstallation.firstSeenAt) {
+      normalizedInstallation.firstSeenAt = Date.now();
+      installationChanged = true;
+    }
     if (JSON.stringify(existingInstallation || {}) !== JSON.stringify(normalizedInstallation)) {
       await saveInstallation(normalizedInstallation);
+    } else if (installationChanged) {
+      await saveInstallation(normalizedInstallation);
+    }
+
+    if (
+      normalizedInstallation.firstSeenAt
+      && !hasTrackedPosthogEvent(normalizedInstallation, 'return_day_1')
+      && isWithinReturnDayOneWindow(normalizedInstallation.firstSeenAt, Date.now())
+    ) {
+      await trackPosthogEventOnce('return_day_1', {
+        daysSinceInstall: 1
+      });
     }
 
     // Register daily badge reset alarm (fires at midnight, repeats every 24h)
@@ -702,6 +745,15 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
     });
   }
 
+  await trackPosthogEventOnce('access_granted', {
+    domain,
+    method: parsedMeta.method,
+    durationMinutes: duration,
+    strictSessionActive: isStrictFocusActive(settings, now),
+    timeSpentSeconds: positiveInt(timeSpentOnChallenge, 0),
+    earnAccessEnabled: parsedMeta.earnAccessEnabled
+  });
+
   if (parsedMeta.method === 'manualOverride' && hasProAccess(settings)) {
     await recordManualOverride(settings, now, domain);
   }
@@ -721,6 +773,11 @@ async function recordBlockedVisit(urlPattern) {
 
   // Pro analytics only
   const settings = await getSettings();
+  if (resistanceCount === 1) {
+    await trackPosthogEventOnce('first_block_hit', {
+      domain
+    });
+  }
   if (hasProAccess(settings)) {
     await appendAnalyticsEvent({
       type: 'blocked_visit',
@@ -777,6 +834,15 @@ async function getResistanceCount(domain) {
 
 async function recordAnalyticsEvent(type, domain) {
   const settings = await getSettings();
+  const rawDomain = typeof domain === 'string' ? domain.trim().slice(0, 120) : '';
+  if (POSTHOG_EVENT_ALLOWLIST.has(type)) {
+    await trackPosthogEventOnce(type, {
+      domain: normalizeDomain(domain) || rawDomain || 'system',
+      surface: rawDomain || 'system',
+      source: 'extension'
+    });
+  }
+
   if (!hasProAccess(settings)) {
     return;
   }
@@ -1071,8 +1137,27 @@ function sanitizeTypingChallengeLevel(level, difficulty) {
 function sanitizeInstallation(installation) {
   const incoming = installation && typeof installation === 'object' ? installation : {};
   return {
-    deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId()
+    deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId(),
+    firstSeenAt: sanitizeTimestamp(incoming.firstSeenAt),
+    posthogSentEvents: sanitizePosthogSentEvents(incoming.posthogSentEvents)
   };
+}
+
+function sanitizePosthogSentEvents(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const sanitized = {};
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (typeof key !== 'string' || !key.trim()) {
+      continue;
+    }
+
+    if (value === true) {
+      sanitized[key] = true;
+    }
+  }
+
+  return sanitized;
 }
 
 function sanitizeTemptationBundle(bundle) {
@@ -1661,6 +1746,9 @@ async function getInstallationRaw() {
 async function getInstallation() {
   const rawInstallation = await getInstallationRaw();
   const normalizedInstallation = sanitizeInstallation(rawInstallation || {});
+  if (!normalizedInstallation.firstSeenAt) {
+    normalizedInstallation.firstSeenAt = Date.now();
+  }
 
   if (JSON.stringify(rawInstallation || {}) !== JSON.stringify(normalizedInstallation)) {
     await saveInstallation(normalizedInstallation);
@@ -1719,6 +1807,119 @@ async function appendAnalyticsEvent(event) {
     analytics.events = analytics.events.slice(-MAX_ANALYTICS_EVENTS);
   }
   await saveAnalytics(analytics);
+}
+
+function sanitizePosthogProperties(properties) {
+  const incoming = properties && typeof properties === 'object' ? properties : {};
+  const sanitized = {};
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (typeof key !== 'string' || !key.trim()) {
+      continue;
+    }
+
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      sanitized[key] = value.trim().slice(0, 250);
+      continue;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      sanitized[key] = value;
+      continue;
+    }
+
+    if (typeof value === 'boolean') {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
+function getPosthogConfig() {
+  const apiKey = typeof globalThis !== 'undefined' && typeof globalThis.__RESISTGATE_POSTHOG_API_KEY__ === 'string'
+    ? globalThis.__RESISTGATE_POSTHOG_API_KEY__.trim()
+    : POSTHOG_PROJECT_TOKEN;
+  const host = typeof globalThis !== 'undefined' && typeof globalThis.__RESISTGATE_POSTHOG_HOST__ === 'string'
+    ? globalThis.__RESISTGATE_POSTHOG_HOST__.trim()
+    : POSTHOG_HOST;
+
+  return {
+    apiKey,
+    host: host || POSTHOG_HOST
+  };
+}
+
+function hasTrackedPosthogEvent(installation, eventName) {
+  if (!installation || typeof installation !== 'object') {
+    return false;
+  }
+
+  return installation.posthogSentEvents?.[eventName] === true;
+}
+
+function isWithinReturnDayOneWindow(firstSeenAt, now) {
+  if (!Number.isFinite(firstSeenAt) || !Number.isFinite(now)) {
+    return false;
+  }
+
+  const elapsedMs = now - firstSeenAt;
+  return elapsedMs >= 24 * 60 * 60 * 1000 && elapsedMs < 48 * 60 * 60 * 1000;
+}
+
+async function trackPosthogEventOnce(eventName, properties = {}) {
+  const name = typeof eventName === 'string' ? eventName.trim() : '';
+  if (!name || !POSTHOG_EVENT_ALLOWLIST.has(name)) {
+    return false;
+  }
+
+  const { apiKey, host } = getPosthogConfig();
+  if (!apiKey || typeof fetch !== 'function') {
+    return false;
+  }
+
+  const installation = await getInstallation();
+  if (hasTrackedPosthogEvent(installation, name)) {
+    return false;
+  }
+
+  const manifest = chrome.runtime?.getManifest ? chrome.runtime.getManifest() : null;
+  installation.posthogSentEvents = {
+    ...(installation.posthogSentEvents || {}),
+    [name]: true
+  };
+  await saveInstallation(installation);
+
+  const payload = {
+    api_key: apiKey,
+    event: name,
+    properties: {
+      distinct_id: installation.deviceId,
+      extension: 'resistgate',
+      extension_version: manifest && typeof manifest.version === 'string' ? manifest.version : 'unknown',
+      installation_first_seen_at: installation.firstSeenAt || null,
+      ...sanitizePosthogProperties(properties)
+    }
+  };
+
+  try {
+    await fetch(`${host.replace(/\/+$/, '')}/capture/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+    return true;
+  } catch (error) {
+    console.warn('PostHog event capture failed:', error);
+    return false;
+  }
 }
 
 
@@ -1980,6 +2181,11 @@ if (typeof globalThis !== 'undefined') {
     isCommitmentModeActive,
     sanitizeTemptationBundle,
     sanitizeWorkTimer,
+    sanitizePosthogSentEvents,
+    sanitizePosthogProperties,
+    isWithinReturnDayOneWindow,
+    hasTrackedPosthogEvent,
+    trackPosthogEventOnce,
     isBundleConditionMet,
     getEffectiveWorkMinutes,
     syncBundleUnlockAlarms,

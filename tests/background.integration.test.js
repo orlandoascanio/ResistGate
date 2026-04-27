@@ -314,4 +314,86 @@ describe('ResistGate background integration', () => {
     expect(res.success).toBe(false);
     expect(res.proRequired).toBe(true);
   });
+
+  it('captures the PostHog funnel milestones exactly once', async () => {
+    const posthogCalls = [];
+    const fetchMock = async (url, init = {}) => {
+      posthogCalls.push({
+        url,
+        body: init.body ? JSON.parse(init.body) : null
+      });
+
+      return {
+        status: 200,
+        headers: {
+          get: () => null
+        }
+      };
+    };
+
+    const posthogEnv = createChromeMock();
+    posthogEnv.storageData.installation = {
+      deviceId: 'device-test-123',
+      firstSeenAt: Date.now() - (25 * 60 * 60 * 1000),
+      posthogSentEvents: {}
+    };
+
+    const context = await loadScriptInVm('background.js', {
+      chrome: posthogEnv.chrome,
+      fetch: fetchMock,
+      __RESISTGATE_POSTHOG_API_KEY__: 'phc_test_key',
+      __RESISTGATE_POSTHOG_HOST__: 'https://us.i.posthog.com'
+    });
+
+    const posthogHooks = context.__RESISTGATE_TEST_HOOKS__;
+    expect(posthogCalls[0].body.event).toBe('return_day_1');
+
+    await posthogEnv.sendMessage({
+      action: 'recordAnalyticsEvent',
+      type: 'onboarding_start',
+      domain: 'welcome'
+    });
+
+    let settings = (await posthogEnv.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [
+      { id: '1', urlPattern: 'youtube.com', createdAt: Date.now() },
+      { id: '2', urlPattern: 'reddit.com', createdAt: Date.now() },
+      { id: '3', urlPattern: 'x.com', createdAt: Date.now() }
+    ];
+    await posthogEnv.sendMessage({ action: 'updateSettings', settings });
+
+    await posthogEnv.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
+    await posthogEnv.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
+
+    await posthogEnv.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'youtube.com',
+      duration: 10,
+      meta: { method: 'challenge', waitedSeconds: 12 }
+    });
+
+    await posthogHooks.trackPosthogEventOnce('install', {
+      installReason: 'install'
+    });
+    await posthogHooks.trackPosthogEventOnce('install', {
+      installReason: 'install'
+    });
+
+    const eventNames = posthogCalls.map((entry) => entry.body.event);
+    expect(eventNames).toContain('return_day_1');
+    expect(eventNames).toContain('onboarding_start');
+    expect(eventNames).toContain('blocklist_created');
+    expect(eventNames).toContain('first_block_hit');
+    expect(eventNames).toContain('access_granted');
+    expect(eventNames).toContain('install');
+
+    expect(eventNames.filter((event) => event === 'install')).toHaveLength(1);
+    expect(eventNames.filter((event) => event === 'first_block_hit')).toHaveLength(1);
+
+    const onboardingCall = posthogCalls.find((entry) => entry.body.event === 'onboarding_start');
+    expect(onboardingCall.body.properties.surface).toBe('welcome');
+
+    const accessCall = posthogCalls.find((entry) => entry.body.event === 'access_granted');
+    expect(accessCall.body.properties.domain).toBe('youtube.com');
+  });
 });
