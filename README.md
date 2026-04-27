@@ -1,4 +1,4 @@
-# ResistGate
+# ResistGate ;)
 
 **ResistGate** is a Manifest V3 Chrome extension for intentional browsing.
 It blocks distracting sites and adds friction (a typing challenge) before granting temporary access.
