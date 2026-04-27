@@ -25,6 +25,11 @@ document.addEventListener('DOMContentLoaded', function () {
         workTimerToggleBtn.addEventListener('click', toggleWorkTimer);
     }
 
+    const openFeedbackBtn = document.getElementById('open-feedback-btn');
+    if (openFeedbackBtn) {
+        openFeedbackBtn.addEventListener('click', openFeedbackPage);
+    }
+
     newBlockedSiteInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             addBlockedSite();
@@ -53,6 +58,17 @@ document.addEventListener('DOMContentLoaded', function () {
         showOutcomeTap(domain);
     });
 });
+
+function openFeedbackPage() {
+    chrome.runtime.sendMessage({
+        action: 'openFeedbackPage',
+        surface: 'extension_popup'
+    }, function (response) {
+        if (!(response && response.success)) {
+            showMessage(response?.error || 'Unable to open feedback page.', 'error');
+        }
+    });
+}
 
 function addBlockedSite() {
     const input = document.getElementById('new-blocked-site');

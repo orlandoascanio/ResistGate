@@ -137,6 +137,10 @@ document.addEventListener('DOMContentLoaded', function () {
     chrome.tabs.create({ url: chrome.runtime.getURL('whats-new/whats-new.html') });
   });
 
+  document.getElementById('open-feedback-btn').addEventListener('click', function () {
+    openFeedbackPage();
+  });
+
   document.getElementById('view-pricing-btn').addEventListener('click', function () {
     hidePaywall();
     openPricingPage();
@@ -1361,6 +1365,20 @@ function openPricingPage(email) {
     }
 
     showMessage('Pricing opened in a new tab. Complete checkout and Pro activates here automatically.', 'success');
+  });
+}
+
+function openFeedbackPage() {
+  chrome.runtime.sendMessage({
+    action: 'openFeedbackPage',
+    surface: 'extension_options'
+  }, function (response) {
+    if (!(response && response.success)) {
+      showMessage(response?.error || 'Unable to open feedback page.', 'error');
+      return;
+    }
+
+    showMessage('Feedback page opened in a new tab.', 'success');
   });
 }
 

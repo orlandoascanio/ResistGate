@@ -57,6 +57,18 @@ describe('ResistGate background integration', () => {
     expect(env.createdTabs[0].url).toContain('https://www.orlandoascanio.com/en/pricing');
   });
 
+  it('opens feedback page via message handler', async () => {
+    const response = await env.sendMessage({
+      action: 'openFeedbackPage',
+      surface: 'extension_popup'
+    });
+
+    expect(response.success).toBe(true);
+    expect(response.url).toContain('https://www.orlandoascanio.com/en/resistgate/feedback');
+    expect(response.url).toContain('source=extension_popup');
+    expect(env.createdTabs.at(-1).url).toBe(response.url);
+  });
+
   it('activates Pro automatically from a trusted website message', async () => {
     const activationEnv = createChromeMock();
     await loadScriptInVm('background.js', {

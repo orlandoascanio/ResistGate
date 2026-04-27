@@ -229,6 +229,35 @@ input:focus {
   border-radius: 2px;
 }
 
+.popup-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.feedback-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.feedback-link:hover {
+  text-decoration: underline;
+}
+
+.feedback-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* ── Blocked sites list ─────────────────────────────────────────── */
 #blocked-sites-list {
   list-style: none;

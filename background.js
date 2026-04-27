@@ -428,6 +428,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        case 'openFeedbackPage': {
+          const surface = typeof request.surface === 'string' ? request.surface : 'extension';
+          const url = `https://www.orlandoascanio.com/en/resistgate/feedback?source=${encodeURIComponent(surface)}`;
+          await chrome.tabs.create({ url });
+          sendResponse({ success: true, url });
+          return;
+        }
+
         default:
           sendResponse({ success: false, error: 'Unknown action' });
       }

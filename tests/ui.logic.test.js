@@ -15,7 +15,9 @@ describe('UI copy and state logic', () => {
     const frictionHtml = fs.readFileSync(path.resolve(repoRoot, 'friction-page/index.html'), 'utf8');
 
     expect(popupHtml).toContain('Block distractions. Unlock intentionally.');
+    expect(popupHtml).toContain('Help improve ResistGate');
     expect(optionsHtml).toContain('Weekly Discipline Report');
+    expect(optionsHtml).toContain('Help improve ResistGate');
     expect(optionsHtml).toContain('Deeper focus tools and weekly accountability reports.');
     expect(frictionHtml).toContain('You blocked this for a reason.');
   });
