@@ -15,6 +15,15 @@ describe('Feature Matrix Coverage', () => {
     hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
 
+  async function activateProForTest() {
+    const response = await env.sendExternalMessage(
+      { action: 'activateProFromWebsite' },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(response.success).toBe(true);
+  }
+
   describe('Free: Domain Blocking', () => {
     it('normalizes domains from raw user input', () => {
       expect(hooks.normalizeDomain('HTTPS://YouTube.COM/')).toBe('youtube.com');
@@ -169,9 +178,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('blocks config updates during active strict schedule window', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.proFeatures.strictModeEnabled = true;
       settings.freeExperience.schedule = {
@@ -192,18 +199,14 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Override Cooldown', () => {
     it('starts with base manual override delay', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const status = await env.sendMessage({ action: 'getManualOverrideStatus' });
       expect(status.success).toBe(true);
       expect(status.status.requiredDelaySeconds).toBe(12);
     });
 
     it('increases required delay after successful overrides', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.delayStepSeconds = 15;
@@ -222,9 +225,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('locks manual override after threshold is exceeded', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.thresholdCount = 2;
@@ -272,9 +273,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('rejects manual override when earn-access is active', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -293,9 +292,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('requires minimum challenge duration when earn-access is active', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -325,9 +322,7 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Analytics Dashboard', () => {
     it('computes blocked attempts, overrides, and strict session minutes', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -354,9 +349,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns top blocked domains sorted and limited to 5', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const now = Date.now();
       const domains = ['a.com', 'b.com', 'b.com', 'c.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'];
       env.storageData.analytics = {
@@ -373,9 +366,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('always returns a 7-day override trend series', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const res = await env.sendMessage({ action: 'getAnalyticsDashboard' });
       expect(res.dashboard.overrideFrequencyTrend).toHaveLength(7);
     });
@@ -383,9 +374,7 @@ describe('Feature Matrix Coverage', () => {
 
   describe('Pro: Focus Score and Weekly Report', () => {
     it('uses score formula 100 - overrides*5 - manualDisable*10', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -401,9 +390,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('clamps score to 0 at lower bound', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const now = Date.now();
       const events = [];
       for (let i = 0; i < 40; i++) {
@@ -419,9 +406,7 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns weekly trend delta and a feedback line', async () => {
-      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
-      await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -755,8 +740,9 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('intention page settings are saved and retrieved via message actions', async () => {
+      await activateProForTest();
+
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-      settingsObj.subscription = { tier: 'pro' };
       settingsObj.proFeatures.intentionPage = {
         enabled: true,
         showBreathingExercise: true

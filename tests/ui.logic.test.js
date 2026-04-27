@@ -37,6 +37,10 @@ describe('UI copy and state logic', () => {
     expect(hooks.getStrictSessionInsight(180)).toBe('Strong commitment. 3+ hours of deep work.');
     expect(hooks.sanitizePreset('strict')).toBe('strict');
     expect(hooks.sanitizePreset('unknown')).toBe('balanced');
+    expect(hooks.isProGatedTab('analytics')).toBe(true);
+    expect(hooks.isProGatedTab('report')).toBe(true);
+    expect(hooks.isProGatedTab('pro')).toBe(true);
+    expect(hooks.isProGatedTab('general')).toBe(false);
   });
 
   it('formats popup blocked-count text cleanly', async () => {

@@ -243,6 +243,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'updateSettings': {
           const currentSettings = await getSettings();
           const nextSettings = sanitizeSettings(request.settings || {});
+          nextSettings.subscription = currentSettings.subscription;
+          if (!hasProAccess(currentSettings)) {
+            nextSettings.proFeatures = currentSettings.proFeatures;
+          }
+
           const currentBlocklistLength = Array.isArray(currentSettings.blocklist)
             ? currentSettings.blocklist.length
             : 0;

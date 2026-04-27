@@ -256,6 +256,11 @@ function renderSettings() {
   renderSubscriptionStatus();
   loadBlockedSites(blocklist);
   renderProFeatureInputs();
+  renderProAccessState();
+
+  if (isProGatedTab(activeTab) && !isProUser()) {
+    setActiveTab('general');
+  }
 
   if (activeTab === 'analytics' && isProUser()) {
     loadAnalytics();
@@ -351,6 +356,27 @@ function renderProFeatureInputs() {
   renderCommitmentStatus();
 }
 
+function renderProAccessState() {
+  const hasPro = isProUser();
+
+  document.querySelectorAll('.tab-btn[data-pro-screen]').forEach((button) => {
+    const requestedTab = button.getAttribute('data-tab');
+    const isLocked = isProGatedTab(requestedTab) && !hasPro;
+    button.classList.toggle('locked', isLocked);
+    button.setAttribute('aria-disabled', String(isLocked));
+  });
+
+  const proPanel = document.getElementById('panel-pro');
+  if (proPanel) {
+    proPanel.toggleAttribute('inert', !hasPro);
+    proPanel.setAttribute('aria-hidden', hasPro ? 'false' : 'true');
+  }
+
+  document.querySelectorAll('[data-pro-feature]').forEach((control) => {
+    control.disabled = !hasPro;
+  });
+}
+
 function formatCommitmentCountdown(remainingMs) {
   const totalSecs = Math.max(0, Math.ceil(remainingMs / 1000));
   const h = Math.floor(totalSecs / 3600);
@@ -402,8 +428,8 @@ function renderCommitmentStatus() {
       commitmentCountdownTimer = setInterval(tickCountdown, 1000);
     } else {
       statusEl.classList.add('hidden');
-      activateBtn.disabled = false;
-      activateBtn.textContent = 'Activate Commitment Mode';
+      activateBtn.disabled = !isProUser();
+      activateBtn.textContent = isProUser() ? 'Activate Commitment Mode' : 'Upgrade to use Commitment Mode';
     }
   });
 }
@@ -413,9 +439,7 @@ function handleTabRequest(requestedTab) {
     return;
   }
 
-  // Analytics and Report tabs are Pro-gated; the Pro tab itself is open to all
-  const proGatedTabs = ['analytics', 'report'];
-  if (proGatedTabs.includes(requestedTab) && !isProUser()) {
+  if (isProGatedTab(requestedTab) && !isProUser()) {
     queuedProScreen = requestedTab;
     showPaywall(`tab-${requestedTab}`);
     return;
@@ -444,6 +468,10 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab-panel').forEach((panel) => {
     panel.classList.toggle('active', panel.id === `panel-${tabName}`);
   });
+}
+
+function isProGatedTab(tabName) {
+  return tabName === 'analytics' || tabName === 'report' || tabName === 'pro';
 }
 
 function addBlockedSite() {
@@ -1469,7 +1497,8 @@ if (typeof globalThis !== 'undefined') {
     sanitizeChallengeLevel,
     getTypingChallengeLevel,
     sanitizePreset,
-    getEarnAccessMinChallengeSeconds
+    getEarnAccessMinChallengeSeconds,
+    isProGatedTab
   };
 }
 

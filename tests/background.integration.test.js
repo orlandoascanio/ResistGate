@@ -9,6 +9,15 @@ describe('ResistGate background integration', () => {
     await loadScriptInVm('background.js', { chrome: env.chrome });
   });
 
+  async function activateProForTest(targetEnv = env) {
+    const response = await targetEnv.sendExternalMessage(
+      { action: 'activateProFromWebsite' },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(response.success).toBe(true);
+  }
+
   it('normalizes and saves free settings for blocklist/schedule', async () => {
     const settingsRes = await env.sendMessage({ action: 'getSettings' });
     expect(settingsRes.success).toBe(true);
@@ -66,9 +75,7 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces strict mode lock during active schedule', async () => {
-    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
-    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+    await activateProForTest();
 
     const initial = (await env.sendMessage({ action: 'getSettings' })).settings;
     initial.proFeatures.strictModeEnabled = true;
@@ -91,9 +98,7 @@ describe('ResistGate background integration', () => {
   });
 
   it('applies strict mode disable cooldown before turning off', async () => {
-    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
-    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+    await activateProForTest();
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.proFeatures.strictModeEnabled = true;
@@ -121,10 +126,7 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces override cooldown policy and lock windows', async () => {
-    // Inject mock valid license
-    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
-    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+    await activateProForTest();
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
@@ -184,9 +186,7 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces earn-access rule for manual override and minimum challenge time', async () => {
-    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
-    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+    await activateProForTest();
 
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
@@ -227,9 +227,7 @@ describe('ResistGate background integration', () => {
   });
 
   it('generates weekly report with correct score formula and trend', async () => {
-    const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
-    await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+    await activateProForTest();
 
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
@@ -254,8 +252,9 @@ describe('ResistGate background integration', () => {
   });
 
   it('activates and enforces commitment mode lockout', async () => {
+    await activateProForTest();
+
     const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settingsObj.subscription = { tier: 'pro' };
     settingsObj.blocklist = [{ id: 'c1', urlPattern: 'reddit.com', createdAt: Date.now() }];
     await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
 
@@ -313,6 +312,23 @@ describe('ResistGate background integration', () => {
     const res = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 2 });
     expect(res.success).toBe(false);
     expect(res.proRequired).toBe(true);
+  });
+
+  it('does not allow updateSettings to self-upgrade to Pro', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.subscription = { tier: 'pro' };
+    settings.proFeatures.strictModeEnabled = true;
+
+    const updateRes = await env.sendMessage({ action: 'updateSettings', settings });
+    expect(updateRes.success).toBe(true);
+
+    const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+    expect(saved.subscription.tier).toBe('free');
+    expect(saved.proFeatures.strictModeEnabled).toBe(false);
+
+    const dashboardRes = await env.sendMessage({ action: 'getAnalyticsDashboard' });
+    expect(dashboardRes.success).toBe(false);
+    expect(dashboardRes.proRequired).toBe(true);
   });
 
   it('captures the PostHog funnel milestones exactly once', async () => {
