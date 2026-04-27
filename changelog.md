@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-27
+
+This release makes ResistGate feel less static and more usable day to day. It adds feedback links, tightens the Pro boundary, refreshes onboarding, and gives people a softer way to build discipline.
+
+### Added (Free)
+- **Feedback links**: A small `Help improve ResistGate` button now lives in the popup and options page. It opens a dedicated feedback survey that sends directly into the site dashboard, so improvements can come from real user input.
+- **Graduated Challenges**: Free users can now pick the level of friction that fits the moment.
+  - **Easy**: short character sequence
+  - **Moderate**: one or two sentences
+  - **Hard**: the original five-paragraph challenge
+
+### Fixed
+- **Pro settings access**: Fixed the bug that let free users reach Pro-only settings. The options page now keeps Pro controls behind entitlement.
+
+### Changed
+- **Welcome page redesign**: Reworked the onboarding/welcome experience so first-time users get a cleaner, less stale introduction to ResistGate.
+- **Feedback flow**: The new survey writes into the feedback dashboard and records structured answers for easier review.
+
+---
+
 ## [Unreleased]
 
 ### Changed
