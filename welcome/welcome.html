@@ -3,72 +3,86 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
   <title>Welcome to ResistGate</title>
   <link rel="stylesheet" href="welcome.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script src="../vendor/sentry.min.js"></script>
-  <script src="../vendor/sentry-init.js"></script>
-  <script>Sentry.setTag('page', 'welcome');</script>
+  <script defer src="../vendor/sentry.min.js"></script>
+  <script defer src="../vendor/sentry-init.js"></script>
+  <script defer src="welcome.js"></script>
 </head>
 <body>
-  <div class="welcome-container">
-    <div class="welcome-card">
-      <div class="welcome-header">
-        <h1>Welcome to ResistGate</h1>
-        <p class="tagline">Block distractions. Unlock intentionally.</p>
+  <main class="welcome-shell" aria-labelledby="welcome-title">
+    <section class="welcome-card" aria-describedby="welcome-summary">
+      <header class="hero">
+        <div class="brand-mark" aria-hidden="true">RG</div>
+        <p class="eyebrow">Intentional friction for distracting sites</p>
+        <h1 id="welcome-title">Welcome to ResistGate</h1>
+        <p id="welcome-summary" class="hero-copy">
+          Stop opening distracting websites on autopilot. Add the sites you want to resist,
+          then earn temporary access only when you actually mean it.
+        </p>
+      </header>
+
+      <div class="preview-panel" aria-label="Example blocked site challenge">
+        <div class="preview-toolbar" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="preview-content">
+          <p class="preview-label">Blocked</p>
+          <strong>reddit.com</strong>
+          <p>Type your reason before continuing.</p>
+        </div>
       </div>
 
-      <div class="welcome-content">
-        <div class="features-list">
-          <h2 class="sr-only">How it works</h2>
-          <div class="feature-item">
-            <span class="feature-number">01</span>
-            <div>
-              <h3>Block any site</h3>
-              <p>Add domains you want to avoid. Every visit redirects to a focus challenge.</p>
-            </div>
-          </div>
+      <section class="setup-flow" aria-labelledby="setup-title">
+        <div class="section-heading">
+          <p class="section-kicker">Start here</p>
+          <h2 id="setup-title">Set up your first resistance loop</h2>
+        </div>
 
-          <div class="feature-item">
-            <span class="feature-number">02</span>
+        <ol class="steps-list">
+          <li>
+            <span class="step-number" aria-hidden="true">1</span>
+            <div>
+              <h3>Choose your distractions</h3>
+              <p>Add sites like YouTube, Reddit, X, Instagram, or anything you open by reflex.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">2</span>
+            <div>
+              <h3>Hit the friction gate</h3>
+              <p>When you visit a blocked site, ResistGate interrupts the habit before it wins.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">3</span>
             <div>
               <h3>Unlock with intention</h3>
-              <p>Complete a short typing challenge to earn temporary access to a blocked site.</p>
+              <p>Complete the challenge only when the visit has a real reason.</p>
             </div>
-          </div>
+          </li>
+        </ol>
+      </section>
 
-          <div class="feature-item">
-            <span class="feature-number">03</span>
-            <div>
-              <h3>Build the discipline</h3>
-              <p>Repeat the habit. Every block counts. Your resistance record is yours to own.</p>
-            </div>
-          </div>
-        </div>
+      <aside class="trust-card" aria-label="Privacy note">
+        <span class="trust-icon" aria-hidden="true">✓</span>
+        <p><strong>No account required.</strong> Your focus rules stay inside the extension.</p>
+      </aside>
 
-        <div class="next-steps">
-          <h2>Getting started</h2>
-          <ol>
-            <li>Open settings and add your first blocked site</li>
-            <li>Visit that site — your challenge will be waiting</li>
-            <li>Complete it to access the site intentionally</li>
-          </ol>
-        </div>
+      <div class="welcome-actions" aria-label="Welcome actions">
+        <button id="open-options-btn" class="btn btn-primary" type="button">
+          Set up my blocklist
+        </button>
+        <button id="close-welcome-btn" class="btn btn-secondary" type="button">
+          I’ll do it later
+        </button>
       </div>
 
-      <div class="welcome-actions">
-        <button id="open-options-btn" class="btn btn-primary">Set up my blocklist</button>
-        <button id="close-welcome-btn" class="btn btn-secondary">Explore on my own</button>
-      </div>
-
-      <p class="footer-note">
-        You can reopen this page anytime from the extension menu.
-      </p>
-    </div>
-  </div>
-
-  <script src="welcome.js"></script>
+      <p id="welcome-status" class="status-message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
 </body>
 </html>
