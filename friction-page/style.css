@@ -715,6 +715,14 @@ body {
   color: var(--text);
 }
 
+.challenge-code {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .challenge-typing-input {
   width: 100%;
   min-height: 140px;

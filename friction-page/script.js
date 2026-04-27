@@ -30,6 +30,41 @@ const PHASES = {
 
 let currentPhase = PHASES.INTENTION;
 
+const DEFAULT_CHALLENGE_LEVEL = 'hard';
+const CHALLENGE_LEVEL_COPY = {
+  easy: {
+    badge: 'Easy drill',
+    precheck: 'Easy drill: type a short random code with full accuracy.',
+    instruction: 'Type the code exactly as shown to continue.',
+    unitLabel: 'Code'
+  },
+  moderate: {
+    badge: 'Moderate drill',
+    precheck: 'Moderate drill: type 1-2 focus sentences with full accuracy.',
+    instruction: 'Type the sentences exactly as shown to continue.',
+    unitLabel: 'Prompt'
+  },
+  hard: {
+    badge: 'Hard mode',
+    precheck: 'Hard mode: complete 5 paragraphs with full accuracy.',
+    instruction: 'Type the text exactly as shown to continue.',
+    unitLabel: 'Paragraph'
+  }
+};
+
+const PRODUCTIVITY_TEXTS = [
+  'Every minute wasted on distractions is a minute stolen from your potential. Protect your time like it is your most valuable asset.',
+  'Focus is a muscle. The more you practice resisting trivial distractions, the stronger it becomes.',
+  'Discipline is choosing what you want most over what you want now.',
+  'Your attention is valuable currency. Spend it deliberately.',
+  'Progress requires focus. Each time you redirect attention, you grow stronger.',
+  'Time is irreversible. Choose actions that build momentum toward meaningful outcomes.',
+  'Purpose-driven effort beats busywork. Ask if this action aligns with your goals.',
+  'Self-mastery is built one decision at a time.',
+  'Small actions, consistently taken, shape identity and outcomes.',
+  'Distraction is the enemy of progress. Confront it with deliberate resistance.'
+];
+
 document.addEventListener('DOMContentLoaded', function () {
   const urlParams = new URLSearchParams(window.location.search);
   currentOriginalUrl = urlParams.get('originalUrl');
@@ -91,6 +126,7 @@ function transitionToPhase(phase) {
   
   // Phase-specific initialization
   if (phase === PHASES.PRECHECK) {
+    renderChallengeSummary();
     renderBundlePanel();
     renderProPrecheck();
     refreshManualOverrideStatus();
@@ -108,6 +144,7 @@ function loadSettings() {
     accessDurationMinutes = currentSettings.defaultAccessDuration
       || currentSettings.challengeTypes?.typing?.duration
       || accessDurationMinutes;
+    renderChallengeSummary();
 
     chrome.runtime.sendMessage({ action: 'getWorkTimerState' }, function (wtResponse) {
       currentWorkTimer = (wtResponse && wtResponse.success) ? wtResponse.state : null;
@@ -661,41 +698,31 @@ function showTypingChallenge(originalUrl) {
   const container = document.getElementById('phase-challenge');
   container.innerHTML = '';
 
-  const productivityTexts = [
-    'Every minute wasted on distractions is a minute stolen from your potential. Protect your time like it is your most valuable asset.',
-    'Focus is a muscle. The more you practice resisting trivial distractions, the stronger it becomes.',
-    'Discipline is choosing what you want most over what you want now.',
-    'Your attention is valuable currency. Spend it deliberately.',
-    'Progress requires focus. Each time you redirect attention, you grow stronger.',
-    'Time is irreversible. Choose actions that build momentum toward meaningful outcomes.',
-    'Purpose-driven effort beats busywork. Ask if this action aligns with your goals.',
-    'Self-mastery is built one decision at a time.',
-    'Small actions, consistently taken, shape identity and outcomes.',
-    'Distraction is the enemy of progress. Confront it with deliberate resistance.'
-  ];
-
-  function getRandomParagraphs() {
-    const shuffled = [...productivityTexts].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 5);
-  }
-
-  const selectedParagraphs = getRandomParagraphs();
-  let currentParagraphIndex = 0;
-  let completedParagraphs = 0;
+  const challengeLevel = getTypingChallengeLevel();
+  const challengeCopy = getChallengeLevelCopy(challengeLevel);
+  const selectedSegments = buildTypingChallengeSegments(challengeLevel);
+  const totalSegments = selectedSegments.length;
+  let currentSegmentIndex = 0;
+  let completedSegments = 0;
 
   function displayCurrentParagraph() {
-    const currentText = selectedParagraphs[currentParagraphIndex];
+    const currentSegment = selectedSegments[currentSegmentIndex];
+    const currentText = currentSegment.text;
+    const stepBadge = totalSegments === 1
+      ? challengeCopy.badge
+      : `${challengeCopy.unitLabel} ${currentSegmentIndex + 1} of ${totalSegments}`;
+    const quoteClass = challengeLevel === 'easy' ? 'quote-text challenge-code' : 'quote-text';
 
     container.innerHTML = `
       <div class="challenge-container">
-        <span class="step-badge">Paragraph ${currentParagraphIndex + 1} of 5</span>
-        <p class="instruction-text">Type the text exactly as shown to continue.</p>
+        <span class="step-badge">${escapeHtml(stepBadge)}</span>
+        <p class="instruction-text">${escapeHtml(challengeCopy.instruction)}</p>
         
         <div class="quote-box">
-          <p class="quote-text">${escapeHtml(currentText)}</p>
+          <p class="${quoteClass}">${escapeHtml(currentText)}</p>
         </div>
         
-        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..."></textarea>
+        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..." spellcheck="false"></textarea>
         <p id="typing-error" class="typing-error"></p>
         
         <div class="challenge-stats">
@@ -769,11 +796,11 @@ function showTypingChallenge(originalUrl) {
 
     submitBtn.addEventListener('click', function () {
       if (typingInput.value === currentText) {
-        completedParagraphs++;
-        if (completedParagraphs === 5) {
+        completedSegments++;
+        if (completedSegments === totalSegments) {
           completeChallenge(accessDurationMinutes, originalUrl);
         } else {
-          currentParagraphIndex++;
+          currentSegmentIndex++;
           displayCurrentParagraph();
         }
       }
@@ -786,6 +813,68 @@ function showTypingChallenge(originalUrl) {
   }
 
   displayCurrentParagraph();
+}
+
+function renderChallengeSummary() {
+  const subtitle = document.getElementById('precheck-subtitle');
+  if (!subtitle) {
+    return;
+  }
+
+  subtitle.textContent = getChallengeLevelCopy(getTypingChallengeLevel()).precheck;
+}
+
+function sanitizeChallengeLevel(level) {
+  if (level === 'easy' || level === 'moderate' || level === 'hard') {
+    return level;
+  }
+  return DEFAULT_CHALLENGE_LEVEL;
+}
+
+function getTypingChallengeLevel(settings = currentSettings) {
+  const typing = settings?.challengeTypes?.typing || {};
+  if (typing.level === 'easy' || typing.level === 'moderate' || typing.level === 'hard') {
+    return typing.level;
+  }
+
+  if (Number(typing.difficulty) === 1) {
+    return 'easy';
+  }
+  if (Number(typing.difficulty) === 2) {
+    return 'moderate';
+  }
+  return DEFAULT_CHALLENGE_LEVEL;
+}
+
+function getChallengeLevelCopy(level) {
+  return CHALLENGE_LEVEL_COPY[sanitizeChallengeLevel(level)];
+}
+
+function buildTypingChallengeSegments(level = getTypingChallengeLevel()) {
+  const selectedLevel = sanitizeChallengeLevel(level);
+  if (selectedLevel === 'easy') {
+    return [{ text: generateRandomCharacterSequence(12) }];
+  }
+
+  const shuffled = getRandomItems(PRODUCTIVITY_TEXTS);
+  if (selectedLevel === 'moderate') {
+    return [{ text: shuffled.slice(0, 2).join(' ') }];
+  }
+
+  return shuffled.slice(0, 5).map((text) => ({ text }));
+}
+
+function getRandomItems(items) {
+  return [...items].sort(() => 0.5 - Math.random());
+}
+
+function generateRandomCharacterSequence(length) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let sequence = '';
+  for (let i = 0; i < length; i++) {
+    sequence += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return sequence;
 }
 
 function completeChallenge(duration, originalUrl) {
@@ -1048,6 +1137,11 @@ if (typeof globalThis !== 'undefined') {
     getEarnAccessMinChallengeSeconds,
     getEarnAccessBonus,
     getSafeTargetUrl,
+    sanitizeChallengeLevel,
+    getTypingChallengeLevel,
+    getChallengeLevelCopy,
+    buildTypingChallengeSegments,
+    generateRandomCharacterSequence,
     formatTime,
     formatTime12,
     renderIntentionPage,

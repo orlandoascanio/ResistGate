@@ -78,6 +78,30 @@ describe('Friction page flow logic', () => {
     expect(hooks.getEarnAccessMinChallengeSeconds()).toBe(900);
   });
 
+  it('resolves challenge level from saved settings and legacy difficulty', () => {
+    expect(hooks.getTypingChallengeLevel({
+      challengeTypes: { typing: { level: 'easy', difficulty: 3 } }
+    })).toBe('easy');
+    expect(hooks.getTypingChallengeLevel({
+      challengeTypes: { typing: { difficulty: 2 } }
+    })).toBe('moderate');
+    expect(hooks.getTypingChallengeLevel({
+      challengeTypes: { typing: { difficulty: 3 } }
+    })).toBe('hard');
+  });
+
+  it('builds graduated typing challenge segments', () => {
+    const easy = hooks.buildTypingChallengeSegments('easy');
+    const moderate = hooks.buildTypingChallengeSegments('moderate');
+    const hard = hooks.buildTypingChallengeSegments('hard');
+
+    expect(easy).toHaveLength(1);
+    expect(easy[0].text).toMatch(/^[A-Z2-9]{12}$/);
+    expect(moderate).toHaveLength(1);
+    expect(moderate[0].text.split('. ').length).toBeGreaterThanOrEqual(2);
+    expect(hard).toHaveLength(5);
+  });
+
   it('returns expected earn-access bonus tiers', () => {
     hooks.__setCurrentSettingsForTest({
       subscription: { tier: 'pro' },
