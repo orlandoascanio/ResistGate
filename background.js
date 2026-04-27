@@ -24,7 +24,7 @@ const DEFAULT_SETTINGS = {
   defaultAccessDuration: 15, // minutes
   blocklist: [],
   challengeTypes: {
-    typing: { difficulty: 3, duration: 15 }
+    typing: { difficulty: 3, duration: 15, level: 'hard' }
   },
   freeExperience: {
     manualOverrideDelaySeconds: 12,
@@ -966,6 +966,10 @@ function sanitizeSettings(settings) {
       duration: positiveInt(
         incoming.challengeTypes?.typing?.duration,
         defaultAccessDuration
+      ),
+      level: sanitizeTypingChallengeLevel(
+        incoming.challengeTypes?.typing?.level,
+        incoming.challengeTypes?.typing?.difficulty
       )
     }
   };
@@ -1047,6 +1051,21 @@ function sanitizeSettings(settings) {
     subscription,
     proFeatures
   };
+}
+
+function sanitizeTypingChallengeLevel(level, difficulty) {
+  if (level === 'easy' || level === 'moderate' || level === 'hard') {
+    return level;
+  }
+
+  const numericDifficulty = Number(difficulty);
+  if (numericDifficulty === 1) {
+    return 'easy';
+  }
+  if (numericDifficulty === 2) {
+    return 'moderate';
+  }
+  return DEFAULT_SETTINGS.challengeTypes.typing.level;
 }
 
 function sanitizeInstallation(installation) {
@@ -1938,6 +1957,7 @@ function setInStorage(value) {
 if (typeof globalThis !== 'undefined') {
   globalThis.__RESISTGATE_TEST_HOOKS__ = {
     sanitizeSettings,
+    sanitizeTypingChallengeLevel,
     sanitizeTemporaryAccess,
     sanitizeAnalytics,
     sanitizeBlocklist,

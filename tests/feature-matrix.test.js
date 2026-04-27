@@ -52,6 +52,32 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
+  describe('Free: Graduated Challenge Levels', () => {
+    it('defaults typing challenges to hard mode for existing users', () => {
+      const settings = hooks.sanitizeSettings({});
+      expect(settings.challengeTypes.typing.level).toBe('hard');
+      expect(settings.challengeTypes.typing.difficulty).toBe(3);
+    });
+
+    it('preserves explicit easy and moderate challenge levels', () => {
+      const easy = hooks.sanitizeSettings({
+        challengeTypes: { typing: { level: 'easy', difficulty: 1, duration: 5 } }
+      });
+      const moderate = hooks.sanitizeSettings({
+        challengeTypes: { typing: { level: 'moderate', difficulty: 2, duration: 10 } }
+      });
+
+      expect(easy.challengeTypes.typing.level).toBe('easy');
+      expect(moderate.challengeTypes.typing.level).toBe('moderate');
+    });
+
+    it('migrates legacy typing difficulty into a challenge level', () => {
+      expect(hooks.sanitizeTypingChallengeLevel(undefined, 1)).toBe('easy');
+      expect(hooks.sanitizeTypingChallengeLevel(undefined, 2)).toBe('moderate');
+      expect(hooks.sanitizeTypingChallengeLevel(undefined, 3)).toBe('hard');
+    });
+  });
+
   describe('Free: Schedule Blocking', () => {
     it('allows traffic when schedule is disabled', () => {
       expect(hooks.isWithinSimpleSchedule({ enabled: false }, Date.now())).toBe(true);
