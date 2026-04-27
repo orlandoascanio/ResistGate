@@ -22,6 +22,8 @@ const POSTHOG_PROJECT_TOKEN = 'phc_u3HfEJ9tnozSthBr37cVGdbC6UYkR6caDHEesudUXMa3'
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   'install',
+  'update',
+  'update_seen',
   'onboarding_start',
   'blocklist_created',
   'first_block_hit',
@@ -107,6 +109,9 @@ chrome.runtime.onInstalled.addListener((details) => {
       url: chrome.runtime.getURL('welcome/welcome.html')
     });
   } else if (details.reason === 'update') {
+    void trackPosthogEventOnce('update', {
+      previousVersion: typeof details.previousVersion === 'string' ? details.previousVersion : null
+    });
     chrome.tabs.create({
       url: chrome.runtime.getURL('whats-new/whats-new.html')
     });
@@ -433,6 +438,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const url = `https://www.orlandoascanio.com/en/resistgate/feedback?source=${encodeURIComponent(surface)}`;
           await chrome.tabs.create({ url });
           sendResponse({ success: true, url });
+          return;
+        }
+
+        case 'trackPosthogEvent': {
+          const eventName = typeof request.eventName === 'string' ? request.eventName.trim() : '';
+          const eventProps = request.properties && typeof request.properties === 'object' ? request.properties : {};
+          const tracked = await trackPosthogEventOnce(eventName, eventProps);
+          sendResponse({ success: true, tracked });
           return;
         }
 

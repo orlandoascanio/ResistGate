@@ -21,7 +21,7 @@ function getSentryPageTag() {
 
 Sentry.init({
   dsn: SENTRY_DSN,
-  release: 'resistgate@1.0.0',
+  release: 'resistgate@1.2.0',
   environment: 'production',
 
   // Capture 100% of errors; adjust tracesSampleRate only if you add tracing later.

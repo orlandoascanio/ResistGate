@@ -21,6 +21,19 @@
     populateVersionBadge();
     bindActions();
     void checkProStatusAndUpdateFooter();
+    void trackUpdateSeen();
+  }
+
+  async function trackUpdateSeen() {
+    try {
+      await sendRuntimeMessage({
+        action: 'trackPosthogEvent',
+        eventName: 'update_seen',
+        properties: {}
+      });
+    } catch (error) {
+      console.warn('[ResistGate] Failed to track update_seen:', error);
+    }
   }
 
   function bindActions() {
