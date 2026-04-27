@@ -3,6 +3,13 @@ const DEFAULT_ACCESS_WINDOW_MINUTES = 15;
 const DEFAULT_OVERRIDE_DELAY_SECONDS = 12;
 const DEFAULT_STRICT_DISABLE_DELAY_SECONDS = 30;
 const DEFAULT_PRO_PRESET = 'balanced';
+const DEFAULT_CHALLENGE_LEVEL = 'hard';
+
+const CHALLENGE_LEVEL_DIFFICULTY = {
+  easy: 1,
+  moderate: 2,
+  hard: 3
+};
 
 const PRO_PRESET_VALUES = {
   light: {
@@ -93,6 +100,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const preset = sanitizePreset(button.getAttribute('data-pro-preset'));
       setActivePresetButton(preset);
       applyPresetToInputs(preset);
+    });
+  });
+
+  document.querySelectorAll('[data-challenge-level]').forEach((button) => {
+    button.addEventListener('click', function () {
+      setActiveChallengeLevel(button.getAttribute('data-challenge-level'));
     });
   });
 
@@ -233,6 +246,7 @@ function renderSettings() {
     || DEFAULT_ACCESS_WINDOW_MINUTES;
 
   accessWindowInput.value = minutes;
+  setActiveChallengeLevel(getTypingChallengeLevel(settings));
 
   document.getElementById('manual-override-delay').value =
     settings.freeExperience?.manualOverrideDelaySeconds || DEFAULT_OVERRIDE_DELAY_SECONDS;
@@ -896,7 +910,9 @@ function saveSettings() {
     settings.defaultAccessDuration = accessMinutes;
     settings.challengeTypes = settings.challengeTypes || {};
     settings.challengeTypes.typing = settings.challengeTypes.typing || {};
-    settings.challengeTypes.typing.difficulty = settings.challengeTypes.typing.difficulty || 3;
+    const challengeLevel = getSelectedChallengeLevel();
+    settings.challengeTypes.typing.difficulty = CHALLENGE_LEVEL_DIFFICULTY[challengeLevel];
+    settings.challengeTypes.typing.level = challengeLevel;
     settings.challengeTypes.typing.duration = accessMinutes;
 
     settings.freeExperience = settings.freeExperience || {};
@@ -1374,6 +1390,42 @@ function getEarnAccessMinChallengeSeconds() {
   return Math.max(30, Math.min(900, parsed));
 }
 
+function sanitizeChallengeLevel(level) {
+  if (level === 'easy' || level === 'moderate' || level === 'hard') {
+    return level;
+  }
+  return DEFAULT_CHALLENGE_LEVEL;
+}
+
+function getTypingChallengeLevel(settings) {
+  const typing = settings?.challengeTypes?.typing || {};
+  if (typing.level === 'easy' || typing.level === 'moderate' || typing.level === 'hard') {
+    return typing.level;
+  }
+
+  if (Number(typing.difficulty) === 1) {
+    return 'easy';
+  }
+  if (Number(typing.difficulty) === 2) {
+    return 'moderate';
+  }
+  return DEFAULT_CHALLENGE_LEVEL;
+}
+
+function getSelectedChallengeLevel() {
+  const active = document.querySelector('[data-challenge-level].active');
+  return sanitizeChallengeLevel(active?.getAttribute('data-challenge-level'));
+}
+
+function setActiveChallengeLevel(level) {
+  const selected = sanitizeChallengeLevel(level);
+  document.querySelectorAll('[data-challenge-level]').forEach((button) => {
+    const isActive = button.getAttribute('data-challenge-level') === selected;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-checked', String(isActive));
+  });
+}
+
 function sanitizePreset(value) {
   if (value === 'light' || value === 'strict') {
     return value;
@@ -1414,6 +1466,8 @@ if (typeof globalThis !== 'undefined') {
     getBlockedAttemptsInsight,
     getOverridesInsight,
     getStrictSessionInsight,
+    sanitizeChallengeLevel,
+    getTypingChallengeLevel,
     sanitizePreset,
     getEarnAccessMinChallengeSeconds
   };

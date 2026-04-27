@@ -53,6 +53,25 @@
         <label for="access-window-minutes">Temporary access duration (minutes)</label>
         <input id="access-window-minutes" type="number" min="1" step="1" />
 
+        <div class="challenge-level-block">
+          <span id="challenge-level-label" class="field-label">Typing challenge level</span>
+          <div class="challenge-level-grid" role="radiogroup" aria-labelledby="challenge-level-label">
+            <button type="button" class="challenge-level-btn" data-challenge-level="easy" role="radio" aria-checked="false">
+              <strong>Easy</strong>
+              <small>Short random code</small>
+            </button>
+            <button type="button" class="challenge-level-btn" data-challenge-level="moderate" role="radio" aria-checked="false">
+              <strong>Moderate</strong>
+              <small>1-2 sentences</small>
+            </button>
+            <button type="button" class="challenge-level-btn" data-challenge-level="hard" role="radio" aria-checked="true">
+              <strong>Hard</strong>
+              <small>5 paragraphs</small>
+            </button>
+          </div>
+          <p class="helper">Start with manageable friction, then raise the bar when distractions get too easy to bypass.</p>
+        </div>
+
         <label for="manual-override-delay" class="top-space">Manual override delay (seconds)</label>
         <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
         <p class="helper" id="override-delay-hint">Free manual override uses a 10 to 15 second pause before access.</p>

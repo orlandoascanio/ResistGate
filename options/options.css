@@ -353,6 +353,15 @@ label {
   color: var(--text-2);
 }
 
+.field-label {
+  display: block;
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
 .helper {
   margin-top: var(--space-sm);
   color: var(--muted);
@@ -394,6 +403,74 @@ label {
 
 .top-space {
   margin-top: 12px;
+}
+
+.challenge-level-block {
+  margin-top: var(--space-md);
+}
+
+.challenge-level-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.challenge-level-btn {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text-2);
+  font: inherit;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--ease-out),
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.1s ease;
+}
+
+.challenge-level-btn strong,
+.challenge-level-btn small {
+  display: block;
+}
+
+.challenge-level-btn strong {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.challenge-level-btn small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.challenge-level-btn:hover {
+  background: var(--bg-alt);
+  border-color: var(--line-2);
+}
+
+.challenge-level-btn:active {
+  transform: translateY(1px);
+}
+
+.challenge-level-btn.active {
+  border-color: var(--primary);
+  background: var(--lavender-2);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(61, 22, 125, 0.1);
+}
+
+.challenge-level-btn.active small {
+  color: var(--text-3);
+}
+
+.challenge-level-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ── Blocked sites list ─────────────────────────────────────────── */
@@ -1339,6 +1416,10 @@ label {
   }
 
   .preset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-level-grid {
     grid-template-columns: 1fr;
   }
 }
