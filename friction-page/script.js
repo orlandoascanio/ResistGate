@@ -52,6 +52,29 @@ const CHALLENGE_LEVEL_COPY = {
   }
 };
 
+const MODERATE_CHALLENGE_SENTENCES = [
+  'Pause before you open the site.',
+  'Choose the next action with intention.',
+  'Let this moment interrupt autopilot.',
+  'Your attention deserves a clear reason.',
+  'One deliberate choice can protect the next hour.',
+  'Slow down enough to decide.',
+  'The urge can wait while you choose.',
+  'Make this visit intentional, not automatic.',
+  'A short pause is still real discipline.',
+  'Return to the task that matters most.',
+  'Notice the impulse before you follow it.',
+  'You can choose access without choosing distraction.',
+  'Let the friction do its job.',
+  'Focus begins with one honest decision.',
+  'Earn the visit before you enter.',
+  'Your time deserves a boundary.',
+  'Decide whether this page serves your goal.',
+  'A mindful click beats a reflexive one.',
+  'Choose the break instead of falling into it.',
+  'Protect the promise you made to yourself.'
+];
+
 const PRODUCTIVITY_TEXTS = [
   'Every minute wasted on distractions is a minute stolen from your potential. Protect your time like it is your most valuable asset.',
   'Focus is a muscle. The more you practice resisting trivial distractions, the stronger it becomes.',
@@ -62,7 +85,57 @@ const PRODUCTIVITY_TEXTS = [
   'Purpose-driven effort beats busywork. Ask if this action aligns with your goals.',
   'Self-mastery is built one decision at a time.',
   'Small actions, consistently taken, shape identity and outcomes.',
-  'Distraction is the enemy of progress. Confront it with deliberate resistance.'
+  'Distraction is the enemy of progress. Confront it with deliberate resistance.',
+  'The urge to check one more tab will pass. Your work will still matter when the urge is gone.',
+  'Momentum is fragile at the beginning. Guard the next ten minutes and let the rest follow.',
+  'You do not need perfect motivation to act. You only need the next honest action.',
+  'Attention becomes identity through repetition. Choose what kind of person this minute is training.',
+  'A small pause can rescue an entire afternoon. Let this challenge create that pause.',
+  'The easy click is rarely the useful click. Slow down enough to choose on purpose.',
+  'Your future self benefits from the boundary you keep right now.',
+  'Focus is not a mood. It is a series of tiny returns to what matters.',
+  'Avoiding discomfort teaches distraction to ask louder next time. Meeting discomfort teaches it to quiet down.',
+  'You are allowed to want rest. You are also allowed to protect work from reflexive escape.',
+  'The page you wanted can wait. The promise you made to yourself deserves the first word.',
+  'A blocked site is not the enemy. Automatic behavior is the thing you are training out of.',
+  'Good systems make better choices easier. This pause is part of the system.',
+  'When the mind reaches for novelty, give it a clear reason to return.',
+  'One focused interval is enough to restart trust with yourself.',
+  'You can make this decision slowly. The extra few seconds are the point.',
+  'The work does not need to feel exciting to be worth finishing.',
+  'Every resisted impulse becomes evidence that you can steer your attention.',
+  'The strongest version of you is built through ordinary moments like this.',
+  'Let the friction remind you that access is a choice, not a reflex.',
+  'If the visit is worth it, you can earn it with attention. If not, you just saved yourself time.',
+  'Clarity often returns after the first sentence, the first file, or the first small task.',
+  'Your attention deserves a destination before it deserves a distraction.',
+  'Impulse says now. Discipline asks whether now is aligned with what you planned.',
+  'The cost of distraction is not only time. It is the effort required to restart.',
+  'A clean boundary today makes tomorrow easier to begin.',
+  'You do not have to win the whole day. Win this decision.',
+  'The best focus tools do not shame you. They help you notice the moment before autopilot takes over.',
+  'Typing this is a deliberate signal. You are choosing awareness before access.',
+  'Your goals need more than intention. They need protected attention.',
+  'A short delay can reveal whether the urge was real or merely habitual.',
+  'The work waiting for you is allowed to be more important than a quick scroll.',
+  'Practice returning. That is the whole skill.',
+  'The first resistance is usually the hardest. After that, momentum starts helping.',
+  'You are not blocking fun. You are putting choice back between impulse and action.',
+  'A focused mind is not empty. It is committed to one thing at a time.',
+  'The longer you protect attention, the easier deep work becomes to enter.',
+  'This moment is a fork. Choose the path you meant to choose before the urge arrived.',
+  'A distraction promises relief, but completed work creates real calm.',
+  'Your schedule is a commitment to your own priorities. Honor it with one focused return.',
+  'You can still take breaks. Make them chosen breaks, not accidental ones.',
+  'The challenge is not punishment. It is a small test of whether access is intentional.',
+  'Every boundary feels inconvenient when it is working.',
+  'You are building the ability to pause before obeying an impulse.',
+  'Do the next useful thing before opening the next interesting thing.',
+  'The most powerful setting is the one you keep when nobody is watching.',
+  'Let this be a reset point. Breathe, decide, and move deliberately.',
+  'Access feels better when it is earned instead of automatic.',
+  'Protect the task that brought you here. Everything else can wait for a cleaner moment.',
+  'The habit you practice now is the habit that will answer next time.'
 ];
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -856,16 +929,21 @@ function buildTypingChallengeSegments(level = getTypingChallengeLevel()) {
     return [{ text: generateRandomCharacterSequence(12) }];
   }
 
-  const shuffled = getRandomItems(PRODUCTIVITY_TEXTS);
   if (selectedLevel === 'moderate') {
-    return [{ text: shuffled.slice(0, 2).join(' ') }];
+    const sentenceCount = Math.random() < 0.5 ? 1 : 2;
+    return [{ text: getRandomItems(MODERATE_CHALLENGE_SENTENCES).slice(0, sentenceCount).join(' ') }];
   }
 
-  return shuffled.slice(0, 5).map((text) => ({ text }));
+  return getRandomItems(PRODUCTIVITY_TEXTS).slice(0, 5).map((text) => ({ text }));
 }
 
 function getRandomItems(items) {
-  return [...items].sort(() => 0.5 - Math.random());
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 function generateRandomCharacterSequence(length) {
@@ -1141,6 +1219,8 @@ if (typeof globalThis !== 'undefined') {
     getTypingChallengeLevel,
     getChallengeLevelCopy,
     buildTypingChallengeSegments,
+    getModerateChallengeSentenceBank: () => [...MODERATE_CHALLENGE_SENTENCES],
+    getChallengePromptBank: () => [...PRODUCTIVITY_TEXTS],
     generateRandomCharacterSequence,
     formatTime,
     formatTime12,

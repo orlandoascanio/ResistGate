@@ -98,8 +98,59 @@ describe('Friction page flow logic', () => {
     expect(easy).toHaveLength(1);
     expect(easy[0].text).toMatch(/^[A-Z2-9]{12}$/);
     expect(moderate).toHaveLength(1);
-    expect(moderate[0].text.split('. ').length).toBeGreaterThanOrEqual(2);
+    expect(moderate[0].text.split('.').filter(Boolean).length).toBeGreaterThanOrEqual(1);
+    expect(moderate[0].text.split('.').filter(Boolean).length).toBeLessThanOrEqual(2);
     expect(hard).toHaveLength(5);
+    expect(new Set(hard.map((segment) => segment.text))).toHaveLength(5);
+  });
+
+  it('keeps a large unique bank for hard challenge paragraphs', () => {
+    const promptBank = hooks.getChallengePromptBank();
+
+    expect(promptBank.length).toBeGreaterThanOrEqual(50);
+    expect(new Set(promptBank)).toHaveLength(promptBank.length);
+  });
+
+  it('keeps moderate challenge prompts to one or two sentences', () => {
+    const sentenceBank = hooks.getModerateChallengeSentenceBank();
+
+    expect(sentenceBank.length).toBeGreaterThanOrEqual(20);
+    expect(sentenceBank.every((sentence) => sentence.split('.').filter(Boolean).length === 1)).toBe(true);
+
+    for (let i = 0; i < 20; i++) {
+      const [{ text }] = hooks.buildTypingChallengeSegments('moderate');
+      const sentenceCount = text.split('.').filter(Boolean).length;
+      expect(sentenceCount).toBeGreaterThanOrEqual(1);
+      expect(sentenceCount).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('varies hard challenge paragraphs across builds', async () => {
+    let randomIndex = 0;
+    const randomValues = [0.12, 0.77, 0.33, 0.91, 0.48, 0.04, 0.66, 0.21, 0.59, 0.83];
+    const math = Object.create(Math);
+    math.random = () => {
+      const value = randomValues[randomIndex % randomValues.length];
+      randomIndex++;
+      return value;
+    };
+
+    const env = createChromeMock();
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: env.chrome,
+      document: createDocumentWithValues(),
+      window: { location: { search: '' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true,
+      Math: math
+    });
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+
+    const firstHardChallenge = localHooks.buildTypingChallengeSegments('hard').map((segment) => segment.text);
+    const secondHardChallenge = localHooks.buildTypingChallengeSegments('hard').map((segment) => segment.text);
+
+    expect(secondHardChallenge).not.toEqual(firstHardChallenge);
   });
 
   it('returns expected earn-access bonus tiers', () => {
