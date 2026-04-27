@@ -39,6 +39,19 @@ document.addEventListener('DOMContentLoaded', function () {
             window.open(chrome.runtime.getURL('options/options.html'));
         }
     });
+
+    chrome.storage.local.get(['pendingOutcomeTap'], function (result) {
+        const tap = result.pendingOutcomeTap;
+        if (!tap || typeof tap !== 'object') return;
+        const domain = typeof tap.domain === 'string' ? tap.domain : null;
+        const expiredAt = Number(tap.expiredAt);
+        if (!domain || !Number.isFinite(expiredAt)) return;
+        if (Date.now() - expiredAt > 86400000) {
+            chrome.storage.local.remove('pendingOutcomeTap');
+            return;
+        }
+        showOutcomeTap(domain);
+    });
 });
 
 function addBlockedSite() {
@@ -425,9 +438,45 @@ function toggleWorkTimer() {
     });
 }
 
+function showOutcomeTap(domain) {
+    const existing = document.getElementById('outcome-tap-banner');
+    if (existing) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'outcome-tap-banner';
+    banner.style.cssText = 'padding:10px 12px;background:#f0f4ff;border-top:1px solid #c7d2fe;font-size:13px;';
+
+    const label = document.createElement('p');
+    label.style.cssText = 'margin:0 0 8px 0;';
+    label.textContent = `Did your visit to ${domain} serve you?`;
+    banner.appendChild(label);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;';
+
+    ['Yes', 'No'].forEach(function (answer) {
+        const btn = document.createElement('button');
+        btn.textContent = answer;
+        btn.style.cssText = 'flex:1;padding:4px 0;cursor:pointer;';
+        btn.addEventListener('click', function () {
+            chrome.runtime.sendMessage({
+                action: 'recordAnalyticsEvent',
+                event: { type: 'outcome_tap_response', domain: domain, response: answer.toLowerCase() }
+            });
+            chrome.storage.local.remove('pendingOutcomeTap');
+            banner.remove();
+        });
+        btnRow.appendChild(btn);
+    });
+
+    banner.appendChild(btnRow);
+    document.body.insertBefore(banner, document.body.firstChild);
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.__RESISTGATE_POPUP_TEST_HOOKS__ = {
         normalizeDomainInput,
-        getBlockedCountMeta
+        getBlockedCountMeta,
+        showOutcomeTap
     };
 }

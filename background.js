@@ -16,6 +16,7 @@ const BUNDLE_UNLOCK_ALARM_PREFIX = 'resistgate-bundle-unlock-';
 const DAILY_COUNT_KEY = 'dailyBlockCount';
 const RESISTANCE_COUNTERS_KEY = 'resistanceCounters';
 const WORK_TIMER_KEY = 'workTimer';
+const PENDING_OUTCOME_TAP_KEY = 'pendingOutcomeTap';
 const MAX_ANALYTICS_EVENTS = 3000;
 
 const DEFAULT_SETTINGS = {
@@ -108,6 +109,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
   if (alarm.name.startsWith(BLOCK_ALARM_PREFIX) || alarm.name.startsWith(ACCESS_ALARM_PREFIX) || alarm.name.startsWith(BUNDLE_UNLOCK_ALARM_PREFIX)) {
     void queueRulesUpdate(`alarm:${alarm.name}`);
+  }
+
+  if (alarm.name.startsWith(ACCESS_ALARM_PREFIX)) {
+    const domain = alarm.name.slice(ACCESS_ALARM_PREFIX.length);
+    void (async () => {
+      try {
+        await setInStorage({ [PENDING_OUTCOME_TAP_KEY]: { domain, expiredAt: Date.now() } });
+      } catch (err) {
+        console.error('Failed to write pendingOutcomeTap:', err);
+      }
+    })();
   }
 
   if (alarm.name === COMMITMENT_ALARM) {
@@ -1185,7 +1197,8 @@ function sanitizeAnalytics(analytics) {
         'override_triggered',
         'manual_disable',
         'challenge_failed',
-        'challenge_completed'
+        'challenge_completed',
+        'outcome_tap_response'
       ]);
       const type = allowedTypes.has(event.type) ? event.type : 'access_granted';
       const timestamp = Number(event.timestamp) || Date.now();
@@ -1214,6 +1227,14 @@ function sanitizeAnalytics(analytics) {
     .slice(-MAX_ANALYTICS_EVENTS);
 
   return { events: cleaned };
+}
+
+function sanitizePendingOutcomeTap(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const domain = typeof raw.domain === 'string' && raw.domain.trim() ? raw.domain.trim().toLowerCase().slice(0, 120) : null;
+  const expiredAt = Number(raw.expiredAt);
+  if (!domain || !Number.isFinite(expiredAt) || expiredAt <= 0) return null;
+  return { domain, expiredAt };
 }
 
 function sanitizeOverrideState(state) {
