@@ -13,7 +13,7 @@ ResistGate is a Manifest V3 Chrome extension that makes it genuinely harder to v
 
 The extension is built on one behavioral premise: **friction changes behavior**. A 10-second countdown is enough to break an unconscious reflex. Five paragraphs of deliberate typing are enough to make you decide whether this visit is actually worth it. ResistGate is not a nanny filter — it is an accountability layer you configure for yourself.
 
-Free users get the complete blocking and friction engine: schedule-based blocking, configurable temporary access windows, a daily resistance badge, per-site visit counters, and the full Earn Access (temptation bundling) system — pair distracting sites with work requirements so they unlock only after you've earned them. Pro users add Commitment Mode (1–24h hard lockout with no escape), Strict Mode locking, behavioral friction presets, a per-site Intention Page with a 4-7-8 breathing exercise, a 7-day analytics dashboard, and a weekly Focus Score.
+Free users get the complete blocking and friction engine: schedule-based blocking, configurable temporary access windows, a daily resistance badge, per-site visit counters, per-site intention goals with optional breathing, and the full Earn Access (temptation bundling) system — pair distracting sites with work requirements so they unlock only after you've earned them. Pro users add Commitment Mode (1–24h hard lockout with no escape), Strict Mode locking, behavioral friction presets, stronger pre-entry prompts, a 7-day analytics dashboard, and a weekly Focus Score.
 
 ---
 
@@ -32,8 +32,8 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 | **Build step** | None — plain ES2020+ HTML / CSS / JS |
 | **Storage** | `chrome.storage.local` only (local-first, per browser profile) |
 | **External services** | Sentry (crash telemetry, extension pages only) |
-| **Test suite** | 121 tests · 4 files · Vitest 2.1.8 |
-| **Background coverage** | 88.5% lines · 77.3% branches · 96.2% functions |
+| **Test suite** | 139 tests · 4 files · Vitest 2.1.9 |
+| **Background coverage** | 88.59% lines · 76.35% branches · 96.59% functions |
 | **License** | See `LICENSE` |
 
 ---
@@ -121,6 +121,9 @@ Calculated over a rolling 7-day window. Compared week-over-week in the Weekly Re
   - allow access only **after a time of day** or **after N minutes on the work timer**
   - if the condition is met, the site loads normally (no redirect)
 - **Work timer** (used by Earn Access rules).
+- **Intention Page**
+  - per-site personal goal reminder
+  - optional guided **4-7-8 breathing** exercise
 
 ### Pro tier (`settings.subscription.tier === 'pro'`)
 
@@ -135,9 +138,6 @@ Calculated over a rolling 7-day window. Compared week-over-week in the Weekly Re
   - timed wait gate
   - custom challenge prompt
   - optional **Earn-Access mode** that requires a minimum challenge time and can grant **bonus minutes**
-- **Intention page**
-  - per-site personal goal reminder
-  - optional guided **4-7-8 breathing** exercise
 - **Commitment Mode (1–24h)**
   - total lockout during the window (no override, no challenge)
   - redirects blocked sites to `commitment-page/index.html`

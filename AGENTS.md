@@ -186,6 +186,7 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 - Focus/work timer with session persistence
 - Work timer (start/stop, tracked minutes per day)
 - Temptation bundle condition checking (time-of-day + work-timer) — checking only; setup is Pro
+- Intention page (per-site personal goals + optional 4-7-8 breathing)
 
 **Pro tier (requires `subscription.tier === 'pro'`):**
 - Strict mode lock (prevents settings changes during active schedule)
@@ -193,7 +194,6 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 - Commitment mode (1–24h total lockout, no override, no challenge)
 - Override cooldown system (progressive lock after threshold)
 - Behavioral friction system (task intent input, timed wait, earn-access mode)
-- Intention page (personal goal/reminder per domain + 4-7-8 breathing)
 - Earn-access bonus minutes (extra time for extended challenge completion)
 - Accountability presets (Light / Balanced / Strict)
 - Focus analytics dashboard (7-day blocked attempts, override trends, top domains)
@@ -211,7 +211,7 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 | `activateCommitmentMode` | Pro only |
 
 **UI elements gated by Pro (`isProUser` / `isPopupProUser`):**
-- Options: Analytics tab, Weekly Report tab, Strict Mode toggle, Accountability preset selector, Behavioral friction configuration, Commitment mode activation, Override cooldown config, Temptation bundle setup, Intention page config
+- Options: Analytics tab, Weekly Report tab, Strict Mode toggle, Accountability preset selector, Behavioral friction configuration, Commitment mode activation, Override cooldown config, Temptation bundle setup
 - Popup: Pro plan pill
 - Friction page: Pro precheck panel (task intent, timed wait, earn-access, custom challenge prompt)
 
