@@ -75,6 +75,19 @@ document.addEventListener('DOMContentLoaded', function () {
     toggleScheduleConfig(scheduleEnabledToggle.checked);
   });
 
+  const intentionPageToggle = document.getElementById('intention-page-enabled');
+  const breathingExerciseToggle = document.getElementById('breathing-exercise-enabled');
+
+  intentionPageToggle.addEventListener('change', function () {
+    breathingExerciseToggle.disabled = !intentionPageToggle.checked;
+    if (!intentionPageToggle.checked) {
+      breathingExerciseToggle.checked = false;
+    }
+  });
+
+  // Initialize breathing exercise toggle state on load
+  breathingExerciseToggle.disabled = !intentionPageToggle.checked;
+
   document.querySelectorAll('.tab-btn[data-tab]').forEach((button) => {
     button.addEventListener('click', function () {
       const requestedTab = button.getAttribute('data-tab');
@@ -189,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('activation') === 'success') {
-      showMessage('Pro is now active! Your checkout went through and this browser is activated.', 'success');
+      showMessage('Stronger locks are active. Your checkout went through and this browser is ready.', 'success');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   });
@@ -226,7 +239,7 @@ function handleSettingsStorageChange(changes, namespace) {
   renderSettings();
 
   if (previousTier !== 'pro' && isProUser()) {
-    showMessage('Pro is active. This browser synced automatically.', 'success');
+    showMessage('Stronger locks are active. This browser synced automatically.', 'success');
   }
 
   if (queuedProScreen && isProUser()) {
@@ -283,7 +296,7 @@ function renderPlanPill() {
   }
 
   if (isProUser()) {
-    planPill.textContent = 'Pro';
+    planPill.textContent = 'Unlocked';
     planPill.classList.add('pro');
     openPricingBtn.style.display = 'none';
     return;
@@ -292,7 +305,7 @@ function renderPlanPill() {
   planPill.textContent = 'Free';
   planPill.classList.remove('pro');
   openPricingBtn.style.display = '';
-  openPricingBtn.textContent = 'See Pro Plans';
+  openPricingBtn.textContent = 'See upgrade options';
 }
 
 function renderSubscriptionStatus() {
@@ -302,11 +315,11 @@ function renderSubscriptionStatus() {
   }
 
   if (isProUser()) {
-    statusNode.textContent = 'Pro is active.';
+    statusNode.textContent = 'Stronger locks are active.';
     return;
   }
 
-  statusNode.textContent = 'Visit our pricing page to get Pro. After checkout, this browser activates automatically.';
+  statusNode.textContent = 'Unlock stronger locks. After checkout, this browser activates automatically.';
 }
 
 function renderScheduleInputs(schedule) {
@@ -325,11 +338,20 @@ function renderScheduleInputs(schedule) {
 
 function toggleScheduleConfig(enabled) {
   const config = document.getElementById('schedule-config');
+  const panel = document.getElementById('schedule-panel');
+  const summaryState = document.getElementById('schedule-summary-state');
   if (!config) {
     return;
   }
 
   config.style.opacity = enabled ? '1' : '0.55';
+  if (panel) {
+    panel.open = enabled === true;
+  }
+  if (summaryState) {
+    summaryState.textContent = enabled ? 'On' : 'Off';
+    summaryState.classList.toggle('is-active', enabled === true);
+  }
 }
 
 function renderProFeatureInputs() {
@@ -433,7 +455,7 @@ function renderCommitmentStatus() {
     } else {
       statusEl.classList.add('hidden');
       activateBtn.disabled = !isProUser();
-      activateBtn.textContent = isProUser() ? 'Activate Commitment Mode' : 'Upgrade to use Commitment Mode';
+      activateBtn.textContent = isProUser() ? 'Activate Commitment Mode' : 'Unlock Commitment Mode';
     }
   });
 }
@@ -560,8 +582,8 @@ function loadBlockedSites(blocklist = []) {
     // Temptation bundle config — badge injected into topRow, panel appended to li
     li.appendChild(buildBundleConfig(entry, topRow));
 
-    // Personal goal config — badge injected into topRow, panel appended to li
-    li.appendChild(buildPersonalGoalConfig(entry, topRow));
+    // Site reminder config — visible because it belongs to the blocked site.
+    li.appendChild(buildPersonalGoalConfig(entry));
 
     listElement.appendChild(li);
   });
@@ -744,42 +766,36 @@ function saveBundleForEntry(entryId, bundle) {
   });
 }
 
-function buildPersonalGoalConfig(entry, topRow) {
+function buildPersonalGoalConfig(entry) {
   const goal = entry.personalGoal || '';
   const hasGoal = goal.trim().length > 0;
 
-  const badge = document.createElement('button');
-  badge.type = 'button';
-  badge.className = `bundle-badge ${hasGoal ? 'bundle-badge--on' : 'bundle-badge--off'}`;
-  badge.setAttribute('data-pro-feature', 'intentionPage');
-  badge.setAttribute('title', hasGoal ? 'Edit personal goal' : 'Set a personal goal');
-
-  const badgeText = document.createElement('span');
-  badgeText.textContent = hasGoal ? goal.slice(0, 25) + (goal.length > 25 ? '...' : '') : '+ Set goal';
-  const badgeChevron = document.createElement('span');
-  badgeChevron.className = 'bundle-badge-chevron';
-  badgeChevron.textContent = '▼';
-  badge.appendChild(badgeText);
-  badge.appendChild(badgeChevron);
-  topRow.insertBefore(badge, topRow.lastElementChild);
+  const reminderBlock = document.createElement('div');
+  reminderBlock.className = `site-reminder ${hasGoal ? 'site-reminder--set' : 'site-reminder--empty'}`;
 
   const configPanel = document.createElement('div');
-  configPanel.className = 'bundle-config';
+  configPanel.className = 'site-reminder-editor';
   configPanel.style.display = 'none';
 
-  badge.addEventListener('click', function (e) {
+  const reminderText = document.createElement('p');
+  reminderText.className = 'site-reminder-text';
+  reminderText.textContent = hasGoal ? goal : 'No reminder yet.';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'btn btn-secondary site-reminder-edit-btn';
+  editBtn.textContent = hasGoal ? 'Edit reminder' : 'Add reminder';
+  editBtn.setAttribute('aria-expanded', 'false');
+
+  editBtn.addEventListener('click', function (e) {
     e.stopPropagation();
-    if (!isProUser()) {
-      showPaywall('intention-goal');
-      return;
-    }
     const isOpen = configPanel.style.display !== 'none';
     configPanel.style.display = isOpen ? 'none' : 'grid';
-    badge.setAttribute('aria-expanded', String(!isOpen));
+    editBtn.setAttribute('aria-expanded', String(!isOpen));
   });
 
   const goalLabel = document.createElement('label');
-  goalLabel.textContent = 'Your goal for this site';
+  goalLabel.textContent = 'Reminder shown before opening this site';
   goalLabel.className = 'bundle-goal-label';
 
   const goalInput = document.createElement('input');
@@ -787,14 +803,14 @@ function buildPersonalGoalConfig(entry, topRow) {
   goalInput.className = 'sub-field';
   goalInput.maxLength = 200;
   goalInput.value = goal;
-  goalInput.placeholder = 'Example: Don\'t watch reels';
+  goalInput.placeholder = 'Example: I only use this site for research';
 
   const actions = document.createElement('div');
   actions.className = 'goal-actions';
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'btn btn-primary bundle-save-btn';
-  saveBtn.textContent = 'Save goal';
+  saveBtn.textContent = 'Save reminder';
   saveBtn.addEventListener('click', function () {
     const newGoal = goalInput.value.trim().slice(0, 200);
     withLatestSettings(function (settings) {
@@ -808,15 +824,12 @@ function buildPersonalGoalConfig(entry, topRow) {
       chrome.runtime.sendMessage({ action: 'updateSettings', settings: settings }, function (response) {
         if (response && response.success) {
           cachedSettings = settings;
-          badgeText.textContent = newGoal ? newGoal.slice(0, 25) + (newGoal.length > 25 ? '...' : '') : '+ Set goal';
-          badge.className = `bundle-badge ${newGoal ? 'bundle-badge--on' : 'bundle-badge--off'}`;
-          badge.setAttribute('title', newGoal ? 'Edit personal goal' : 'Set a personal goal');
           configPanel.style.display = 'none';
-          badge.setAttribute('aria-expanded', 'false');
-          showMessage(newGoal ? 'Personal goal saved.' : 'Personal goal removed.', 'success');
+          editBtn.setAttribute('aria-expanded', 'false');
+          showMessage(newGoal ? 'Site reminder saved.' : 'Site reminder removed.', 'success');
           loadBlockedSites(settings.blocklist);
         } else {
-          showMessage(response?.error || 'Unable to save goal.', 'error');
+          showMessage(response?.error || 'Unable to save reminder.', 'error');
         }
       });
     });
@@ -837,11 +850,11 @@ function buildPersonalGoalConfig(entry, topRow) {
         if (response && response.success) {
           cachedSettings = settings;
           configPanel.style.display = 'none';
-          badge.setAttribute('aria-expanded', 'false');
-          showMessage('Personal goal removed.', 'success');
+          editBtn.setAttribute('aria-expanded', 'false');
+          showMessage('Site reminder removed.', 'success');
           loadBlockedSites(settings.blocklist);
         } else {
-          showMessage(response?.error || 'Unable to remove goal.', 'error');
+          showMessage(response?.error || 'Unable to remove reminder.', 'error');
         }
       });
     });
@@ -854,7 +867,11 @@ function buildPersonalGoalConfig(entry, topRow) {
   configPanel.appendChild(goalInput);
   configPanel.appendChild(actions);
 
-  return configPanel;
+  reminderBlock.appendChild(reminderText);
+  reminderBlock.appendChild(editBtn);
+  reminderBlock.appendChild(configPanel);
+
+  return reminderBlock;
 }
 
 function removeBlockedSite(id) {
@@ -956,8 +973,12 @@ function saveSettings() {
       endTime: document.getElementById('schedule-end-time').value || '17:00'
     };
 
+    settings.proFeatures = settings.proFeatures || {};
+    settings.proFeatures.intentionPage = settings.proFeatures.intentionPage || {};
+    settings.proFeatures.intentionPage.enabled = document.getElementById('intention-page-enabled').checked;
+    settings.proFeatures.intentionPage.showBreathingExercise = document.getElementById('breathing-exercise-enabled').checked;
+
     if (isProUser()) {
-      settings.proFeatures = settings.proFeatures || {};
       settings.proFeatures.accountabilityPreset = getSelectedPreset();
       settings.proFeatures.strictModeEnabled = document.getElementById('strict-mode-toggle').checked;
       settings.proFeatures.strictModeDisableDelaySeconds = getStrictDisableDelay();
@@ -970,10 +991,6 @@ function saveSettings() {
       settings.proFeatures.behavioralFriction.earnAccessEnabled = document.getElementById('earn-access-enabled').checked;
       settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
       settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
-
-      settings.proFeatures.intentionPage = settings.proFeatures.intentionPage || {};
-      settings.proFeatures.intentionPage.enabled = document.getElementById('intention-page-enabled').checked;
-      settings.proFeatures.intentionPage.showBreathingExercise = document.getElementById('breathing-exercise-enabled').checked;
     }
 
     chrome.runtime.sendMessage({
@@ -1364,7 +1381,7 @@ function openPricingPage(email) {
       return;
     }
 
-    showMessage('Pricing opened in a new tab. Complete checkout and Pro activates here automatically.', 'success');
+    showMessage('Upgrade options opened in a new tab. Complete checkout and this browser activates automatically.', 'success');
   });
 }
 
