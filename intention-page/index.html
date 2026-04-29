@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ResistGate - Intention Check</title>
+  <link rel="stylesheet" href="../shared/design-system.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="../vendor/sentry.min.js"></script>
+  <script src="../vendor/sentry-init.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#pause-panel">Skip to intention check</a>
+  <main id="main-content" class="intention-shell">
+    <section id="pause-panel" class="intention-panel" aria-labelledby="intention-title">
+      <div class="gate-header">
+        <div>
+          <div class="intention-kicker">Decision gate</div>
+          <h1 id="intention-title" tabindex="-1">Pause before you enter.</h1>
+          <p class="intention-lede">Read your reminder first. If this visit is worth it, you’ll earn it.</p>
+        </div>
+
+        <ol class="gate-steps" aria-label="Access path">
+          <li>
+            <span>01</span>
+            <strong>Reminder</strong>
+          </li>
+          <li>
+            <span>02</span>
+            <strong>Decide</strong>
+          </li>
+          <li>
+            <span>03</span>
+            <strong>Earn</strong>
+          </li>
+        </ol>
+      </div>
+
+      <div class="decision-grid">
+        <div class="ledger-stack">
+          <div class="target-card">
+            <span class="target-label">Destination</span>
+            <strong id="blocked-site">Loading...</strong>
+            <span id="resistance-count" class="target-meta"></span>
+          </div>
+
+          <blockquote class="goal-card">
+            <span class="goal-label">Reminder for this site</span>
+            <p id="personal-goal-display">You blocked this for a reason.</p>
+          </blockquote>
+        </div>
+
+        <section class="reason-card" aria-labelledby="reason-title">
+          <h2 id="reason-title">Optional intent check</h2>
+          <p id="reason-help" class="field-help">Pick one if it helps you decide. You can also continue without choosing.</p>
+          <div class="reason-grid" id="reason-options" aria-describedby="reason-help">
+            <button type="button" class="reason-chip" data-reason="work" aria-pressed="false">
+              <strong>Work</strong>
+              <span>Required task</span>
+            </button>
+            <button type="button" class="reason-chip" data-reason="research" aria-pressed="false">
+              <strong>Research</strong>
+              <span>Find something specific</span>
+            </button>
+            <button type="button" class="reason-chip" data-reason="message" aria-pressed="false">
+              <strong>Message</strong>
+              <span>Contact one person</span>
+            </button>
+            <button type="button" class="reason-chip" data-reason="quick_break" aria-pressed="false">
+              <strong>Quick break</strong>
+              <span>Time-boxed reset</span>
+            </button>
+            <button type="button" class="reason-chip reason-chip--watch" data-reason="avoiding_work" aria-pressed="false">
+              <strong>Avoidance</strong>
+              <span>Name it before opening</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <section id="pro-intent-card" class="pro-intent-card hidden" aria-labelledby="pro-intent-title">
+        <label id="pro-intent-title" for="task-intent-input">Why do you need this site now?</label>
+        <textarea id="task-intent-input" rows="3" maxlength="180" placeholder="Example: I need to publish today’s launch update." aria-describedby="task-intent-help"></textarea>
+        <p id="task-intent-help" class="field-help">Pro friction: write a specific reason before continuing.</p>
+      </section>
+
+      <div id="breathing-exercise" class="breathing-card hidden">
+        <div class="breathing-countdown" aria-hidden="true"><span id="breathing-count">10</span></div>
+        <div>
+          <p id="breathing-phase-label" class="breathing-phase">Take 10 seconds.</p>
+          <p class="breathing-help">Let the impulse cool down before you continue.</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="close-page" class="btn btn-secondary">Go back</button>
+        <button id="continue-to-challenge" class="btn btn-primary" disabled>Continue to challenge</button>
+      </div>
+    </section>
+
+    <section id="challenge-panel" class="intention-panel challenge-panel hidden" aria-labelledby="challenge-title">
+      <div class="gate-header compact">
+        <div>
+          <div class="intention-kicker">Typing challenge</div>
+          <h1 id="challenge-title" tabindex="-1">Earn this visit.</h1>
+          <p class="intention-lede">Type the line exactly. No paste. This is the cost of entering.</p>
+        </div>
+      </div>
+
+      <div class="quote-card">
+        <p id="challenge-text">Loading challenge...</p>
+      </div>
+
+      <label class="control-label" for="typing-input">Type this line exactly</label>
+      <textarea id="typing-input" class="typing-input" placeholder="Start typing here..." spellcheck="false" autocomplete="off" autocapitalize="none" aria-describedby="typing-error challenge-progress"></textarea>
+      <p id="typing-error" class="typing-error" role="alert" aria-live="polite"></p>
+
+      <div id="challenge-progress" class="challenge-stats" aria-live="polite">
+        <span>Progress <strong><span id="char-count">0</span> / <span id="challenge-length">0</span></strong></span>
+        <span>Accuracy <strong id="accuracy">100%</strong></span>
+      </div>
+
+      <div class="actions">
+        <button id="back-to-intention" class="btn btn-secondary">Back to pause</button>
+        <button id="submit-challenge" class="btn btn-primary" disabled>Grant access</button>
+      </div>
+    </section>
+
+    <section id="success-panel" class="intention-panel success-panel hidden" aria-labelledby="success-title">
+      <div class="intention-kicker">Access granted</div>
+      <h1 id="success-title" tabindex="-1">You earned it.</h1>
+      <p id="success-duration" class="intention-lede">Access is open for a few minutes.</p>
+      <p class="success-note">Use the window for the reason you named. Leave before the blocker has to ask again.</p>
+      <a id="continue-to-site" class="btn btn-primary continue-link" href="#" aria-label="Continue to blocked site after earning access">Continue to site</a>
+    </section>
+  </main>
+
+  <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
+  <script src="script.js"></script>
+</body>
+</html>
