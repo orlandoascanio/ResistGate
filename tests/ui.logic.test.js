@@ -13,13 +13,46 @@ describe('UI copy and state logic', () => {
     const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
     const popupHtml = fs.readFileSync(path.resolve(repoRoot, 'popup/popup.html'), 'utf8');
     const frictionHtml = fs.readFileSync(path.resolve(repoRoot, 'friction-page/index.html'), 'utf8');
+    const intentionHtml = fs.readFileSync(path.resolve(repoRoot, 'intention-page/index.html'), 'utf8');
+    const whatsNewHtml = fs.readFileSync(path.resolve(repoRoot, 'whats-new/whats-new.html'), 'utf8');
 
     expect(popupHtml).toContain('Block distractions. Unlock intentionally.');
     expect(popupHtml).toContain('Help improve ResistGate');
-    expect(optionsHtml).toContain('Weekly Discipline Report');
+    expect(optionsHtml).toContain('Weekly Review');
+    expect(optionsHtml).toContain('data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Progress</button>');
+    expect(optionsHtml).toContain('data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Stronger Locks</button>');
     expect(optionsHtml).toContain('Help improve ResistGate');
-    expect(optionsHtml).toContain('Deeper focus tools and weekly accountability reports.');
+    expect(optionsHtml).toContain('Unlock stronger locks, progress tracking, and weekly reviews.');
     expect(frictionHtml).toContain('You blocked this for a reason.');
+    expect(intentionHtml).toContain('Pause before you enter.');
+    expect(intentionHtml).toContain('Decision gate');
+    expect(intentionHtml).toContain('Optional intent check');
+    expect(intentionHtml).toContain('Avoidance');
+    expect(intentionHtml).not.toContain('Today’s budget');
+    expect(whatsNewHtml).toContain('Your intention, front and center.');
+    expect(whatsNewHtml).toContain('Release highlights');
+    expect(whatsNewHtml).toContain('Set your first intention');
+  });
+
+  it('labels Intention pause as available and keeps it out of paywall gating', () => {
+    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
+
+    expect(optionsHtml).toContain('Intention pause');
+    expect(optionsHtml).not.toContain('Intention pause <span class="panel-subtitle">· Free</span>');
+    expect(optionsHtml).toContain('Show your saved site reminder before the challenge.');
+    expect(optionsHtml).toContain('Reminders are saved per blocked site.');
+    expect(optionsHtml).not.toContain('Add optional reminder');
+    expect(optionsHtml).toContain('<details id="schedule-panel" class="panel disclosure-panel">');
+    expect(optionsHtml).not.toContain('data-pro-feature="intentionPage"');
+    expect(optionsHtml).not.toContain('Intention Page — personal goals &amp; breathing exercises');
+    expect(optionsHtml).toContain('Behavioral Friction — stronger pre-entry prompts');
+  });
+
+  it('registers the distinct intention page as an extension resource', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.resolve(repoRoot, 'manifest.json'), 'utf8'));
+    const resources = manifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
+
+    expect(resources).toContain('intention-page/index.html');
   });
 
   it('maps analytics insights to the expected user-facing guidance', async () => {

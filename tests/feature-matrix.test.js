@@ -557,10 +557,22 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Event Listeners', () => {
+  describe('Event Listeners', () => {
     it('onInstalled fires initializeExtension and creates welcome tab on first install', async () => {
       await env.triggerInstalled({ reason: 'install' });
       expect(env.createdTabs.some((t) => t.url.includes('welcome'))).toBe(true);
+    });
+
+    it('onInstalled enables intention page by default only for new installs', async () => {
+      await env.triggerInstalled({ reason: 'install' });
+      const installed = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(installed.proFeatures.intentionPage.enabled).toBe(true);
+
+      const updateEnv = createChromeMock();
+      await loadScriptInVm('background.js', { chrome: updateEnv.chrome });
+      await updateEnv.triggerInstalled({ reason: 'update' });
+      const updated = (await updateEnv.sendMessage({ action: 'getSettings' })).settings;
+      expect(updated.proFeatures.intentionPage.enabled).toBe(false);
     });
 
     it('onInstalled opens whats-new tab on update', async () => {
@@ -713,7 +725,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Intention Page', () => {
+  describe('Free: Intention Page', () => {
     it('sanitizeIntentionPage returns defaults for null input', () => {
       const result = hooks.sanitizeIntentionPage(null);
       expect(result.enabled).toBe(false);
@@ -740,8 +752,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('intention page settings are saved and retrieved via message actions', async () => {
-      await activateProForTest();
-
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.proFeatures.intentionPage = {
         enabled: true,
@@ -752,6 +762,98 @@ describe('Feature Matrix Coverage', () => {
       const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
       expect(saved.proFeatures.intentionPage.enabled).toBe(true);
       expect(saved.proFeatures.intentionPage.showBreathingExercise).toBe(true);
+    });
+
+    it('routes blocked sites to the distinct intention page when enabled', () => {
+      const settings = hooks.sanitizeSettings({
+        enabled: true,
+        proFeatures: { intentionPage: { enabled: true } }
+      });
+      const rules = hooks.buildBlockingRules(
+        settings,
+        [{ id: '1', urlPattern: 'reddit.com' }],
+        {},
+        Date.now(),
+        {}
+      );
+
+      expect(rules[0].action.redirect.url).toContain('intention-page/index.html');
+      expect(rules[0].action.redirect.url).toContain('originalUrl=');
+    });
+
+    it('keeps blocked sites on the challenge page when intention page is disabled', () => {
+      const settings = hooks.sanitizeSettings({
+        enabled: true,
+        proFeatures: { intentionPage: { enabled: false } }
+      });
+      const rules = hooks.buildBlockingRules(
+        settings,
+        [{ id: '1', urlPattern: 'reddit.com' }],
+        {},
+        Date.now(),
+        {}
+      );
+
+      expect(rules[0].action.redirect.url).toContain('friction-page/index.html');
+      expect(rules[0].action.redirect.url).not.toContain('intention-page/index.html');
+    });
+
+    it('keeps commitment mode ahead of the intention page route', () => {
+      const now = Date.now();
+      const settings = hooks.sanitizeSettings({
+        enabled: true,
+        subscription: { tier: 'pro' },
+        proFeatures: {
+          intentionPage: { enabled: true },
+          commitmentMode: {
+            active: true,
+            durationHours: 2,
+            activatedAt: now,
+            expiresAt: now + 60_000
+          }
+        }
+      });
+      const rules = hooks.buildBlockingRules(
+        settings,
+        [{ id: '1', urlPattern: 'reddit.com' }],
+        {},
+        now,
+        {}
+      );
+
+      expect(rules[0].action.redirect.url).toContain('commitment-page/index.html');
+      expect(rules[0].action.redirect.url).not.toContain('intention-page/index.html');
+    });
+
+    it('free users can save per-site personal goals without unlocking Pro features', async () => {
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.blocklist = [{ id: 'x1', urlPattern: 'instagram.com', personalGoal: 'Stop reels' }];
+      settingsObj.proFeatures.behavioralFriction.enabled = true;
+      settingsObj.proFeatures.behavioralFriction.timedWaitEnabled = true;
+
+      const res = await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      expect(res.success).toBe(true);
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.blocklist[0].personalGoal).toBe('Stop reels');
+      expect(saved.proFeatures.behavioralFriction.enabled).toBe(false);
+      expect(saved.proFeatures.behavioralFriction.timedWaitEnabled).toBe(false);
+    });
+
+    it('pro users can still save behavioral precheck settings', async () => {
+      await activateProForTest();
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.proFeatures.behavioralFriction.enabled = true;
+      settingsObj.proFeatures.behavioralFriction.requireTaskIntent = true;
+      settingsObj.proFeatures.behavioralFriction.customChallengePrompt = 'Why this task?';
+
+      const res = await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      expect(res.success).toBe(true);
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.proFeatures.behavioralFriction.enabled).toBe(true);
+      expect(saved.proFeatures.behavioralFriction.requireTaskIntent).toBe(true);
+      expect(saved.proFeatures.behavioralFriction.customChallengePrompt).toBe('Why this task?');
     });
 
     it('migrates global personalGoal to blocklist entries', () => {

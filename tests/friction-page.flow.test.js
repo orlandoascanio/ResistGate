@@ -328,7 +328,284 @@ describe('Friction page flow logic', () => {
     localHooks.renderIntentionPage();
 
     expect(mockElements['personal-goal-display'].textContent).toBe('Stop watching reels');
-    expect(mockElements['intention-label'].textContent).toBe('Remember your goal');
+    expect(mockElements['intention-label'].textContent).toBe('See your reminder');
+  });
+
+  it('renderIntentionPage shows per-domain goal for free users', async () => {
+    const env = createChromeMock();
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          mockElements[id] = {
+            textContent: '',
+            classList: { add: () => {}, remove: () => {} },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: env.chrome,
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.instagram.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: false }
+      },
+      blocklist: [
+        { id: '1', urlPattern: 'instagram.com', personalGoal: 'Stop watching reels' }
+      ]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.instagram.com');
+
+    localHooks.renderIntentionPage();
+
+    expect(mockElements['personal-goal-display'].textContent).toBe('Stop watching reels');
+    expect(mockElements['intention-label'].textContent).toBe('See your reminder');
+  });
+
+  it('renderIntentionPage shows breathing exercise for free users when enabled', async () => {
+    const env = createChromeMock();
+    const classSets = {};
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          classSets[id] = new Set(['hidden']);
+          mockElements[id] = {
+            textContent: '',
+            classList: {
+              add: (className) => classSets[id].add(className),
+              remove: (className) => classSets[id].delete(className)
+            },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: env.chrome,
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.reddit.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true,
+      requestAnimationFrame: (callback) => callback()
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: true }
+      },
+      blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.reddit.com');
+
+    localHooks.renderIntentionPage();
+
+    expect(classSets['breathing-exercise'].has('hidden')).toBe(false);
+  });
+
+  it('renderInitialPhase skips the intention screen when free intention page is disabled', async () => {
+    const classSets = {};
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          classSets[id] = new Set(id === 'breathing-exercise' ? ['hidden'] : []);
+          mockElements[id] = {
+            textContent: '',
+            className: id === 'main-container' ? 'container phase-intention' : '',
+            classList: {
+              add: (className) => {
+                classSets[id].add(className);
+                if (id === 'main-container') {
+                  mockElements[id].className += ` ${className}`;
+                }
+              },
+              remove: (className) => classSets[id].delete(className)
+            },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: {
+        runtime: {
+          sendMessage: (request, callback) => {
+            if (request.action === 'getManualOverrideStatus') {
+              callback({ success: true, status: { requiredDelaySeconds: 12, locked: false, remainingSeconds: 0 } });
+            }
+          }
+        }
+      },
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.reddit.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      proFeatures: {
+        intentionPage: { enabled: false, showBreathingExercise: true }
+      },
+      blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.reddit.com');
+
+    mockDoc.getElementById('breathing-exercise');
+    localHooks.renderInitialPhase();
+
+    expect(mockElements['main-container'].className).toContain('phase-precheck');
+    expect(classSets['breathing-exercise'].has('hidden')).toBe(true);
+  });
+
+  it('renderInitialPhase shows breathing when free intention page is enabled', async () => {
+    const classSets = {};
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          classSets[id] = new Set(['hidden']);
+          mockElements[id] = {
+            textContent: '',
+            className: id === 'main-container' ? 'container phase-precheck' : '',
+            classList: {
+              add: (className) => {
+                classSets[id].add(className);
+                if (id === 'main-container') {
+                  mockElements[id].className += ` ${className}`;
+                }
+              },
+              remove: (className) => classSets[id].delete(className)
+            },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: { runtime: { sendMessage: () => {} } },
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.reddit.com' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true,
+      requestAnimationFrame: (callback) => callback()
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: true }
+      },
+      blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.reddit.com');
+
+    localHooks.renderInitialPhase();
+
+    expect(mockElements['main-container'].className).toContain('phase-intention');
+    expect(classSets['breathing-exercise'].has('hidden')).toBe(false);
+  });
+
+  it('renderInitialPhase skips intention when returning from the distinct intention page', async () => {
+    const mockElements = {};
+    const mockDoc = {
+      addEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementById: (id) => {
+        if (!mockElements[id]) {
+          mockElements[id] = {
+            textContent: '',
+            className: id === 'main-container' ? 'container phase-intention' : '',
+            classList: {
+              add: (className) => {
+                if (id === 'main-container') {
+                  mockElements[id].className += ` ${className}`;
+                }
+              },
+              remove: () => {}
+            },
+            style: {},
+            disabled: false,
+            addEventListener: () => {}
+          };
+        }
+        return mockElements[id];
+      }
+    };
+    const context = await loadScriptInVm('friction-page/script.js', {
+      chrome: {
+        runtime: {
+          sendMessage: (request, callback) => {
+            if (request.action === 'getManualOverrideStatus') {
+              callback({ success: true, status: { requiredDelaySeconds: 12, locked: false, remainingSeconds: 0 } });
+            }
+          }
+        }
+      },
+      document: mockDoc,
+      window: { location: { search: '?originalUrl=https%3A%2F%2Fwww.reddit.com&skipIntention=1' }, close: () => {} },
+      location: { reload: () => {} },
+      alert: () => {},
+      confirm: () => true
+    });
+
+    const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+    localHooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      proFeatures: {
+        intentionPage: { enabled: true, showBreathingExercise: false }
+      },
+      blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+    });
+    localHooks.__setOriginalUrlForTest('https://www.reddit.com');
+    localHooks.__setSkipIntentionForTest(true);
+
+    localHooks.renderInitialPhase();
+
+    expect(mockElements['main-container'].className).toContain('phase-precheck');
   });
 
   it('renderIntentionPage shows default message when blocklist entry has no goal', async () => {
