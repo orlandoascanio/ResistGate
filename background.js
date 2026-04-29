@@ -95,7 +95,12 @@ let initializationPromise = null;
 void initializeExtension('service-worker-start');
 
 chrome.runtime.onInstalled.addListener((details) => {
-  void initializeExtension('onInstalled');
+  void (async () => {
+    await initializeExtension('onInstalled');
+    if (details.reason === 'install') {
+      await enableIntentionPageForNewInstall();
+    }
+  })();
   
   // Set the survey/uninstall URL (Must be https)
   chrome.runtime.setUninstallURL('https://www.orlandoascanio.com/resistgate/uninstall');
@@ -250,7 +255,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const nextSettings = sanitizeSettings(request.settings || {});
           nextSettings.subscription = currentSettings.subscription;
           if (!hasProAccess(currentSettings)) {
+            const intentionPage = nextSettings.proFeatures?.intentionPage;
             nextSettings.proFeatures = currentSettings.proFeatures;
+            if (canUseIntentionPage() && intentionPage) {
+              nextSettings.proFeatures.intentionPage = intentionPage;
+            }
           }
 
           const currentBlocklistLength = Array.isArray(currentSettings.blocklist)
@@ -581,6 +590,16 @@ async function initializeExtension(reason) {
   }
 }
 
+async function enableIntentionPageForNewInstall() {
+  const settings = await getSettings();
+  settings.proFeatures = settings.proFeatures || {};
+  settings.proFeatures.intentionPage = sanitizeIntentionPage({
+    ...settings.proFeatures.intentionPage,
+    enabled: true
+  });
+  await saveSettings(settings);
+}
+
 async function queueRulesUpdate(reason) {
   updateQueue = updateQueue
     .then(() => updateBlockingRules(reason))
@@ -659,7 +678,13 @@ function buildBlockingRules(settings, blocklist, temporaryAccess, now, workTimer
     }
 
     const commitmentActive = isCommitmentModeActive(settings, now);
-    const redirectPage = commitmentActive ? 'commitment-page/index.html' : 'friction-page/index.html';
+    const intentionPageEnabled = canUseIntentionPage()
+      && settings.proFeatures?.intentionPage?.enabled === true;
+    const redirectPage = commitmentActive
+      ? 'commitment-page/index.html'
+      : intentionPageEnabled
+        ? 'intention-page/index.html'
+        : 'friction-page/index.html';
 
     rules.push({
       id: ruleId++,
@@ -1440,6 +1465,10 @@ function hasProAccess(settings) {
   return settings?.subscription?.tier === 'pro';
 }
 
+function canUseIntentionPage() {
+  // Free feature. Stored under proFeatures for backward compatibility with existing settings.
+  return true;
+}
 
 
 function isStrictFocusActive(settings, now) {
@@ -2200,6 +2229,7 @@ if (typeof globalThis !== 'undefined') {
     buildWeekSummary,
     getWeeklyFeedbackLine,
     hasProAccess,
+    canUseIntentionPage,
     removeExpiredBlocks,
     removeExpiredTemporaryAccess,
     sanitizeCommitmentMode,
