@@ -100,17 +100,17 @@
 
     if (!elements.upgradeLink) return;
     elements.upgradeLink.classList.add('is-disabled');
-    setStatus('Opening upgrade page...');
+    setStatus('Opening upgrade options...');
 
     sendRuntimeMessage({ action: 'openPricingPage' })
       .then(() => {
-        setStatus('Upgrade page opened.');
+        setStatus('Upgrade options opened.');
         window.setTimeout(() => window.close(), 180);
       })
       .catch((error) => {
         console.warn('[ResistGate] Pricing page error:', error);
         elements.upgradeLink.classList.remove('is-disabled');
-        setStatus('Could not open the upgrade page. Try again.', 'error');
+        setStatus('Could not open upgrade options. Try again.', 'error');
       });
   }
 
