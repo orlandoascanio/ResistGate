@@ -13,12 +13,19 @@
 </head>
 <body>
   <div class="container phase-intention" id="main-container">
+    <nav class="gate-progress" aria-label="Access progress">
+      <span class="progress-step" data-step="intention">Pause</span>
+      <span class="progress-step" data-step="precheck">Prepare</span>
+      <span class="progress-step" data-step="challenge">Challenge</span>
+      <span class="progress-step" data-step="success">Access</span>
+    </nav>
+
     <!-- Phase 1: Intention -->
     <section class="phase-section phase-intention-content" id="phase-intention">
       <header class="intention-header">
         <div class="intention-context">
+          <span id="intention-label" class="phase-label">See your reminder</span>
           <h1 id="page-title">You blocked this for a reason.</h1>
-          <span id="intention-label" class="phase-label">Remember your goal</span>
         </div>
         
         <blockquote class="personal-goal">
@@ -37,13 +44,14 @@
         </div>
         
         <div class="intention-meta">
-          <p class="site-info"><span id="blocked-site">Loading...</span></p>
+          <p class="site-info">Destination <span id="blocked-site">Loading...</span></p>
           <p id="resistance-count" class="helper-text"></p>
         </div>
       </header>
       
       <div class="phase-actions">
         <button id="continue-to-challenge" class="btn btn-primary btn-large">Continue to Challenge</button>
+        <button id="go-back-btn" class="btn-text" type="button">Go back instead</button>
       </div>
     </section>
 
@@ -67,7 +75,7 @@
       <!-- Pro precheck section -->
       <div id="pro-precheck" class="pro-precheck hidden">
         <div id="precheck-task-section" class="precheck-section hidden">
-          <label for="task-intent-input">Your goal on this site</label>
+          <label for="task-intent-input">Why do you need this site now?</label>
           <textarea id="task-intent-input" class="typing-input precheck-input" rows="2" placeholder="What do you need to accomplish?"></textarea>
         </div>
         <div id="precheck-challenge-section" class="precheck-section hidden">

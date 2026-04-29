@@ -7,6 +7,8 @@ let breathingAnimationInterval = null;
 let breathingPhaseInterval = null;
 let breathingPhaseTimeout = null;
 let currentOriginalUrl = null;
+let skipIntentionPage = false;
+let skipBlockedVisitRecord = false;
 let currentSettings = null;
 let currentWorkTimer = null;
 let manualOverrideState = {
@@ -31,6 +33,7 @@ const PHASES = {
 let currentPhase = PHASES.INTENTION;
 
 const DEFAULT_CHALLENGE_LEVEL = 'hard';
+const INTENTION_PRECHECK_KEY = 'resistgateIntentionPrecheck';
 const CHALLENGE_LEVEL_COPY = {
   easy: {
     badge: 'Easy drill',
@@ -141,6 +144,8 @@ const PRODUCTIVITY_TEXTS = [
 document.addEventListener('DOMContentLoaded', function () {
   const urlParams = new URLSearchParams(window.location.search);
   currentOriginalUrl = urlParams.get('originalUrl');
+  skipIntentionPage = urlParams.get('skipIntention') === '1';
+  skipBlockedVisitRecord = urlParams.get('skipRecord') === '1';
 
   const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
   const blockedSite = document.getElementById('blocked-site');
@@ -148,18 +153,20 @@ document.addEventListener('DOMContentLoaded', function () {
   if (safeTargetUrl) {
     const hostname = new URL(safeTargetUrl).hostname;
     blockedSite.textContent = hostname;
-    chrome.runtime.sendMessage({
-      action: 'recordBlockedVisit',
-      urlPattern: hostname
-    }, function (response) {
-      if (response && response.resistanceCount > 0) {
-        const countEl = document.getElementById('resistance-count');
-        if (countEl) {
-          const n = response.resistanceCount;
-          countEl.textContent = `You've resisted ${hostname} ${n} ${n === 1 ? 'time' : 'times'} today.`;
+    if (!skipBlockedVisitRecord) {
+      chrome.runtime.sendMessage({
+        action: 'recordBlockedVisit',
+        urlPattern: hostname
+      }, function (response) {
+        if (response && response.resistanceCount > 0) {
+          const countEl = document.getElementById('resistance-count');
+          if (countEl) {
+            const n = response.resistanceCount;
+            countEl.textContent = `You've resisted ${hostname} ${n} ${n === 1 ? 'time' : 'times'} today.`;
+          }
         }
-      }
-    });
+      });
+    }
   } else {
     blockedSite.textContent = 'Unknown destination';
   }
@@ -169,6 +176,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // Phase 1: Continue to Challenge
   document.getElementById('continue-to-challenge').addEventListener('click', function () {
     transitionToPhase(PHASES.PRECHECK);
+  });
+
+  document.getElementById('go-back-btn').addEventListener('click', function () {
+    goBack();
   });
 
   // Phase 2: Start Challenge
@@ -206,6 +217,15 @@ function transitionToPhase(phase) {
   }
 }
 
+function goBack() {
+  if (window.history && window.history.length > 1) {
+    window.history.back();
+    return;
+  }
+
+  window.close();
+}
+
 function loadSettings() {
   chrome.runtime.sendMessage({ action: 'getSettings' }, function (response) {
     if (!(response && response.settings)) {
@@ -221,9 +241,19 @@ function loadSettings() {
 
     chrome.runtime.sendMessage({ action: 'getWorkTimerState' }, function (wtResponse) {
       currentWorkTimer = (wtResponse && wtResponse.success) ? wtResponse.state : null;
-      renderIntentionPage();
+      renderInitialPhase();
     });
   });
+}
+
+function renderInitialPhase() {
+  if (!skipIntentionPage && isIntentionPageEnabled()) {
+    setPhase(PHASES.INTENTION);
+    renderIntentionPage();
+    return;
+  }
+
+  transitionToPhase(PHASES.PRECHECK);
 }
 
 function refreshManualOverrideStatus(onReady) {
@@ -313,7 +343,18 @@ function formatTime12(h, m) {
 }
 
 function renderIntentionPage() {
-  const isPro = currentSettings?.subscription?.tier === 'pro';
+  // If intention page is disabled, go directly to precheck
+  if (!isIntentionPageEnabled()) {
+    transitionToPhase(PHASES.PRECHECK);
+    const intentionLabel = document.getElementById('intention-label');
+    const personalGoalDisplay = document.getElementById('personal-goal-display');
+    const breathingExercise = document.getElementById('breathing-exercise');
+    intentionLabel.textContent = 'Pause before proceeding';
+    personalGoalDisplay.textContent = 'You blocked this for a reason.';
+    breathingExercise.classList.add('hidden');
+    return;
+  }
+
   const intentionPage = currentSettings?.proFeatures?.intentionPage || {};
   const personalGoalDisplay = document.getElementById('personal-goal-display');
   const breathingExercise = document.getElementById('breathing-exercise');
@@ -321,7 +362,7 @@ function renderIntentionPage() {
 
   let perDomainGoal = '';
 
-  if (isPro && intentionPage.enabled === true) {
+  if (isIntentionPageEnabled()) {
     const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
     if (safeTargetUrl) {
       const hostname = new URL(safeTargetUrl).hostname.replace(/^www\./, '');
@@ -335,15 +376,9 @@ function renderIntentionPage() {
     }
   }
 
-  if (!isPro || intentionPage.enabled !== true) {
-    intentionLabel.textContent = 'Pause before proceeding';
-    personalGoalDisplay.textContent = 'You blocked this for a reason.';
-    breathingExercise.classList.add('hidden');
-    return;
-  }
 
   if (perDomainGoal) {
-    intentionLabel.textContent = 'Remember your goal';
+    intentionLabel.textContent = 'See your reminder';
     personalGoalDisplay.textContent = perDomainGoal;
   } else {
     intentionLabel.textContent = 'Pause before proceeding';
@@ -356,6 +391,14 @@ function renderIntentionPage() {
   } else {
     breathingExercise.classList.add('hidden');
   }
+}
+
+function canUseIntentionPage() {
+  return true;
+}
+
+function isIntentionPageEnabled(settings = currentSettings) {
+  return canUseIntentionPage() && settings?.proFeatures?.intentionPage?.enabled === true;
 }
 
 const BREATHING_PHASES = [
@@ -478,6 +521,7 @@ function renderProPrecheck() {
 
   const isPro = currentSettings.subscription?.tier === 'pro';
   const friction = currentSettings.proFeatures?.behavioralFriction || {};
+  const intentionPrecheck = getIntentionPrecheck();
 
   if (!isPro || friction.enabled !== true) {
     proPrecheck.classList.add('hidden');
@@ -487,7 +531,7 @@ function renderProPrecheck() {
   let hasAnySection = false;
 
   // Task intent section
-  if (friction.requireTaskIntent !== false) {
+  if (friction.requireTaskIntent !== false && !intentionPrecheck?.taskIntent) {
     taskSection.classList.remove('hidden');
     hasAnySection = true;
   } else {
@@ -709,6 +753,7 @@ function handleManualOverride() {
 function collectPrecheckMeta() {
   const isPro = currentSettings?.subscription?.tier === 'pro';
   const friction = currentSettings?.proFeatures?.behavioralFriction || {};
+  const intentionPrecheck = getIntentionPrecheck();
 
   if (!isPro || friction.enabled !== true) {
     return {
@@ -722,7 +767,9 @@ function collectPrecheckMeta() {
 
   const requireTaskIntent = friction.requireTaskIntent !== false;
   const taskIntentInput = document.getElementById('task-intent-input');
-  const taskIntent = taskIntentInput ? taskIntentInput.value.trim() : '';
+  const taskIntent = taskIntentInput
+    ? taskIntentInput.value.trim()
+    : (intentionPrecheck?.taskIntent || '');
 
   if (requireTaskIntent && taskIntent.length < 4) {
     return {
@@ -761,6 +808,42 @@ function collectPrecheckMeta() {
   };
 }
 
+function getIntentionPrecheck() {
+  if (typeof sessionStorage === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = sessionStorage.getItem(INTENTION_PRECHECK_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const sameUrl = parsed.originalUrl === currentOriginalUrl;
+    const fresh = Number(parsed.timestamp) > Date.now() - 10 * 60 * 1000;
+    const taskIntent = typeof parsed.taskIntent === 'string'
+      ? parsed.taskIntent.trim().slice(0, 180)
+      : '';
+    const reason = typeof parsed.reason === 'string'
+      ? parsed.reason.trim().slice(0, 40)
+      : '';
+
+    if (!sameUrl || !fresh) {
+      return null;
+    }
+
+    return { taskIntent, reason };
+  } catch (err) {
+    console.warn('Unable to read intention precheck:', err);
+    return null;
+  }
+}
+
 function startTypingChallenge(originalUrl) {
   startTime = Date.now();
   transitionToPhase(PHASES.CHALLENGE);
@@ -788,17 +871,23 @@ function showTypingChallenge(originalUrl) {
 
     container.innerHTML = `
       <div class="challenge-container">
-        <span class="step-badge">${escapeHtml(stepBadge)}</span>
-        <p class="instruction-text">${escapeHtml(challengeCopy.instruction)}</p>
+        <header class="challenge-header">
+          <span class="step-badge">${escapeHtml(stepBadge)}</span>
+          <p class="instruction-text">${escapeHtml(challengeCopy.instruction)}</p>
+        </header>
+        <div class="segment-progress" aria-label="Challenge progress">
+          <span class="segment-progress-bar" style="width: ${Math.round(((currentSegmentIndex + 1) / totalSegments) * 100)}%"></span>
+        </div>
         
         <div class="quote-box">
           <p class="${quoteClass}">${escapeHtml(currentText)}</p>
         </div>
         
-        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..." spellcheck="false"></textarea>
-        <p id="typing-error" class="typing-error"></p>
+        <label class="typing-label" for="typing-input">Type exactly</label>
+        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..." spellcheck="false" aria-describedby="typing-error challenge-stats"></textarea>
+        <p id="typing-error" class="typing-error" role="alert" aria-live="polite"></p>
         
-        <div class="challenge-stats">
+        <div class="challenge-stats" id="challenge-stats" aria-live="polite">
           <div class="stat-item">
             <span class="stat-label">Progress</span>
             <span class="stat-value"><span id="char-count">0</span> / ${currentText.length}</span>
@@ -1219,12 +1308,17 @@ if (typeof globalThis !== 'undefined') {
     getTypingChallengeLevel,
     getChallengeLevelCopy,
     buildTypingChallengeSegments,
+    canUseIntentionPage,
+    isIntentionPageEnabled,
+    getIntentionPrecheck,
+    goBack,
     getModerateChallengeSentenceBank: () => [...MODERATE_CHALLENGE_SENTENCES],
     getChallengePromptBank: () => [...PRODUCTIVITY_TEXTS],
     generateRandomCharacterSequence,
     formatTime,
     formatTime12,
     renderIntentionPage,
+    renderInitialPhase,
     renderBundlePanel,
     startBreathingAnimation,
     stopBreathingAnimation,
@@ -1239,6 +1333,9 @@ if (typeof globalThis !== 'undefined') {
     },
     __setOriginalUrlForTest: (url) => {
       currentOriginalUrl = url;
+    },
+    __setSkipIntentionForTest: (value) => {
+      skipIntentionPage = value === true;
     }
   };
 }

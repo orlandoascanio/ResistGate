@@ -23,10 +23,16 @@
   --primary-subtle: #b996ea;
   --lavender: #efe7fb;
   --lavender-2: #f4edff;
+  --surface-strong: #fbfaff;
 
   /* Semantic */
   --ok: #0f766e;
+  --ok-bg: #e6f7f3;
+  --progress: #0f766e;
+  --progress-bg: #e7f0ee;
+  --progress-text: #155e57;
   --err: #b42318;
+  --error-bg: #fff1f0;
 
   /* Disabled states */
   --disabled-bg: #d1d5db;
@@ -90,9 +96,15 @@
     --primary-subtle: #a78bfa;
     --lavender: #26193a;
     --lavender-2: #1f1232;
+    --surface-strong: #211633;
 
     --ok: #34d399;
+    --ok-bg: #062f2b;
+    --progress: #34d399;
+    --progress-bg: #143b36;
+    --progress-text: #a7f3d0;
     --err: #f87171;
+    --error-bg: #351719;
 
     /* Disabled states (dark mode) */
     --disabled-bg: #4b5563;
@@ -137,7 +149,10 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--lavender) 76%, transparent), transparent 28rem),
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--primary-subtle) 18%, transparent), transparent 24rem),
+    linear-gradient(180deg, var(--bg-alt), var(--bg));
   color: var(--text);
   font: 16px/1.6 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -147,17 +162,51 @@ body {
 /* ── Container ──────────────────────────────────────────────────── */
 .container {
   width: 100%;
-  max-width: 680px;
-  background: var(--card);
+  max-width: 760px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-8) var(--space-6);
+  border-radius: 24px;
+  padding: var(--space-5);
   box-shadow: var(--shadow-card);
   transition: box-shadow var(--transition-slow), transform var(--transition-slow);
+  overflow: hidden;
 }
 
 .container:hover {
   box-shadow: var(--shadow-lg);
+}
+
+.gate-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+}
+
+.progress-step {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.phase-intention .progress-step[data-step="intention"],
+.phase-precheck .progress-step[data-step="precheck"],
+.phase-challenge .progress-step[data-step="challenge"],
+.phase-success .progress-step[data-step="success"] {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(15, 13, 20, 0.05);
 }
 
 /* ── Phase System ───────────────────────────────────────────────── */
@@ -189,32 +238,56 @@ body {
 .phase-label {
   display: inline-block;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--muted);
-  margin-bottom: 16px;
+  color: var(--primary);
+  margin-bottom: 12px;
 }
 
 /* ── Phase 1: Intention ─────────────────────────────────────────── */
 .intention-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .intention-context {
-  margin-bottom: 8px;
+  margin-bottom: 18px;
+}
+
+.intention-context h1 {
+  font-size: clamp(30px, 6vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  max-width: 12ch;
+  margin: 0 auto;
 }
 
 .personal-goal {
-  font-size: 28px;
-  font-weight: 700;
+  position: relative;
+  max-width: 620px;
+  font-size: clamp(20px, 4vw, 30px);
+  font-weight: 800;
   line-height: 1.4;
   color: var(--text);
-  margin: 0 0 24px;
-  padding: 0;
-  border: none;
-  background: none;
+  margin: 0 auto 24px;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-strong);
+  text-wrap: balance;
+}
+
+.personal-goal::before {
+  content: "Reminder";
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
 }
 
 .personal-goal:empty {
@@ -316,14 +389,30 @@ body {
 }
 
 .intention-meta {
-  margin-top: 24px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 10px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-subtle);
 }
 
 .site-info {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.site-info span {
   color: var(--primary);
-  margin-bottom: 4px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .helper-text {
@@ -338,8 +427,10 @@ body {
 }
 
 .precheck-header h2 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: clamp(26px, 5vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
   margin-bottom: 8px;
   color: var(--text);
 }
@@ -396,7 +487,7 @@ body {
 .pro-precheck {
   background: var(--bg-subtle);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: 18px;
   padding: var(--space-5);
   margin-bottom: var(--space-5);
 }
@@ -451,7 +542,7 @@ body {
   min-height: 80px;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: 16px;
   padding: 12px 14px;
   font: inherit;
   font-size: 14px;
@@ -508,7 +599,8 @@ body {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
+  min-height: 44px;
   padding: 12px 20px;
   font: inherit;
   font-weight: 600;
@@ -523,8 +615,8 @@ body {
 }
 
 .btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--primary);
-  outline-offset: var(--focus-ring-offset);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .btn:disabled {
@@ -603,6 +695,7 @@ body {
   padding: 16px 28px;
   font-size: 15px;
   min-width: 200px;
+  min-height: 52px;
 }
 
 /* Text button for secondary actions */
@@ -614,7 +707,8 @@ body {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 8px;
+  min-height: 44px;
+  padding: 10px 12px;
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color var(--transition-fast),
@@ -648,7 +742,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: var(--space-4);
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .secondary-actions {
@@ -672,12 +766,17 @@ body {
 }
 
 .challenge-container {
+  text-align: left;
+}
+
+.challenge-header {
   text-align: center;
+  margin-bottom: var(--space-4);
 }
 
 .step-badge {
   display: inline-block;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -690,15 +789,33 @@ body {
 
 .instruction-text {
   color: var(--muted);
-  margin-bottom: 20px;
+  margin: 0 auto;
   font-size: 15px;
+  max-width: 46rem;
+}
+
+.segment-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  margin-bottom: var(--space-5);
+}
+
+.segment-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--primary-subtle));
+  transition: width var(--transition-slow) var(--ease-out-quart);
 }
 
 .quote-box {
-  background: var(--lavender);
+  background: var(--surface-strong);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--primary);
-  border-radius: var(--radius-sm);
+  border-left: 5px solid var(--primary);
+  border-radius: 18px;
   padding: var(--space-5);
   margin-bottom: var(--space-5);
   text-align: left;
@@ -710,17 +827,26 @@ body {
 }
 
 .quote-text {
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.75;
   color: var(--text);
 }
 
 .challenge-code {
-  font-size: 24px;
+  font-size: clamp(24px, 6vw, 36px);
   font-weight: 800;
   letter-spacing: 0.14em;
   text-align: center;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.typing-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .challenge-typing-input {
@@ -728,21 +854,21 @@ body {
   min-height: 140px;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: 18px;
   padding: 16px;
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   background: var(--card);
   color: var(--text);
   margin-bottom: 12px;
-  transition: border-color var(--transition-fast), outline var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
 .challenge-typing-input:focus {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: 0;
+  outline: none;
   border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
 .challenge-typing-input.has-error {
@@ -764,13 +890,14 @@ body {
 }
 
 .challenge-stats {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-8);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
   margin-bottom: var(--space-6);
   padding: var(--space-3);
   background: var(--bg-subtle);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  border-radius: 18px;
 }
 
 .stat-item {
@@ -802,28 +929,13 @@ body {
 }
 
 .challenge-actions {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.65fr) minmax(180px, 1fr);
   gap: var(--space-3);
-  flex-wrap: wrap;
 }
 
 .challenge-actions .btn {
-  min-width: 120px;
-}
-
-.challenge-actions .btn-primary {
-  min-width: 160px;
-}
-
-.challenge-actions .btn-secondary {
-  flex: 1;
-  max-width: 140px;
-}
-
-.challenge-actions .btn-primary {
-  flex: 2;
-  max-width: 200px;
+  width: 100%;
 }
 
 /* ── Phase 4: Success ───────────────────────────────────────────── */
@@ -835,7 +947,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
 }
 
 .success-icon {
@@ -865,8 +978,10 @@ body {
 }
 
 .success-message h2 {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: clamp(30px, 6vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
   color: var(--text);
 }
 
@@ -897,8 +1012,18 @@ body {
 
 /* ── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+
   .success-icon,
-  .breathing-count.tick {
+  .breathing-count.tick,
+  .phase-intention .phase-intention-content,
+  .phase-precheck .phase-precheck-content,
+  .phase-challenge .phase-challenge-content,
+  .phase-success .phase-success-content {
     animation: none;
   }
   
@@ -915,7 +1040,8 @@ body {
   .container,
   .btn,
   .phase-section,
-  .breathing-phase-label {
+  .breathing-phase-label,
+  .segment-progress-bar {
     transition: none;
     animation: none;
   }
@@ -928,12 +1054,17 @@ body {
   }
 
   .container {
-    padding: var(--space-5) var(--space-4);
-    border-radius: var(--radius-sm);
+    padding: var(--space-4);
+    border-radius: 20px;
+  }
+
+  .gate-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 18px;
   }
 
   .personal-goal {
-    font-size: 22px;
+    padding: var(--space-4);
   }
 
   .precheck-header h2 {
@@ -941,6 +1072,7 @@ body {
   }
 
   .challenge-stats {
+    grid-template-columns: 1fr;
     gap: var(--space-5);
     padding: var(--space-3);
   }
@@ -950,8 +1082,7 @@ body {
   }
 
   .challenge-actions {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
     gap: var(--space-3);
   }
 
