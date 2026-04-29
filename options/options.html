@@ -4,10 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ResistGate Settings</title>
+  <link rel="stylesheet" href="../shared/design-system.css" />
   <link rel="stylesheet" href="options.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="../vendor/sentry.min.js"></script>
   <script src="../vendor/sentry-init.js"></script>
 </head>
@@ -27,21 +25,25 @@
 
     <nav class="tabs" role="tablist" aria-label="Settings sections">
       <button id="tab-general" class="tab-btn active" data-tab="general" role="tab" aria-selected="true" aria-controls="panel-general">General</button>
-      <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Analytics</button>
-      <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">Weekly Report</button>
-      <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Pro</button>
+      <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Progress</button>
+      <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">Weekly Review</button>
+      <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Stronger Locks</button>
     </nav>
 
     <section id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
       <section class="panel">
-        <h2>Blocklist</h2>
-        <div class="input-group">
-          <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com" />
-          <button id="add-site-btn" class="btn btn-primary">Block site</button>
+        <h2>Block sites</h2>
+        <p class="helper">Add the domains that pull you off-task. Start with one.</p>
+        <div class="block-site-form">
+          <label for="new-blocked-site">Site</label>
+          <div class="input-group">
+            <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com" />
+            <button id="add-site-btn" class="btn btn-primary">Block site</button>
+          </div>
         </div>
         <ul id="blocked-sites-list">
           <li class="empty-state">
-            <div class="empty-icon">🚫</div>
+            <div class="empty-icon" aria-hidden="true">RG</div>
             <p>No sites blocked yet</p>
             <span>Add a site above to start building your focus zone</span>
           </li>
@@ -49,9 +51,8 @@
       </section>
 
       <section class="panel">
-        <h2>Core Settings</h2>
-        <label for="access-window-minutes">Temporary access duration (minutes)</label>
-        <input id="access-window-minutes" type="number" min="1" step="1" />
+        <h2>Friction level</h2>
+        <p class="helper">Choose how hard it should be to enter a blocked site.</p>
 
         <div class="challenge-level-block">
           <span id="challenge-level-label" class="field-label">Typing challenge level</span>
@@ -69,20 +70,39 @@
               <small>5 paragraphs</small>
             </button>
           </div>
-          <p class="helper">Start with manageable friction, then raise the bar when distractions get too easy to bypass.</p>
+          <p class="helper">Start manageable, then raise the bar when distractions get too easy to bypass.</p>
         </div>
 
-        <label for="manual-override-delay" class="top-space">Manual override delay (seconds)</label>
-        <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
-        <p class="helper" id="override-delay-hint">Free manual override uses a 10 to 15 second pause before access.</p>
-
-        <div class="schedule-header top-space">
-          <h3>Simple Schedule</h3>
-          <label class="switch-row">
-            <input id="schedule-enabled" type="checkbox" />
-            <span>Enable schedule-based blocking</span>
-          </label>
+        <div class="settings-grid">
+          <div>
+            <label for="access-window-minutes">Access window</label>
+            <input id="access-window-minutes" type="number" min="1" step="1" aria-describedby="access-window-hint" />
+            <p class="helper" id="access-window-hint">Minutes granted after a completed challenge.</p>
+          </div>
+          <div>
+            <label for="manual-override-delay">Override pause</label>
+            <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
+            <p class="helper" id="override-delay-hint">Free override waits 10 to 15 seconds.</p>
+          </div>
         </div>
+      </section>
+
+      <details id="schedule-panel" class="panel disclosure-panel">
+        <summary class="disclosure-summary">
+          <span>
+            <strong>Schedule</strong>
+            <small>Only block during chosen days and hours.</small>
+          </span>
+          <span id="schedule-summary-state" class="summary-state">Off</span>
+        </summary>
+
+        <label class="switch-row schedule-toggle">
+          <input id="schedule-enabled" type="checkbox" />
+          <span>
+            <strong>Use schedule</strong>
+            <small>Turn this on when blocking should follow a daily routine.</small>
+          </span>
+        </label>
 
         <div id="schedule-config" class="schedule-config">
           <div class="time-row">
@@ -107,6 +127,47 @@
             <label><input type="checkbox" value="6" />Sat</label>
           </div>
         </div>
+      </details>
+
+      <section class="panel">
+        <h2>Intention pause</h2>
+        <p class="helper">Show your saved site reminder before the challenge.</p>
+
+        <div class="intention-preview" aria-label="Intention pause flow preview">
+          <div class="preview-step">
+            <span class="preview-step-index">01</span>
+            <strong>See your reminder</strong>
+            <small>Your saved site reminder appears before the challenge.</small>
+          </div>
+          <div class="preview-step">
+            <span class="preview-step-index">02</span>
+            <strong>Pause before entering</strong>
+            <small>Optionally take a short breathing reset.</small>
+          </div>
+          <div class="preview-step">
+            <span class="preview-step-index">03</span>
+            <strong>Continue deliberately</strong>
+            <small>Go back, use your reminder, or continue to the challenge.</small>
+          </div>
+        </div>
+
+        <label class="switch-row">
+          <input id="intention-page-enabled" type="checkbox" />
+          <span>
+            <strong>Use Intention pause</strong>
+            <small>Show a pause screen with your saved site reminder before the challenge.</small>
+          </span>
+        </label>
+
+        <label class="switch-row sub-toggle">
+          <input id="breathing-exercise-enabled" type="checkbox" />
+          <span>
+            <strong>Show breathing exercise</strong>
+            <small>A guided 4-7-8 breathing cycle appears on the blocked page to help you reset.</small>
+          </span>
+        </label>
+
+        <p class="helper">Reminders are saved per blocked site. Add or edit reminders in the Block sites section.</p>
       </section>
 
       <button id="save-settings-btn" data-action="save-settings" class="btn btn-primary full">Save Settings</button>
@@ -114,7 +175,7 @@
 
     <section id="panel-analytics" class="tab-panel" role="tabpanel" aria-labelledby="tab-analytics">
       <section class="panel">
-        <h2>Analytics Dashboard</h2>
+        <h2>Progress Dashboard</h2>
         <p id="analytics-period-value" class="metric-period">--</p>
 
         <div class="scoreboard">
@@ -144,14 +205,14 @@
       </section>
 
       <section class="panel">
-        <h2>Override frequency <span class="panel-subtitle">· last 7 days</span></h2>
+        <h2>Override pattern <span class="panel-subtitle">· last 7 days</span></h2>
         <div id="override-trend-list" class="trend-chart"></div>
       </section>
     </section>
 
     <section id="panel-report" class="tab-panel" role="tabpanel" aria-labelledby="tab-report">
       <section class="panel">
-        <h2 id="weekly-report-title">Weekly Discipline Report</h2>
+        <h2 id="weekly-report-title">Weekly Review</h2>
         <p id="weekly-report-period" class="metric-period">--</p>
 
         <div class="discipline-score-block">
@@ -187,7 +248,7 @@
       </section>
 
       <section class="panel">
-        <h2>Risks and recommendations</h2>
+        <h2>Risks to watch</h2>
         <ul id="weekly-report-risks" class="metric-list"></ul>
       </section>
     </section>
@@ -195,11 +256,11 @@
     <section id="panel-pro" class="tab-panel" role="tabpanel" aria-labelledby="tab-pro">
       <section class="panel pro-panel">
         <div class="pro-panel-head">
-          <h2>Pro Focus Tools</h2>
-          <button id="open-pricing-btn" class="btn btn-secondary">See Pro Plans</button>
+          <h2>Stronger Locks</h2>
+          <button id="open-pricing-btn" class="btn btn-secondary">See upgrade options</button>
         </div>
         <div id="subscription-status" class="subscription-status">
-          Visit our pricing page to get Pro. After checkout, this browser activates automatically.
+          Unlock stronger locks. After checkout, this browser activates automatically.
         </div>
         <p class="helper">Add extra friction between you and a blocked site — so you only visit when it's genuinely worth it.</p>
 
@@ -297,40 +358,19 @@
         <button id="activate-commitment-btn" class="btn btn-primary" data-pro-feature="commitmentMode" style="margin-top: 12px;">Activate Commitment Mode</button>
       </section>
 
-      <section class="panel pro-panel">
-        <h2>Intention Page</h2>
-        <p class="helper">Turn the blocked page into a moment of intention. Set a personal goal for each blocked site. When enabled, your per-site goal (or a default reminder) appears on the block page.</p>
-
-        <label class="switch-row">
-          <input id="intention-page-enabled" type="checkbox" data-pro-feature="intentionPage" />
-          <span>
-            <strong>Enable Intention Page</strong>
-            <small>Replace the default block header with your personal goal.</small>
-          </span>
-        </label>
-
-        <label class="switch-row sub-toggle">
-          <input id="breathing-exercise-enabled" type="checkbox" data-pro-feature="intentionPage" />
-          <span>
-            <strong>Show breathing exercise</strong>
-            <small>A guided 4-7-8 breathing cycle appears on the blocked page to help you reset.</small>
-          </span>
-        </label>
-      </section>
-
       <button data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
   </main>
 
   <div id="paywall-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
     <div class="modal-card">
-      <h2 id="paywall-title">Upgrade to Pro</h2>
-      <p>Deeper focus tools and weekly accountability reports.</p>
+      <h2 id="paywall-title">Unlock stronger locks</h2>
+      <p>Unlock stronger locks, progress tracking, and weekly reviews.</p>
       <ul class="price-points">
-        <li>Analytics dashboard</li>
-        <li>Weekly discipline reports</li>
+        <li>Progress dashboard</li>
+        <li>Weekly reviews</li>
         <li>Commitment Mode — total lockout, no override</li>
-        <li>Intention Page — personal goals &amp; breathing exercises</li>
+        <li>Behavioral Friction — stronger pre-entry prompts</li>
         <li>Strict Mode and stronger access rules</li>
       </ul>
       <div class="price-tiers">
@@ -350,7 +390,7 @@
         </div>
       </div>
       <div class="modal-actions">
-        <button id="view-pricing-btn" class="btn btn-primary">Go to Pricing</button>
+        <button id="view-pricing-btn" class="btn btn-primary">View upgrade options</button>
         <button id="close-paywall-btn" class="btn btn-secondary">Not now</button>
       </div>
     </div>
