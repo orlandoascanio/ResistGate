@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [1.3.0] - 2026-04-29
+
+This release makes your personal goals impossible to ignore — and the options page easier to navigate. Every pause now starts with remembering why you blocked the site in the first place.
+
+### Added (Free)
+- **Intention Page**: Personal goals and optional 4-7-8 breathing are now available to all users, not just Pro. New installs get the Intention Page enabled by default. The blocklist editor in options now supports inline goal setting per site.
+- **Welcome page redesign**: Fresh visual design with better information architecture. New users get a clearer understanding of the core value proposition in less time.
+
+### Changed
+- **Friction Page Redesign**: Full visual overhaul of the blocked-site challenge page. Progress stepper now clearly shows which phase the user is in (Pause → Prepare → Challenge → Access). The breathing exercise uses a refined ring animation. The challenge section was restructured for better visual hierarchy. Intentional design language throughout.
+- **Options page redesign**: Reorganized panel structure, cleaner form layouts, improved accessibility for all interactive elements, and better visual hierarchy throughout.
+- **Pro positioning**: The paywall now emphasizes stronger behavioral friction instead of soft intention reminders.
+- **Earn Access UI**: Redesigned the temptation bundling configuration panel in the options page:
+  - Removed AI-generated emoji from badges; badge now displays purely typographic status indicators
+  - Removed dashed-border panel in favor of cleaner visual hierarchy with chevron expand/collapse indicator and `aria-expanded` accessibility support
+  - Grouped condition type and time selectors in a 2-column row layout for tighter composition
+  - Rewrote help text with benefit-driven copy ("Earn bonus access by completing longer challenges") and standardized terminology ("access condition", "Access after", "manual overrides")
+  - Improved badge hover transitions and added `focus-visible` outline for keyboard accessibility
+  - Badge-on colors now use design tokens (`--ok-bg`, `--ok`, `--ok-border`) instead of hard-coded green values
+
+---
+
 ## [1.2.0] - 2026-04-27
 
 This release makes ResistGate feel less static and more usable day to day. It adds feedback links, tightens the Pro boundary, refreshes onboarding, and gives people a softer way to build discipline.
@@ -21,19 +45,6 @@ This release makes ResistGate feel less static and more usable day to day. It ad
 ### Changed
 - **Welcome page redesign**: Reworked the onboarding/welcome experience so first-time users get a cleaner, less stale introduction to ResistGate.
 - **Feedback flow**: The new survey writes into the feedback dashboard and records structured answers for easier review.
-
----
-
-## [Unreleased]
-
-### Changed
-- **Earn Access UI**: Redesigned the temptation bundling configuration panel in the options page:
-  - Removed AI-generated emoji from badges; badge now displays purely typographic status indicators
-  - Removed dashed-border panel in favor of cleaner visual hierarchy with chevron expand/collapse indicator and `aria-expanded` accessibility support
-  - Grouped condition type and time selectors in a 2-column row layout for tighter composition
-  - Rewrote help text with benefit-driven copy ("Earn bonus access by completing longer challenges") and standardized terminology ("access condition", "Access after", "manual overrides")
-  - Improved badge hover transitions and added `focus-visible` outline for keyboard accessibility
-  - Badge-on colors now use design tokens (`--ok-bg`, `--ok`, `--ok-border`) instead of hard-coded green values
 
 ---
 
@@ -108,7 +119,7 @@ This update is about earning access — not just blocking it. Every feature here
 - Temptation Bundling (Free): Pair distracting sites with work requirements
 - Focus Timer (Free): Work minutes automatically unlock bundled sites
 - Commitment Mode (Pro): 1–24 hour total lockout — no escape, by design
-- Intention Page (Pro): Personal goal reminder + 4-7-8 breathing exercise
+- Intention Page: Personal goal reminder + 4-7-8 breathing exercise
 - Pricing: $3.99/mo · $29.99/yr · $49.99 lifetime
 
 **1.0.0** is the initial release with full Pro feature support:
