@@ -558,9 +558,9 @@ describe('Feature Matrix Coverage', () => {
   });
 
   describe('Event Listeners', () => {
-    it('onInstalled fires initializeExtension and creates welcome tab on first install', async () => {
+    it('onInstalled fires initializeExtension and opens the portfolio install page on first install', async () => {
       await env.triggerInstalled({ reason: 'install' });
-      expect(env.createdTabs.some((t) => t.url.includes('welcome'))).toBe(true);
+      expect(env.createdTabs).toEqual([{ url: 'https://orlandoascanio.com/resistgate/installed' }]);
     });
 
     it('onInstalled enables intention page by default only for new installs', async () => {
@@ -575,11 +575,17 @@ describe('Feature Matrix Coverage', () => {
       expect(updated.proFeatures.intentionPage.enabled).toBe(false);
     });
 
-    it('onInstalled opens whats-new tab on update', async () => {
+    it('onInstalled opens the portfolio update page on update', async () => {
       const tabsBefore = env.createdTabs.length;
-      await env.triggerInstalled({ reason: 'update' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.0.0' });
       expect(env.createdTabs.length).toBe(tabsBefore + 1);
-      expect(env.createdTabs[env.createdTabs.length - 1].url).toContain('whats-new');
+      expect(env.createdTabs[env.createdTabs.length - 1].url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.0.0');
+    });
+
+    it('onInstalled does not open lifecycle pages for browser or shared module updates', async () => {
+      await env.triggerInstalled({ reason: 'chrome_update' });
+      await env.triggerInstalled({ reason: 'shared_module_update' });
+      expect(env.createdTabs.every((t) => !String(t.url).includes('orlandoascanio.com/resistgate'))).toBe(true);
     });
 
     it('onStartup triggers initialization', async () => {

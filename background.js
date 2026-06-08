@@ -32,6 +32,10 @@ const POSTHOG_EVENT_ALLOWLIST = new Set([
   'return_day_1',
   'uninstall_reason_submit'
 ]);
+const RESISTGATE_LIFECYCLE_URLS = {
+  install: 'https://orlandoascanio.com/resistgate/installed',
+  update: 'https://orlandoascanio.com/resistgate/updated'
+};
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -94,6 +98,42 @@ let initializationPromise = null;
 
 void initializeExtension('service-worker-start');
 
+function getLifecyclePageUrl(details, urls) {
+  const ignoredReasons = chrome.runtime.OnInstalledReason || {};
+  if (
+    !details ||
+    details.reason === ignoredReasons.CHROME_UPDATE ||
+    details.reason === ignoredReasons.SHARED_MODULE_UPDATE ||
+    details.reason === 'chrome_update' ||
+    details.reason === 'shared_module_update'
+  ) {
+    return null;
+  }
+
+  if (details.reason === 'install') {
+    return urls.install;
+  }
+
+  if (details.reason === 'update') {
+    const url = new URL(urls.update);
+    if (typeof details.previousVersion === 'string' && details.previousVersion.length > 0) {
+      url.searchParams.set('from', details.previousVersion);
+    }
+    return url.toString();
+  }
+
+  return null;
+}
+
+function openLifecyclePage(details, urls) {
+  const url = getLifecyclePageUrl(details, urls);
+  if (!url) {
+    return;
+  }
+
+  chrome.tabs.create({ url });
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   void (async () => {
     await initializeExtension('onInstalled');
@@ -110,16 +150,12 @@ chrome.runtime.onInstalled.addListener((details) => {
     void trackPosthogEventOnce('install', {
       installReason: details.reason
     });
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('welcome/welcome.html')
-    });
+    openLifecyclePage(details, RESISTGATE_LIFECYCLE_URLS);
   } else if (details.reason === 'update') {
     void trackPosthogEventOnce('update', {
       previousVersion: typeof details.previousVersion === 'string' ? details.previousVersion : null
     });
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('whats-new/whats-new.html')
-    });
+    openLifecyclePage(details, RESISTGATE_LIFECYCLE_URLS);
   }
 });
 
