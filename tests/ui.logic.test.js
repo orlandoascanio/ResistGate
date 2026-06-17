@@ -16,7 +16,10 @@ describe('UI copy and state logic', () => {
     const intentionHtml = fs.readFileSync(path.resolve(repoRoot, 'intention-page/index.html'), 'utf8');
     const whatsNewHtml = fs.readFileSync(path.resolve(repoRoot, 'whats-new/whats-new.html'), 'utf8');
 
-    expect(popupHtml).toContain('Block distractions. Unlock intentionally.');
+    expect(popupHtml).toContain('Block distractions before autopilot takes over.');
+    expect(popupHtml).toContain('Block this tab\'s site');
+    expect(popupHtml).toContain('Uses the active website');
+    expect(popupHtml).toContain('I\'m improving ResistGate based on real feedback.');
     expect(popupHtml).toContain('Help improve ResistGate');
     expect(optionsHtml).toContain('Weekly Review');
     expect(optionsHtml).toContain('data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Progress</button>');
@@ -89,7 +92,7 @@ describe('UI copy and state logic', () => {
     const hooks = context.__RESISTGATE_POPUP_TEST_HOOKS__;
     expect(hooks).toBeTruthy();
 
-    expect(hooks.getBlockedCountMeta(0)).toBe('No sites blocked');
+    expect(hooks.getBlockedCountMeta(0)).toBe('');
     expect(hooks.getBlockedCountMeta(1)).toBe('1 blocked');
     expect(hooks.getBlockedCountMeta(8)).toBe('8 blocked');
     expect(hooks.normalizeDomainInput('HTTPS://WWW.YOUTUBE.COM/')).toBe('www.youtube.com');
