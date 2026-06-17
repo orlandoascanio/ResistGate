@@ -164,7 +164,9 @@ function loadBlockedSites() {
         const countBadge = document.getElementById('blocked-count-badge');
 
         if (countBadge) {
-            countBadge.textContent = getBlockedCountMeta(blocklist.length);
+            const countMeta = getBlockedCountMeta(blocklist.length);
+            countBadge.textContent = countMeta;
+            countBadge.hidden = !countMeta;
         }
 
         listElement.innerHTML = '';
@@ -271,7 +273,7 @@ function normalizeDomainInput(value) {
 function getBlockedCountMeta(count) {
     const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
     if (safeCount <= 0) {
-        return 'No sites blocked';
+        return '';
     }
     return `${safeCount} blocked`;
 }
