@@ -180,6 +180,34 @@ input:focus {
   background: var(--primary-hover);
 }
 
+.current-tab-btn {
+  width: 100%;
+  margin-top: 10px;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  background: var(--lavender);
+  color: var(--primary);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 5px 12px rgba(74, 29, 150, 0.08);
+}
+
+.current-tab-btn:hover {
+  background: var(--lavender-2);
+  border-color: var(--primary);
+}
+
+.current-tab-btn-label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.current-tab-btn-hint {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .btn:focus-visible,
 .remove-site-btn:focus-visible {
   outline: 2px solid var(--primary);
@@ -233,6 +261,14 @@ input:focus {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.feedback-context {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 4px;
+  text-align: center;
 }
 
 .feedback-link {
