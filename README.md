@@ -13,7 +13,7 @@ ResistGate is a Manifest V3 Chrome extension that makes it genuinely harder to v
 
 The extension is built on one behavioral premise: **friction changes behavior**. A 10-second countdown is enough to break an unconscious reflex. Five paragraphs of deliberate typing are enough to make you decide whether this visit is actually worth it. ResistGate is not a nanny filter — it is an accountability layer you configure for yourself.
 
-Free users get the complete blocking and friction engine: schedule-based blocking, configurable temporary access windows, a daily resistance badge, per-site visit counters, per-site intention goals with optional breathing, and the full Earn Access (temptation bundling) system — pair distracting sites with work requirements so they unlock only after you've earned them. Pro users add Commitment Mode (1–24h hard lockout with no escape), Strict Mode locking, behavioral friction presets, stronger pre-entry prompts, a 7-day analytics dashboard, and a weekly Focus Score.
+Free users get the complete blocking and friction engine: schedule-based blocking, configurable temporary access windows, a daily resistance badge, per-site visit counters, per-site intention goals with optional breathing, a work timer, and per-site access conditions that unlock sites after a chosen time or after earned focus minutes. Pro users add Commitment Mode (1-24h hard lockout with no escape), Strict Mode locking, behavioral friction presets, stronger pre-entry prompts, earn-access challenge timing, a 7-day analytics dashboard, and a weekly Focus Score.
 
 ---
 
@@ -21,7 +21,7 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 
 | Detail | Value |
 |---|---|
-| **Version** | 1.1.0 |
+| **Version** | 1.3.3 |
 | **Manifest** | V3 |
 | **Platform** | Google Chrome (desktop) |
 | **Free tier** | No account required — full blocking engine included |
@@ -31,9 +31,9 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 | **Pro activation** | PayPal checkout on orlandoascanio.com → extension activates automatically |
 | **Build step** | None — plain ES2020+ HTML / CSS / JS |
 | **Storage** | `chrome.storage.local` only (local-first, per browser profile) |
-| **External services** | Sentry (crash telemetry, extension pages only) |
-| **Test suite** | 139 tests · 4 files · Vitest 2.1.9 |
-| **Background coverage** | 88.59% lines · 76.35% branches · 96.59% functions |
+| **External services** | Sentry crash telemetry + PostHog allowlisted lifecycle/funnel events |
+| **Test suite** | 152 tests · 5 files · Vitest 2.1.9 |
+| **Background coverage** | 88.4% lines/statements · 76.44% branches · 96.66% functions |
 | **License** | See `LICENSE` |
 
 ---
@@ -43,14 +43,14 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 ### Challenge mechanics
 | Setting | Default | Range |
 |---|---|---|
-| Typing paragraphs | 5 | Fixed |
+| Typing challenge | Hard = 5 paragraphs; Moderate = 1-2 sentences; Easy = short random code | Configurable level |
 | Required accuracy | 100% | Fixed |
 | Paste / clipboard | Disabled | Fixed |
-| Manual override delay | 12 seconds | 10–15s (configurable) |
+| Manual override delay | 12 seconds | 10-15s (configurable) |
 | Temporary access window | 15 minutes | Configurable per site |
-| Earn-access min challenge time | 90 seconds | 30–900s (Pro) |
+| Earn-access min challenge time | 90 seconds | 30-900s (Pro) |
 | Commitment Mode duration | 2 hours | 1–24h (Pro) |
-| Strict Mode disable delay | 30 seconds | 10–300s (Pro) |
+| Strict Mode disable delay | 30 seconds | 10-300s (Pro) |
 
 ### Override cooldown system (Pro)
 | Parameter | Default | Range |
@@ -72,6 +72,7 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 | `dailyBlockCount` | Badge counter (resets at midnight) |
 | `resistanceCounters` | Per-domain visit counters keyed by date |
 | `installation` | Generated device ID (opaque UUID) |
+| `pendingOutcomeTap` | Last expired access window that should prompt for reflection in the popup |
 
 ### Alarm types
 | Alarm prefix | Trigger |
@@ -91,6 +92,7 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 | `manual_disable` | Strict Mode turned off |
 | `challenge_failed` | Typing challenge abandoned |
 | `challenge_completed` | Typing challenge finished |
+| `outcome_tap_response` | Recognized by the sanitizer, but current popup recording is incomplete; see `docs/Implementation.md` |
 
 ### Focus Score formula
 ```
@@ -117,7 +119,7 @@ Calculated over a rolling 7-day window. Compared week-over-week in the Weekly Re
   - **block current tab**
 - **Options page** for full settings (blocklist, schedule, access duration).
 - **Daily resistance badge** (toolbar) + **per-site resistance counters** (stored locally).
-- **Earn Access rules per site ("temptation bundles")**
+- **Access conditions per site ("temptation bundles")**
   - allow access only **after a time of day** or **after N minutes on the work timer**
   - if the condition is met, the site loads normally (no redirect)
 - **Work timer** (used by Earn Access rules).
@@ -179,7 +181,8 @@ Notes:
 
 - **Local-first data**: settings, timers, resistance counters, and analytics live in `chrome.storage.local` (no `chrome.storage.sync`).
 - **Crash reporting**: extension pages load Sentry (`vendor/sentry-init.js`) for error diagnostics.
-- **No remote blocking/unlocking APIs**: the extension does not call a backend to decide whether to block or grant access. (Network traffic is limited to Sentry telemetry and the separate website checkout/activation flow.)
+- **Lifecycle telemetry**: `background.js` sends allowlisted PostHog funnel events with an opaque generated device ID and sanitized primitive properties.
+- **No remote blocking/unlocking APIs**: the extension does not call a backend to decide whether to block or grant access. Network traffic is limited to Sentry, PostHog lifecycle/funnel telemetry, and separate website pricing/feedback/activation flows.
 
 ## Project structure
 
@@ -188,10 +191,12 @@ manifest.json          — MV3 config + permissions + externally_connectable
 background.js          — service worker: rules, alarms, storage, Pro gating, messaging
 popup/                 — quick actions UI (popup.html/css/js)
 options/               — full settings UI (options.html/css/js)
+intention-page/        — standalone pause + short challenge page
 friction-page/         — typing challenge + manual override (index.html/css/js)
 commitment-page/       — lockout page for Commitment Mode (index.html/css/js)
 welcome/               — onboarding page
 whats-new/             — update notes page
+shared/                — shared CSS design tokens/utilities
 vendor/                — Sentry bundle + init
 icons/                 — extension icons
 tests/                 — Vitest suite (unit + integration)
@@ -215,7 +220,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-Coverage thresholds are enforced by `vitest.config.js` (notably: `background.js` lines/statements 85%, functions 95%).
+Coverage thresholds are enforced by `vitest.config.js`: global covered files must meet 43% lines/statements, 48% functions, 70% branches; `background.js` must meet 85% lines/statements, 95% functions, 70% branches.
 
 ## Permissions (why)
 
@@ -224,6 +229,7 @@ Coverage thresholds are enforced by `vitest.config.js` (notably: `background.js`
 | `declarativeNetRequest` | block/redirect configured domains |
 | `storage` | persist settings and state locally |
 | `alarms` | expire temporary access, schedule resets, timed unlock conditions |
+| `tabs` | open pricing, feedback, options, lifecycle, and active-tab quick-block flows |
 | `host_permissions: <all_urls>` | apply rules to user-selected domains |
 
 ## Related docs

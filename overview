@@ -1,247 +1,54 @@
-Sat - 11 - April - 2026
+ResistGate Current Overview
 
- Codebase Map
+Last audited: 2026-07-07
+Version: 1.3.3
 
-  ResistGate/
-  ├── manifest.json                    # MV3 manifest
-  ├── background.js                    # Service worker (~1870 lines) — THE CORE
-  ├── popup/
-  │   ├── popup.html                   # Popup UI (add/remove blocked sites)
-  │   ├── popup.js                     # Popup logic
-  │   └── popup.css                   # Popup styles
-  ├── options/
-  │   ├── options.html                 # Full settings page (3 tabs: General, Analytics, Report)
-  │   ├── options.js                   # Options page logic (~1020 lines)
-  │   └── options.css                  # Options styles
-  ├── friction-page/
-  │   ├── index.html                   # Interstitial challenge page
-  │   ├── script.js                    # Challenge flow logic (~840 lines)
-  │   └── style.css                    # Challenge page styles
-  ├── welcome/
-  │   ├── welcome.html                 # Onboarding page shown on first install
-  │   ├── welcome.js                   # Welcome page logic (19 lines)
-  │   └── welcome.css                  # Welcome styles
-  ├── icons/                           # 16x16, 32x32, 48x48, 128x128 PNGs
-  ├── tests/
-  │   ├── background.integration.test.js
-  │   ├── feature-matrix.test.js
-  │   ├── friction-page.flow.test.js
-  │   ├── ui.logic.test.js
-  │   └── helpers/vm-env.js
-  ├── resistgate-extension/            # DUPLICATE of root (stale copy with different bg.js)
-  ├── package.json                     # vitest + @vitest/coverage-v8 only
-  ├── vitest.config.js                 # Test config
-  ├── ROADMAP.md                       # Pro v1 product spec
-  ├── Architecture.md                  # Architecture doc
-  └── .gitignore
+This plain-text overview is intentionally short. The detailed current docs are:
 
-  Entry points:
-  - background.js — Service worker (MV3)
-  - popup/popup.html + popup.js — Browser action popup
-  - options/options.html + options.js — Full settings page
-  - friction-page/index.html + script.js — Interstitial blocking page
-  - welcome/welcome.html + welcome.js — First-install onboarding
+- README.md
+- Architecture.md
+- docs/Implementation.md
+- Features.md
+- ROADMAP.md
+- AGENTS.md
+- CLAUDE.md
+- TODOS.md
 
-  Manifest: MV3, permissions: declarativeNetRequest, storage, alarms
-  Host permissions: <all_urls>
-  Build system: None — plain JS, no bundler
-  Dependencies: vitest (dev only)
-  Storage: chrome.storage.local exclusively — keys: settings, temporaryAccess, analytics, overrideState,
-  welcomeShown (unused key), installation
-  External services: https://www.orlandoascanio.com (entitlement sync, pricing, uninstall survey)
+Verified state:
 
-  ---
-  Current Features
+- Manifest V3 Chrome extension.
+- No build step; plain HTML/CSS/JS.
+- Runtime source of truth: background.js.
+- Storage: chrome.storage.local only.
+- Rules: declarativeNetRequest session rules refreshed through queueRulesUpdate().
+- Tests: 152 passing across 5 Vitest files.
+- Coverage gate: npm run test:coverage passes.
 
-  Site Blocking — Status: Working
+Core free features:
 
-  - Domains are added/removed via popup or options page
-  - buildBlockingRules() creates declarativeNetRequest session rules that redirect matching main_frame
-  requests to friction-page/index.html?originalUrl=...                                                      - Uses ||domain^ urlFilter pattern — blocks exact domain and subdomains
-  - Expired blocks and temporary access entries are cleaned on each rule refresh
-  - Alarms fire at expiry times to re-sync rules
+- Domain blocking.
+- Schedule blocking.
+- Graduated typing challenge.
+- Temporary access.
+- Manual override delay.
+- Popup quick actions.
+- Options page settings.
+- Daily badge and per-site resistance counters.
+- Work timer.
+- Per-site time/work access conditions.
+- Intention Page with per-site reminders and optional breathing.
 
-  Friction / Challenge System — Status: Working
+Core Pro features:
 
-  - Blocked redirects land on friction page
-  - 5-paragraph typing challenge with accuracy tracking
-  - Paste and Ctrl+A/C/V blocked during challenge
-  - Pro features: task intent input, custom challenge prompt, timed wait countdown, earn-access minimum     time requirement
-  - Earn-access bonus time for longer challenge times (5 min for ≤4 min, 2 min for ≤6 min)
+- Strict Mode.
+- Commitment Mode.
+- Override cooldown.
+- Behavioral friction precheck.
+- Earn-access challenge timing and bonus minutes.
+- Accountability presets.
+- Analytics dashboard.
+- Weekly report and Focus Score.
 
-  Manual Override — Status: Working
+Current audit finding to fix next:
 
-  - Free users: 10-15 second forced wait, then access
-  - Pro users: cooldown system — escalating delays after threshold overrides, lockout after excessive use
-
-  Pro / Subscription — Status: Working (with caveats)
-
-  - Two activation paths: (1) external website sends activateProFromWebsite message, (2) activateLicense    message with RSA-signed JWT
-  - RSA public key is embedded in background.js
-  - Daily entitlement refresh alarm syncs with server
-  - hasProAccess() checks tier === 'pro' and expiresAt — but allows pro with no expiry (legacy/dev
-  fallback)
-  - Paywall modal in options page gates analytics and pro features
-
-  Analytics Dashboard — Status: Working (Pro only)
-
-  - Tracks blocked_visit, access_granted, override_triggered, manual_disable, challenge_failed,
-  challenge_completed                                                                                       - Max 3000 events stored locally
-  - 7-day dashboard: blocked attempts, overrides, strict session minutes, top domains, override trend
-  chart
-
-                                                                                                     Weekly Report — Status: Working (Pro only)
-
-  - Focus score formula: 100 - (overrides × 5) - (manualDisableCount × 10), clamped 0-100
-  - Trend vs previous week, risk alerts, feedback line
-
-  Schedule-Based Blocking — Status: Working
-  - Configurable days + start/end time
-  - Overnight schedules supported (start > end wraps around midnight)                                       - Schedule check happens in buildBlockingRules() — only blocks during scheduled windows
-
-  Strict Mode — Status: Working
-
-  - Locks settings during active schedule windows
-  - Cooldown-based disable flow (first request starts cooldown, second confirms after delay)
-  - Configuration locked: can only toggle strictModeEnabled, nothing else
-
-  ---
-  Bugs Found
-
-  CRITICAL
-
-  1. resistgate-extension/ is a stale duplicate — The resistgate-extension/ directory contains the same
-  files as the root but with an outdated background.js. The uncommitted changes add setUninstallURL to
-  both. This directory will cause confusion and potential packaging issues if loaded as the extension.
-
-  2. host_permissions: <all_urls> is over-broad — The manifest requests <all_urls> host permission. This
-  is only needed for declarativeNetRequest to redirect blocked sites. However, <all_urls> is the nuclear
-  option and will trigger a Chrome Web Store review warning. You should declare only the domains the user
-  actually blocks, or use declarativeNetRequestWithHostAccess with more targeted permissions.
-
-  MAJOR
-
-  3. WELCOME_SHOWN_KEY is declared but never read or written (background.js:8) — The key welcomeShown is    defined as a constant but never used anywhere. The welcome page opens on every onInstalled with reason
-  === 'install' (which Chrome handles correctly), but there's no mechanism to prevent re-showing on
-  updates.
-
-                                                                                                  4. Race condition in initializeExtension — initializationPromise is set to null in the finally block. If
-   two callers hit it near-simultaneously after the first resolves, the second call sees initialized ===    true and returns immediately — this is fine. But if a call arrives while initializationPromise is being
-  awaited and initialized is still false, the second call correctly awaits the same promise. However, if
-  initializationPromise resolves and is set to null before the first await in the try block returns, a
-  concurrent call could start a second initialization. The guard if (initializationPromise) prevents this
-  in practice, but the finally { initializationPromise = null } pattern creates a brief window where        initialized is true and initializationPromise is null, which is the intended steady state. Low risk in
-  practice but the pattern is fragile.
-
-  5. Storage writes have no mutex — updateSettings in the message handler does getSettings → sanitize →     saveSettings. If two messages arrive rapidly (e.g., popup add-site + options save), the second write can   overwrite the first's changes. The updateQueue in queueRulesUpdate only queues rule updates, not
-  settings writes. The grantTemporaryAccess function also does read-modify-write on temporaryAccess         without queuing.
-
-                                                                                          6. chrome.runtime.onMessage handler uses void (async () => { ... })() pattern — This works because
-  return true keeps the channel open, but if sendResponse is called after the extension context is          invalidated (e.g., service worker restarts), the call silently fails. No retry mechanism exists.
-  7. License verification uses atob() and crypto.subtle in service worker — Service workers support
-  crypto.subtle in MV3, but the atob usage and string manipulation in base64UrlDecode could fail in edge
-  cases with non-ASCII characters. More critically, str2ab uses str.charCodeAt(i) which mangles characters   > 255. For base64url this is fine since the charset is ASCII, but it's a latent assumption.
-
-              MINOR
-  8. console.log statements left in production — background.js lines 351, 400, 1089, 1099, 1110 all have
-  console.log calls that will appear in the service worker console. Not a bug per se, but noisy for         production.
-
-  9. Duplicate normalizeDomain() function — The exact same function exists in background.js,
-  popup/popup.js, and friction-page/script.js. Any bug fix or behavior change must be applied in all three   places.
-  10. Friction page startTime is set on "I'm Ready" click (script.js:57) — If the user clicks "Start        Challenge", then clicks "Cancel" and restarts, startTime is reset on the confirm click, but if they
-  reload the page, startTime is null and Date.now() - null gives NaN. The completeChallenge function uses
-  Date.now() - startTime which would produce NaN, breaking earn-access time checks.
-
-  11. Friction page XSS risk in innerHTML assignment (script.js:160) — proPrecheck.innerHTML =              sections.join('') injects HTML that includes friction.customChallengePrompt via escapeHtml(). This is
-  safe because escapeHtml is used, but the pattern is fragile. One missed call and it's XSS.
-
-  12. Options page pro-precheck area uses innerHTML with escapeHtml — Same concern as above. Currently      safe, but brittle pattern.
-
-  13. temporaryAccess stored as object keyed by domain — If a user blocks youtube.com and www.youtube.com   (both normalize to different values depending on input), they get separate access entries. But
-  buildBlockingRules deduplicates by normalizeDomain, so both domains get blocked. The access lookup uses   the exact domain from the blocklist entry's urlPattern, which should match, but the
-  isDomainTemporarilyAccessible check in the background uses the domain key directly, not a normalized
-  lookup.
-  14. Analytics only track Pro users — recordBlockedVisit and recordAnalyticsEvent silently return if
-  !hasProAccess(settings). This means free users get zero analytics data, so upgrading to Pro starts with
-  an empty dashboard. This is by design per ROADMAP.md but worth noting as a UX gap.
-  15. isProUser() in options.js and hasProAccess() in background.js use slightly different logic —
-  options.js:949-958 checks cachedSettings.subscription.tier directly, while background.js:933-946 uses     sanitizeSettings which normalizes. Both treat no-expiresAt as valid Pro, but the options page relies on
-  potentially stale cachedSettings rather than re-reading from storage.
-  ---                                                                                                       Missing / Incomplete
-
-  1. No content_scripts declared — The extension relies entirely on declarativeNetRequest for blocking.     This means it cannot inject any UI into blocked pages. The friction page is a full redirect, not an
-  overlay. This is fine but means no inline dismissal/countdown UI on the original page.
-
-  2. welcomeShown key is never written — WELCOME_SHOWN_KEY is defined but never used. The welcome page      re-shows only on reason === 'install' which Chrome handles, but there's no opt-out mechanism if a user
-  closes it and wants to revisit.
-  3. No content security policy — The manifest has no content_security_policy. The friction page and
-  options page load Google Fonts via external <link>. This works in MV3 (CSP for extension pages is
-  relaxed by default), but is worth noting.
-
-  4. No internationalization (i18n) — All UI text is hardcoded English.
-  5. friction-page is not declared in web_accessible_resources — But it's loaded via
-  chrome.runtime.getURL() in a redirect, which works without being in web_accessible_resources. However,
-  the welcome/welcome.html IS declared in web_accessible_resources with <all_urls>, which is overly broad   — it only needs to be accessible to the extension itself.
-
-  6. No error boundary in friction page — If chrome.runtime.sendMessage fails (extension context
-  invalidated, service worker asleep), the user is stuck on the friction page with no way to proceed.
-  7. No declarativeNetRequest rule limit handling — Chrome limits session rules to 5000 (or 300 on some
-  versions). No guard exists against adding too many blocklist entries.
-
-  8. Paywall modal has a "Go to Pricing" button that calls openPricingPage() which sends a message to the
-  background. This works, but the email validation is basic (/^[^\s@]+@[^\s@]+\.[^\s@]+$/) and the pricing   URL leaks extensionId and deviceId in query params.
-
-                                                      9. No graceful degradation for offline scenarios — refreshEntitlement makes a fetch() call that will
-  fail offline. The extension continues working (local storage), but the user might see confusing error
-  states.
-  ---
-  Roadmap Opportunities
-  V-next (quick wins — under 2 hours each)
-
-                                                                  1. Remove stale resistgate-extension/ directory — It's a duplicate that will cause packaging confusion
-  2. Remove or use WELCOME_SHOWN_KEY — Either delete the unused constant or implement a "don't show again"
-   flow
-  3. Add console.log stripping for production — Replace with a no-op logger or remove entirely              4. Narrow web_accessible_resources for welcome page — Change <all_urls> to ["chrome-extension://*"] or
-  remove entirely since it's only opened by the extension itself
-  5. Reduce host_permissions scope — Use declarativeNetRequestWithHostAccess or dynamically add host
-  permissions only for blocked domains
-  6. Extract shared normalizeDomain into a common module — Deduplicate across 3 files
-  7. Add blocklist size guard — Show a warning or hard cap at ~250 domains (Chrome's DNR session rule
-  limit is 300)
-  8. Fix startTime null case in friction page — Handle page reload where startTime is null
-  9. Add error recovery in friction page — If chrome.runtime.sendMessage fails, show a "Try again" or       "Close tab" button instead of hanging
-
-  V+1 (meaningful features — 1-3 days each)
-  1. Analytics for free users — Track at least blocked_visit counts (capped) so Pro upgrade has historical   data
-  2. Overlay mode — Use content scripts to inject a blocking overlay instead of redirecting, preserving
-  URL and browser history                                                                                   3. Cloud sync — Use chrome.storage.sync for settings so they follow the user across devices
-  4. Graceful offline entitlement — Cache the last known Pro status and show a clear "offline mode"
-  indicator instead of error                                                                                5. Import/export settings — Allow users to back up and restore their blocklist and configuration
-  6. Blocklist categories/presets — Offer one-click blocking of social media, news, entertainment, etc.
-  7. Testing for friction page flow — The test suite covers background logic well but has minimal
-  friction-page end-to-end tests
-
-                                                                            V+2 (bigger bets — 1+ week each)
-
-                                                                          1. Build pipeline — Add a bundler (Vite/Webpack) to enable module sharing, tree-shaking, and proper
-  build artifacts; currently shipping raw JS                                                                2. Service worker persistence — Move to chrome.storage.session for ephemeral state and add proper state
-  recovery after service worker restarts (currently relies on alarms + storage.onChanged, which is mostly   correct but fragile)
-  3. Dynamic rule management — Instead of rebuilding all rules on every change, use updateDynamicRules for   persistent rules and only use session rules for temporary access, reducing rule update overhead
-  4. Cross-device sync with backend — Full Stripe integration with webhook-verified entitlement, email      receipts, and cross-device Pro activation
-  5. Adaptive friction — Dynamically adjust challenge difficulty based on user's override frequency,        creating a personalized difficulty curve
-
-                                                                  ---
-  Overall Assessment
-  - Extension stability: Needs work — The core blocking loop works, but there are race conditions in        concurrent settings writes, stale code duplicates, and no error recovery on the friction page for
-  extension context invalidation.                                                                           - Manifest V3 compliance: Compliant with caveats — MV3 service worker, declarativeNetRequest, and
-  storage APIs are all used correctly. The <all_urls> host permission will trigger CWS review friction.     - Ready for Chrome Web Store submission: No, with caveats — Works functionally but has: (1) over-broad
-  permissions that will draw reviewer scrutiny, (2) console.log calls in production code, (3) a stale
-  duplicate directory that could cause packaging confusion, (4) no CSP, (5) web_accessible_resources
-  declared too broadly.
-  - Top 3 things to fix before next release:
-    a. Remove the resistgate-extension/ duplicate directory and ensure packaging only uses root-level
-  files
-    b. Narrow host_permissions from <all_urls> to something scoped, and tighten web_accessible_resources
-  matches
-    c. Fix the startTime null case and add error recovery in the friction page so users aren't stuck if
-  the extension context resets
+- Outcome tap responses are not persisted. popup/popup.js sends the wrong payload shape to recordAnalyticsEvent, and background.js does not currently store outcome_tap_response through that handler. See docs/Implementation.md and TODOS.md.

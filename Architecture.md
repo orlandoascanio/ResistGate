@@ -1,351 +1,230 @@
-# ResistGate Pro v1 Architecture
+# ResistGate Architecture
 
-## 1. Overall Architecture (Mental Model)
-Think in 4 layers:
-- Background worker (service worker)
-  Source of truth for blocking, Pro status, analytics.
-- Storage layer
-  `chrome.storage.local` + sync with typed schemas.
-- UI surfaces
-  Options page, popup, friction/blocked page, dashboard.
-- Backend (your site/Stripe)
-  Only for Pro entitlement + billing (already discussed).
+Last audited: 2026-07-07
+Current extension version: 1.3.3
 
-Everything important (rules, analytics, Pro flags) lives in background + storage.
+ResistGate is a Manifest V3 Chrome extension with no build step. The runtime is plain HTML, CSS, and ES2020+ JavaScript loaded directly by Chrome.
 
-## 2. Background Worker Responsibilities
-Background script is the “brain”:
-- Evaluates requests -> should this be blocked?
-- Manages temporary access & strict mode
-- Logs analytics events
-- Triggers weekly aggregation/report
-- Periodically refreshes Pro entitlement
-- Exposes a small message API for UIs
+## System Model
 
-### 2.1 Main Responsibilities
-#### a) Blocking Orchestration
-- Listens to URL classification (via `declarativeNetRequest` rules already configured).
-- When a blocked domain is hit:
-  - Redirect -> friction page (challenge URL).
-  - Pass context via query params or `chrome.storage` (original URL, reason, timestamp).
+ResistGate has four runtime layers:
 
-#### b) Friction Flow
-- Challenge page -> talks to background via `chrome.runtime.sendMessage`.
-- Background validates challenge result.
-- On success:
-  - Create temporary allow rule (for X minutes) or "earn-access" logic.
-  - Schedule expiry via `chrome.alarms`.
-  - Log `access_granted` event.
+1. `background.js`
+   - Service worker and source of truth.
+   - Owns storage sanitation, `declarativeNetRequest` rule generation, alarms, analytics aggregation, Pro gating, external activation, and message handlers.
 
-#### c) Strict Mode / Override Control
-- If `strictModeEnabled && strictModeActiveWindow`:
-  - Prevent editing blocklist/schedule (UI reads this state).
-  - Enforce extra friction for overrides.
-- Cooldown:
-  - Track override attempts.
-  - If beyond threshold -> set a cooldown alarm or flag.
+2. Extension pages
+   - `popup/`: quick add/remove, block current tab, work timer, commitment status, feedback, outcome tap prompt.
+   - `options/`: blocklist, per-site reminders, access conditions, schedule, Pro paywall, analytics, weekly report, stronger locks.
+   - `intention-page/`: standalone pause layer and short challenge when the Intention Page is enabled.
+   - `friction-page/`: fallback/full challenge page, manual override, Pro behavioral prechecks, temptation bundle progress.
+   - `commitment-page/`: lockout page shown while Commitment Mode is active.
+   - `welcome/` and `whats-new/`: lifecycle/support pages.
 
-#### d) Analytics Logging & Aggregation
-Single function: `logEvent(event: FocusEvent)`
+3. Local storage
+   - All user and runtime data uses `chrome.storage.local`.
+   - No `chrome.storage.sync` is used.
 
-Called from:
-- Block events
-- Overrides
-- Challenge success/fail
-- Strict session start/stop
+4. External product site
+   - The extension opens pricing and feedback pages on `orlandoascanio.com`.
+   - Pro activation is accepted only through trusted external messaging from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`.
 
-Stores raw events -> local storage.
-Periodically aggregates into weekly metrics (scheduled by `chrome.alarms`).
+## Manifest Surface
 
-#### e) Entitlement Refresh (Pro)
-On startup and every 24 hours (via `chrome.alarms`):
-- Read `licenseKey` from storage.
-- Verify the key using the embedded RS256 public key (Web Crypto API).
-- Check `expiresAt` in the JWT payload.
-- Update `tier`, `expiresAt`, and `status` in storage.
-- If license is invalid or expired, downgrade to `free`.
+`manifest.json` declares:
 
-Expose this to UIs via:
-- `chrome.storage` (observed by components)
-- or message `activateLicense`.
+| Area | Current value |
+|---|---|
+| Manifest version | 3 |
+| Background | `background.js` service worker |
+| Popup | `popup/popup.html` |
+| Options | `options/options.html` |
+| Permissions | `declarativeNetRequest`, `storage`, `alarms`, `tabs` |
+| Host permissions | `<all_urls>` |
+| Web resources | `welcome/`, `commitment-page/`, `intention-page/`, `whats-new/` |
+| External origins | localhost dev URL plus website matches in manifest; handler only trusts the website origins |
+| CSP connect-src | Sentry and PostHog ingest endpoints |
 
-## 3. Storage Model (What Lives Where)
-Use typed schemas in TS so you don’t drown later.
+The broad host permission is what allows DNR rules to match user-configured domains. Keep it documented because it will be visible during Chrome Web Store review.
 
-### 3.1 Storage Areas
-#### `chrome.storage.sync`
-Light user settings that should sync between devices:
-- blocklist
-- schedules
-- strictModeEnabled
-- basicFrictionEnabled
+## Storage Model
 
-#### `chrome.storage.local`
-Heavier / device-specific:
-- licenseKey
-- analytics raw events
-- weekly aggregates
-- `lastReportGeneratedAt`
-- temp access state
-- strict mode runtime state (if device-specific)
+`background.js` defines the storage constants and normalizes persisted data on startup.
 
-### 3.2 Type Interfaces (Example)
-```ts
-// sync storage
-export interface SyncSettings {
-  blocklist: string[]; // domains
-  schedules: FocusSchedule[];
-  strictModeEnabled: boolean;
-  basicFrictionEnabled: boolean;
-}
+| Key constant | Storage key | Purpose | Sanitizer |
+|---|---|---|---|
+| `SETTINGS_KEY` | `settings` | Blocklist, schedule, challenge settings, subscription tier, Pro feature config | `sanitizeSettings()` |
+| `TEMP_ACCESS_KEY` | `temporaryAccess` | Per-domain temporary access grants | `sanitizeTemporaryAccess()` |
+| `ANALYTICS_KEY` | `analytics` | Pro analytics event log, capped at 3,000 events | `sanitizeAnalytics()` |
+| `OVERRIDE_STATE_KEY` | `overrideState` | Manual override timestamps and lock window | `sanitizeOverrideState()` |
+| `INSTALLATION_KEY` | `installation` | Opaque device ID, first-seen timestamp, PostHog dedupe flags | `sanitizeInstallation()` |
+| `DAILY_COUNT_KEY` | `dailyBlockCount` | Toolbar badge count for the current day | inline daily reset logic |
+| `RESISTANCE_COUNTERS_KEY` | `resistanceCounters` | Per-domain daily resistance counts | inline counter logic |
+| `WORK_TIMER_KEY` | `workTimer` | Current-day work timer state | `sanitizeWorkTimer()` |
+| `PENDING_OUTCOME_TAP_KEY` | `pendingOutcomeTap` | Recent expired access prompt for popup reflection | `sanitizePendingOutcomeTap()` exists, but startup does not currently normalize this key |
+| `WELCOME_SHOWN_KEY` | `welcomeShown` | Declared but currently unused | none |
+| `WHATS_NEW_SHOWN_KEY` | `whatsNewShown` | Declared but currently unused | none |
 
-export interface FocusSchedule {
-  id: string;
-  daysOfWeek: number[]; // 0-6
-  startTime: string; // "09:00"
-  endTime: string;   // "13:00"
-}
+All storage reads and writes go through `getFromStorage()` and `setInStorage()`, except a few UI-side reads for popup-only ephemeral prompts.
 
-// entitlement (local storage)
-export interface ProEntitlement {
-  tier: 'pro' | 'free';
-  licenseKey?: string;
-  email?: string;
-  expiresAt?: number;
-  upgradedAt?: number;
-}
-```
-// local storage
-export interface LocalRuntimeState {
-  tempAllowRules: TempAllowRule[];
-  strictModeRuntime: StrictModeRuntimeState;
-  analyticsEvents: FocusEvent[];
-  weeklyMetrics: WeeklyMetrics[];
-  lastWeeklyReportAt?: string;
-}
+## Rule Pipeline
 
-export interface TempAllowRule {
-  id: string;
-  domain: string;
-  expiresAt: string; // ISO
-}
+Rule updates are serialized through `queueRulesUpdate(reason)`. New code should not call `updateBlockingRules()` directly.
 
-export interface StrictModeRuntimeState {
-  isActive: boolean;
-  activeSince?: string;
-  overrideAttemptsWindow: OverrideWindow;
-}
+```js
+let updateQueue = Promise.resolve();
+function queueRulesUpdate(reason) {
+  updateQueue = updateQueue
+    .then(() => updateBlockingRules(reason))
+    .catch((error) => {
+      console.error('Rule update failed:', error);
+    });
 
-export interface OverrideWindow {
-  attempts: number;
-  windowStart: string; // ISO
+  return updateQueue;
 }
 ```
 
-## 4. Analytics Structure (Events -> Aggregates -> Report)
-### 4.1 Event Schema
-Keep it simple and append-only.
+`updateBlockingRules()`:
 
-```ts
-export type FocusEventType =
-  | 'blocked_visit'
-  | 'access_granted'
-  | 'override_attempt'
-  | 'override_success'
-  | 'challenge_failed'
-  | 'challenge_completed'
-  | 'strict_session_start'
-  | 'strict_session_end';
+1. Reads sanitized settings and temporary access.
+2. Removes expired blocklist and access entries.
+3. Syncs access/block expiry alarms and time-of-day bundle alarms.
+4. Reads work timer state.
+5. Builds session DNR rules with `buildBlockingRules()`.
+6. Replaces existing session rules.
 
-export interface FocusEvent {
-  id: string;
-  type: FocusEventType;
-  timestamp: string; // ISO
-  domain?: string;
-  metadata?: Record<string, unknown>;
-}
+`buildBlockingRules()` skips rules when:
+
+- the extension is disabled;
+- schedule blocking is enabled and the current local time is outside the configured window;
+- the domain already has active temporary access;
+- a per-site access condition is enabled and already satisfied.
+
+When a domain remains blocked, the redirect target is:
+
+| Condition | Redirect |
+|---|---|
+| Commitment Mode active | `commitment-page/index.html` |
+| Intention Page enabled | `intention-page/index.html` |
+| Otherwise | `friction-page/index.html` |
+
+Redirects pass `originalUrl` as a query parameter.
+
+## Message API
+
+Internal pages send `{ action: '...' }` through `chrome.runtime.sendMessage`. Successful responses use `{ success: true, ...payload }`. Failures use `{ success: false, error }`, with optional `proRequired` or `cooldownPending`.
+
+| Action | Pro-gated | Purpose |
+|---|---:|---|
+| `grantTemporaryAccess` | No | Grant timed access after challenge or manual override |
+| `recordBlockedVisit` | No | Increment badge and resistance counters; logs Pro analytics |
+| `getResistanceCount` | No | Return today's per-domain resistance count |
+| `recordAnalyticsEvent` | Partially | Track allowed PostHog events for all users; store selected local analytics for Pro |
+| `getSettings` | No | Return sanitized settings |
+| `getManualOverrideStatus` | No | Return current manual override delay/lock state |
+| `updateSettings` | No | Sanitize, enforce tier guards, apply Strict/Commitment locks, save, refresh rules |
+| `getAnalyticsDashboard` | Yes | Return 7-day dashboard data |
+| `getWeeklyReport` | Yes | Return weekly Focus Score report |
+| `activateCommitmentMode` | Yes | Start 1-24 hour lockout |
+| `deactivateCommitmentMode` | Always refuses | Commitment Mode cannot end early |
+| `getWorkTimerState` | No | Return current-day timer state |
+| `startWorkTimer` | No | Start focus timer |
+| `stopWorkTimer` | No | Stop focus timer and accumulate minutes |
+| `getCommitmentModeStatus` | No | Return lockout status and remaining time |
+| `openPricingPage` | No | Open website pricing page |
+| `openFeedbackPage` | No | Open website feedback page |
+| `trackPosthogEvent` | No | Track an allowlisted PostHog event once per installation |
+
+External messages are handled by `chrome.runtime.onMessageExternal`. The only supported external action is `activateProFromWebsite`, and it is accepted only from trusted website origins.
+
+## Alarms
+
+| Alarm name | Purpose |
+|---|---|
+| `resistgate-block-expire-*` | Refresh rules after a time-limited block expires |
+| `resistgate-access-expire-*` | Refresh rules after temporary access expires and write pending outcome tap state |
+| `resistgate-bundle-unlock-*` | Refresh rules when a time-of-day access condition becomes true |
+| `resistgate-commitment-expire` | End Commitment Mode and refresh rules |
+| `resistgate-daily-reset` | Reset badge count and work timer at local midnight |
+
+## Tier Model
+
+The canonical runtime check is `hasProAccess(settings)`, which returns `settings.subscription.tier === 'pro'`.
+
+Free code paths currently include:
+
+- domain blocking;
+- schedule-based blocking;
+- graduated typing challenges;
+- temporary access;
+- manual override with 10-15 second delay;
+- popup quick actions;
+- options page blocklist/settings;
+- daily badge and per-site counters;
+- work timer;
+- per-site access conditions using time-of-day or work timer;
+- Intention Page with per-site reminders and optional breathing.
+
+Pro code paths currently include:
+
+- Strict Mode and disable cooldown;
+- Commitment Mode;
+- override cooldown and lockouts;
+- behavioral friction precheck;
+- earn-access minimum challenge time and bonus minutes;
+- accountability presets;
+- analytics dashboard;
+- weekly report and Focus Score;
+- custom challenge prompt.
+
+Note: older docs referred to per-site access condition setup as Pro-only. Current code and tests treat temptation bundle setup as free.
+
+## Analytics And Telemetry
+
+Local analytics:
+
+- stored in `chrome.storage.local` under `analytics`;
+- only populated for Pro users in most code paths;
+- capped at 3,000 events;
+- used for dashboard and weekly report.
+
+PostHog lifecycle telemetry:
+
+- uses an opaque generated device ID from `installation.deviceId`;
+- tracks allowlisted funnel events once per installation where appropriate;
+- sends only sanitized primitive properties;
+- uses `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` from `background.js`.
+
+Sentry:
+
+- bundled under `vendor/`;
+- loaded by extension pages for crash/error diagnostics.
+
+## Known Architecture Risks
+
+- `pendingOutcomeTap` is written by the access-expiry alarm and rendered by the popup, but the popup sends the wrong shape to `recordAnalyticsEvent`, so the response is not currently persisted.
+- `WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are declared but unused.
+- Several UI scripts duplicate domain normalization instead of sharing a module. This is a tradeoff of the no-build-step architecture.
+- `options/options.js`, `popup/popup.js`, and `friction-page/script.js` have low line coverage even though background coverage meets the stricter threshold.
+- `<all_urls>` is broad and should be justified in Chrome Web Store copy.
+
+## Testing
+
+The suite uses Vitest 2.1.9 and Node VM contexts through `tests/helpers/vm-env.js`.
+
+Current verified state on 2026-07-07:
+
+```bash
+npm test
+# 5 test files, 152 tests passing
+
+npm run test:coverage
+# background.js: 88.4% lines/statements, 76.44% branches, 96.66% functions
 ```
 
-Logging entry point:
+Coverage thresholds live in `vitest.config.js`:
 
-```ts
-async function logEvent(event: Omit<FocusEvent, 'id' | 'timestamp'>) {
-  const full: FocusEvent = {
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    ...event,
-  };
-
-  const { analyticsEvents = [] } = await chrome.storage.local.get('analyticsEvents');
-  analyticsEvents.push(full);
-
-  await chrome.storage.local.set({ analyticsEvents });
-}
-```
-
-Call `logEvent({ type: 'blocked_visit', domain })` etc.
-
-### 4.2 Aggregation Model (Weekly)
-Run via `chrome.alarms` e.g. every few hours; if week boundary passed -> aggregate.
-
-```ts
-export interface WeeklyMetrics {
-  weekStart: string; // Monday ISO date
-  weekEnd: string;
-  focusScore: number;
-  totalBlocked: number;
-  totalOverrides: number;
-  strictSessionMinutes: number;
-  topDistractors: { domain: string; count: number }[];
-}
-```
-
-Aggregation steps:
-- Determine current week range (Mon-Sun).
-- Filter `analyticsEvents` to that week.
-- Compute:
-  - `totalBlocked = count of blocked_visit`
-  - `totalOverrides = count of override_success`
-  - `strictSessionMinutes` from start/end pairs
-  - `topDistractors` from `blocked_visit.domain`
-- Compute `focusScore`.
-
-Example v1 formula:
-
-```ts
-focusScore = clamp(
-  100
-    - totalOverrides * 5
-    - manualDisableCount * 10, // tracked via events
-  0,
-  100,
-);
-```
-
-- Store or update `WeeklyMetrics` entry for that week.
-- Optionally prune old raw events (e.g. > 90 days).
-
-### 4.3 Weekly Report Generation
-Weekly report = view over `WeeklyMetrics`.
-
-For v1:
-- Stored only locally
-- Rendered in “Weekly report” section in options/dashboard
-
-UI reads:
-- Latest `WeeklyMetrics`
-- Previous week to compare
-
-You can generate a small derived object:
-
-```ts
-export interface WeeklyReport {
-  weekStart: string;
-  weekEnd: string;
-  focusScore: number;
-  deltaFocusScore?: number;
-  totalBlocked: number;
-  totalOverrides: number;
-  topDistractors: { domain: string; count: number }[];
-  summaryText: string; // simple interpretation
-}
-```
-
-`summaryText` can be produced by a simple rules engine:
-- If `deltaFocusScore > 5`: “Better discipline than last week.”
-- If `< -5`: “More overrides than last week.”
-- Else: “Discipline was about the same as last week.”
-
-No AI. Deterministic and cheap.
-
-## 5. How Pro Fits Technically
-### 5.1 Pro Gating
-Every Pro-only feature checks `settings.subscription.tier === 'pro'`.
-
-In background:
-
-```ts
-async function isProUser(): Promise<boolean> {
-  const settings = await getSettings();
-  return settings?.subscription?.tier === 'pro';
-}
-```
-
-Gated features:
-- Strict mode lock actually enforcing lock -> Pro only
-- Override cooldown -> Pro only
-- Analytics dashboard -> visible only if Pro
-- Weekly report -> Pro only
-
-UI pattern:
-- UI checks `tier` from storage.
-- If user clicks Pro feature while free -> show paywall modal.
-
-### 5.2 Storage Separation
-You can still log events for free users, but:
-- Only Pro sees full analytics
-- Or Pro gets more granularity/history
-
-V1 simple rule:
-- Only show analytics if `isPro`, but you log anyway so if they upgrade, they see immediate history.
-
-## 6. Background Worker: Message API
-You want a tight set of messages for Popup/Options/Friction page.
-
-Example:
-
-```ts
-type MessageRequest =
-  | { type: 'getSettings' }
-  | { type: 'updateSettings'; settings: any }
-  | { type: 'activateLicense'; licenseKey: string }
-  | { type: 'getAnalyticsDashboard' };
-
-type MessageResponse =
-  | { success: boolean; settings?: any; error?: string };
-```
-
-In background:
-
-```ts
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  (async () => {
-    switch (request.action) {
-      case 'getSettings': {
-        const settings = await getSettings();
-        sendResponse({ success: true, settings });
-        break;
-      }
-      case 'activateLicense': {
-        const result = await verifyAndStoreLicense(request.licenseKey);
-        sendResponse(result);
-        break;
-      }
-      // etc...
-    }
-  })();
-
-  // indicate async
-  return true;
-});
-```
-
-Your React UIs (options, popup, friction page) use this to read state and render.
-
-## 7. Implementation Order (To Avoid Chaos)
-Given your roadmap and Pro v1 goals, implement in this order:
-1. Define types: `SyncSettings`, `LocalRuntimeState`, `FocusEvent`, `WeeklyMetrics`, `ProEntitlement`.
-2. Refactor background around:
-   - `logEvent`
-   - `refreshEntitlement`
-   - `applyTempAllowRule`
-   - `runWeeklyAggregation`
-3. Wire blocking + friction + temp access cleanly (you already have most).
-4. Add Strict Mode runtime rules and override cooldown logic.
-5. Implement analytics logging (calls in all relevant paths).
-6. Implement weekly aggregation via `chrome.alarms`.
-7. Build simple analytics dashboard UI (reads from `WeeklyMetrics`).
-8. Gate dashboard + strict mode + cooldown behind Pro.
-9. Only then: finish Stripe & entitlement endpoints and connect.
-
-You already have a lot coded - this gives structure so you don’t bolt on Pro in a messy way.
+| Scope | Lines | Statements | Functions | Branches |
+|---|---:|---:|---:|---:|
+| Global covered files | 43% | 43% | 48% | 70% |
+| `background.js` | 85% | 85% | 95% | 70% |
