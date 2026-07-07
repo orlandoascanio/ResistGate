@@ -1,23 +1,25 @@
 # ResistGate Roadmap
 
-## Current Status: v1.1.0 ✅ Live on Chrome Web Store
+## Current Status: v1.3.3 Live
 
 **v1.0.0 shipped:** April 11, 2026 — Core engine + Pro tier.
 **v1.1.0 shipped:** April 15, 2026 — Temptation bundling, focus timer, commitment mode, intention page.
+**v1.2.0 shipped:** April 27, 2026 — Graduated challenges, feedback links, onboarding refresh, Pro access fixes.
+**v1.3.0 shipped:** April 29, 2026 — Intention Page moved to free, options/friction/welcome redesign, per-site reminders.
 
-### v1.1 Baseline Metrics
-- ✅ 121 tests passing (4 test files, Vitest 2.1.8)
-- ✅ `background.js`: 88.5% line coverage, 96% function coverage
-- ✅ Free + Pro tiers — no license keys, no expiration checks (trust-based, PayPal-activated)
-- ✅ Actively gathering user feedback and behavior data
-- ✅ Stable core engine proven in production
+### v1.3.3 Baseline Metrics
+- 152 tests passing across 5 test files (Vitest 2.1.9)
+- `background.js`: 88.4% line coverage, 76.44% branch coverage, 96.66% function coverage
+- Free + Pro tiers use trust-based, PayPal-triggered activation from the website
+- PostHog lifecycle/funnel telemetry and Sentry diagnostics are present
+- Stable core engine with current audit gaps tracked in `docs/Implementation.md`
 
 ---
 
 ## Pricing Model
 
-- **Free** = Block distractions + typing challenge + temporary access
-- **Pro** = Strict mode + analytics + weekly report + earn-access bonus
+- **Free** = Block distractions + typing challenge + temporary access + Intention Page + work timer + per-site access conditions
+- **Pro** = Strict mode + commitment mode + stronger behavioral friction + analytics + weekly report + earn-access challenge timing/bonus
 - **$3.99/month** or **$29.99/year** or **$49.99 lifetime** (pay once, own forever)
 - Pro activates via PayPal checkout on orlandoascanio.com; no license keys, no expiration checks
 - Monthly and yearly are PayPal subscriptions (cancel anytime); lifetime is one-time payment
@@ -35,16 +37,16 @@
 - ✅ Popup for quick add/remove sites + block current tab
 - ✅ Options page with full blocklist management
 - ✅ Daily resistance badge (toolbar, resets at midnight) + per-site resistance counters
-- ✅ **Temptation Bundling** — Pair distracting sites with a time-of-day or work-timer condition; site unlocks automatically when condition is met
+- ✅ **Access Conditions / Temptation Bundling** — Pair distracting sites with a time-of-day or work-timer condition; site unlocks automatically when condition is met
 - ✅ **Focus Timer** — Track focused work minutes; feeds temptation bundle work-timer conditions
+- ✅ **Intention Page** — Per-site personal goal reminder + optional breathing exercise, available to free users
 
 ### Pro Tier (Fully Implemented)
-- ✅ **Strict Mode Lock** — Prevent settings changes during active schedule; require cooldown to disable
+- ✅ **Strict Mode Lock** — Prevent settings changes during the active schedule, or globally when no schedule is enabled; require cooldown to disable
 - ✅ **Override Cooldown System** — Track overrides; lock manual access after threshold exceeded
 - ✅ **Accountability Presets** — Light / Balanced / Strict one-click configuration
 - ✅ **Behavioral Friction Precheck** — Task intent, timed wait, custom challenge prompt, earn-access gate
 - ✅ **Earn-Access Bonus** — Extra minutes awarded for completing extended challenge sessions
-- ✅ **Intention Page** — Per-site personal goal reminder + optional 4-7-8 breathing exercise
 - ✅ **Commitment Mode (1–24h)** — Total lockout with live countdown; no override, no challenge bypass
 - ✅ **Commitment Page** — Dedicated full-screen lockout UI (`commitment-page/`) shown instead of typing challenge
 - ✅ **Focus Analytics Dashboard** — 7-day view of blocked attempts, overrides, top domains
@@ -216,7 +218,7 @@ Monitor user feedback for:
 - Maintain 85% coverage on background.js
 - All changes require green test suite
 - Security review for entitlement changes
-- No external dependencies beyond test harness
+- Keep runtime dependencies minimal and document every external telemetry/checkout dependency
 
 ### Performance
 - Extension should load < 500ms
@@ -226,7 +228,7 @@ Monitor user feedback for:
 
 ### Security
 - No license keys or external verification (privacy-first, trust-based model)
-- No user data sent externally without explicit consent
+- No blocking decisions are made remotely; Sentry diagnostics and allowlisted PostHog lifecycle/funnel events are the extension telemetry surfaces
 - All PII stored only in `chrome.storage.local`
 - Periodic security audit (quarterly minimum)
 

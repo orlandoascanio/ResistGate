@@ -4,13 +4,31 @@ Tracked deferred work. Items here are not yet PRs. Ordered by priority.
 
 ---
 
+## P1 — Active implementation risks
+
+### Outcome tap recording bug
+**What:** The popup already shows an outcome tap prompt after temporary access expires, but responses are not persisted correctly.
+
+**Evidence:** `popup/popup.js` sends `{ action: 'recordAnalyticsEvent', event: { type, domain, response } }`, while `background.js` reads `request.type` and `request.domain`. `recordAnalyticsEvent()` also omits `outcome_tap_response` from its local analytics allowlist even though `sanitizeAnalytics()` recognizes the type.
+
+**Why:** The UI can ask "Did your visit serve you?", but the answer is dropped. That breaks the awareness loop this feature was meant to validate.
+
+**Fix notes:**
+- Add a regression test for the popup outcome tap click path.
+- Use a top-level payload (`type`, `domain`, `response`) or add a dedicated `recordOutcomeTapResponse` action.
+- Persist sanitized yes/no responses in local analytics.
+- Only add weekly report trend UI after capture is verified.
+
+**Effort:** S. **Depends on:** none.
+
+---
+
 ## P1 — After research sprint validates hypothesis
 
 ### Outcome tap (permanent feature)
-**What:** After research sprint validates Intention Page hypothesis, build outcome tap as
-a permanent feature. When temporary access expires, popup asks on next open: "Did that
-visit to [domain] serve you? Yes / No". Store response as `outcome_tap_response` analytics
-event. Surface trend in weekly report.
+**What:** After research sprint validates Intention Page hypothesis, finish outcome tap as
+a permanent feature. The temporary-access expiry and popup prompt are partially implemented;
+the next step is reliable `outcome_tap_response` capture and weekly-report trend surfacing.
 
 **Why:** Closes the awareness loop: intention stated → access → reflection. This is
 the data that proves awareness-based friction changes behavior over time.
