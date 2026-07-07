@@ -59,7 +59,7 @@ let commitmentCountdownTimer = null;
 document.addEventListener('DOMContentLoaded', function () {
   const newBlockedSiteInput = document.getElementById('new-blocked-site');
   const addSiteBtn = document.getElementById('add-site-btn');
-  const scheduleEnabledToggle = document.getElementById('schedule-enabled');
+  const schedulePanel = document.getElementById('schedule-panel');
 
   addSiteBtn.addEventListener('click', addBlockedSite);
   newBlockedSiteInput.addEventListener('keypress', function (e) {
@@ -71,22 +71,22 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[data-action="save-settings"]').forEach(function (btn) {
     btn.addEventListener('click', saveSettings);
   });
-  scheduleEnabledToggle.addEventListener('change', function () {
-    toggleScheduleConfig(scheduleEnabledToggle.checked);
+  schedulePanel.addEventListener('toggle', function () {
+    updateSchedulePanelState(schedulePanel.open);
+  });
+  document.getElementById('schedule-start-time').addEventListener('input', updateScheduleSummary);
+  document.getElementById('schedule-end-time').addEventListener('input', updateScheduleSummary);
+  document.querySelectorAll('#schedule-days input[type="checkbox"]').forEach(function (checkbox) {
+    checkbox.addEventListener('change', updateScheduleSummary);
   });
 
   const intentionPageToggle = document.getElementById('intention-page-enabled');
-  const breathingExerciseToggle = document.getElementById('breathing-exercise-enabled');
 
   intentionPageToggle.addEventListener('change', function () {
-    breathingExerciseToggle.disabled = !intentionPageToggle.checked;
-    if (!intentionPageToggle.checked) {
-      breathingExerciseToggle.checked = false;
-    }
+    updateIntentionPanelState(intentionPageToggle.checked);
   });
 
-  // Initialize breathing exercise toggle state on load
-  breathingExerciseToggle.disabled = !intentionPageToggle.checked;
+  updateIntentionPanelState(intentionPageToggle.checked);
 
   document.querySelectorAll('.tab-btn[data-tab]').forEach((button) => {
     button.addEventListener('click', function () {
@@ -324,7 +324,6 @@ function renderSubscriptionStatus() {
 
 function renderScheduleInputs(schedule) {
   const enabled = schedule.enabled === true;
-  document.getElementById('schedule-enabled').checked = enabled;
   document.getElementById('schedule-start-time').value = schedule.startTime || '09:00';
   document.getElementById('schedule-end-time').value = schedule.endTime || '17:00';
 
@@ -337,21 +336,95 @@ function renderScheduleInputs(schedule) {
 }
 
 function toggleScheduleConfig(enabled) {
+  const panel = document.getElementById('schedule-panel');
+  if (panel && panel.open !== (enabled === true)) {
+    panel.open = enabled === true;
+  }
+
+  updateSchedulePanelState(enabled === true);
+}
+
+function updateSchedulePanelState(enabled) {
   const config = document.getElementById('schedule-config');
   const panel = document.getElementById('schedule-panel');
   const summaryState = document.getElementById('schedule-summary-state');
+  const summaryCopy = document.getElementById('schedule-summary-copy');
   if (!config) {
     return;
   }
 
-  config.style.opacity = enabled ? '1' : '0.55';
+  config.hidden = enabled !== true;
+  config.toggleAttribute('inert', enabled !== true);
   if (panel) {
-    panel.open = enabled === true;
+    panel.classList.toggle('is-enabled', enabled === true);
   }
   if (summaryState) {
     summaryState.textContent = enabled ? 'On' : 'Off';
     summaryState.classList.toggle('is-active', enabled === true);
   }
+  if (summaryCopy) {
+    summaryCopy.textContent = formatScheduleSummary(enabled);
+  }
+}
+
+function updateScheduleSummary() {
+  updateSchedulePanelState(isScheduleEnabled());
+}
+
+function isScheduleEnabled() {
+  return document.getElementById('schedule-panel')?.open === true;
+}
+
+function formatScheduleSummary(enabled) {
+  if (enabled !== true) {
+    return 'Off - turn on to block only during chosen hours.';
+  }
+
+  const start = formatTimeLabel(getInputValue('schedule-start-time', '09:00'));
+  const end = formatTimeLabel(getInputValue('schedule-end-time', '17:00'));
+  return `${formatScheduleDays(getSelectedScheduleDays())}, ${start}-${end}`;
+}
+
+function getInputValue(id, fallback) {
+  const input = document.getElementById(id);
+  return input?.value || fallback;
+}
+
+function formatScheduleDays(days) {
+  const normalized = [...new Set((Array.isArray(days) ? days : [])
+    .map(Number)
+    .filter((day) => day >= 0 && day <= 6))]
+    .sort((a, b) => a - b);
+
+  if (normalized.length === 7) {
+    return 'Every day';
+  }
+
+  if (normalized.join(',') === '1,2,3,4,5') {
+    return 'Mon-Fri';
+  }
+
+  if (normalized.join(',') === '0,6') {
+    return 'Weekends';
+  }
+
+  const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return normalized.length
+    ? normalized.map((day) => labels[day]).join(', ')
+    : 'Mon-Fri';
+}
+
+function formatTimeLabel(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ''));
+  if (!match) {
+    return '9:00 AM';
+  }
+
+  const hours = Math.max(0, Math.min(23, Number(match[1])));
+  const minutes = Math.max(0, Math.min(59, Number(match[2])));
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour = hours % 12 || 12;
+  return `${hour}:${String(minutes).padStart(2, '0')} ${period}`;
 }
 
 function renderProFeatureInputs() {
@@ -376,10 +449,33 @@ function renderProFeatureInputs() {
   // Intention Page
   document.getElementById('intention-page-enabled').checked = intentionPage.enabled === true;
   document.getElementById('breathing-exercise-enabled').checked = intentionPage.showBreathingExercise === true;
+  updateIntentionPanelState(intentionPage.enabled === true);
 
   // Commitment Mode
   document.getElementById('commitment-duration-hours').value = commitmentMode.durationHours || 2;
   renderCommitmentStatus();
+}
+
+function updateIntentionPanelState(enabled) {
+  const panel = document.getElementById('intention-panel');
+  const state = document.getElementById('intention-summary-state');
+  const breathingToggle = document.getElementById('breathing-exercise-enabled');
+
+  if (panel && panel.open !== (enabled === true)) {
+    panel.open = enabled === true;
+  }
+
+  if (state) {
+    state.textContent = enabled ? 'On' : 'Off';
+    state.classList.toggle('is-active', enabled === true);
+  }
+
+  if (breathingToggle) {
+    breathingToggle.disabled = enabled !== true;
+    if (enabled !== true) {
+      breathingToggle.checked = false;
+    }
+  }
 }
 
 function renderProAccessState() {
@@ -536,7 +632,7 @@ function addBlockedSite() {
       if (updateResponse && updateResponse.success) {
         input.value = '';
         cachedSettings = settings;
-        loadBlockedSites(settings.blocklist);
+        loadBlockedSites(settings.blocklist, newEntry.id);
         showMessage('Site added to ResistGate.', 'success');
       } else {
         showMessage(updateResponse?.error || 'Unable to add site. Try again.', 'error');
@@ -545,7 +641,7 @@ function addBlockedSite() {
   });
 }
 
-function loadBlockedSites(blocklist = []) {
+function loadBlockedSites(blocklist = [], expandedEntryId = null) {
   const listElement = document.getElementById('blocked-sites-list');
   listElement.innerHTML = '';
 
@@ -561,64 +657,133 @@ function loadBlockedSites(blocklist = []) {
     const li = document.createElement('li');
     li.className = 'blocked-site-item';
 
-    // Top row: domain + remove button
-    const topRow = document.createElement('div');
-    topRow.className = 'blocked-site-row';
+    const toggleButton = document.createElement('button');
+    toggleButton.type = 'button';
+    toggleButton.className = 'blocked-site-toggle';
+    toggleButton.setAttribute('aria-expanded', 'false');
 
     const siteDomain = document.createElement('span');
     siteDomain.className = 'site-domain';
     siteDomain.textContent = entry.urlPattern;
     siteDomain.setAttribute('title', entry.urlPattern);
 
+    const siteSummary = document.createElement('span');
+    siteSummary.className = 'site-rule-summary';
+    siteSummary.textContent = formatBlockedSiteSummary(entry);
+
+    const primary = document.createElement('span');
+    primary.className = 'blocked-site-primary';
+    primary.appendChild(siteDomain);
+    primary.appendChild(siteSummary);
+
+    const chevron = document.createElement('span');
+    chevron.className = 'site-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+
+    toggleButton.appendChild(primary);
+    toggleButton.appendChild(chevron);
+
+    const configPanel = document.createElement('div');
+    configPanel.className = 'blocked-site-config';
+    configPanel.hidden = true;
+    configPanel.setAttribute('inert', '');
+    configPanel.appendChild(buildBundleConfig(entry));
+
+    // Site reminder config stays inside the expanded per-site editor.
+    configPanel.appendChild(buildPersonalGoalConfig(entry));
+
+    const actions = document.createElement('div');
+    actions.className = 'blocked-site-actions';
+
     const removeButton = document.createElement('button');
-    removeButton.className = 'btn btn-danger delete-btn';
-    removeButton.setAttribute('data-id', entry.id);
-    removeButton.textContent = 'Remove';
-
-    topRow.appendChild(siteDomain);
-    topRow.appendChild(removeButton);
-    li.appendChild(topRow);
-
-    // Temptation bundle config — badge injected into topRow, panel appended to li
-    li.appendChild(buildBundleConfig(entry, topRow));
-
-    // Site reminder config — visible because it belongs to the blocked site.
-    li.appendChild(buildPersonalGoalConfig(entry));
-
-    listElement.appendChild(li);
-  });
-
-  document.querySelectorAll('.delete-btn[data-id]').forEach((button) => {
-    button.addEventListener('click', function () {
-      const id = this.getAttribute('data-id');
-      removeBlockedSite(id);
+    removeButton.className = 'btn btn-danger';
+    removeButton.type = 'button';
+    removeButton.textContent = 'Remove site';
+    removeButton.addEventListener('click', function () {
+      removeBlockedSite(entry.id);
     });
+
+    actions.appendChild(removeButton);
+    configPanel.appendChild(actions);
+
+    toggleButton.addEventListener('click', function () {
+      setBlockedSiteExpanded(toggleButton, configPanel, configPanel.hidden);
+    });
+
+    li.appendChild(toggleButton);
+    li.appendChild(configPanel);
+    listElement.appendChild(li);
+
+    if (expandedEntryId && entry.id === expandedEntryId) {
+      setBlockedSiteExpanded(toggleButton, configPanel, true);
+    }
   });
+}
+
+function setBlockedSiteExpanded(toggleButton, configPanel, expanded) {
+  toggleButton.setAttribute('aria-expanded', String(expanded));
+  configPanel.hidden = expanded !== true;
+  configPanel.toggleAttribute('inert', expanded !== true);
+}
+
+function formatBlockedSiteSummary(entry) {
+  return `${formatBundleSummary(entry?.temptationBundle)} · ${formatReminderSummary(entry)}`;
+}
+
+function formatReminderSummary(entry) {
+  return entry?.personalGoal?.trim() ? 'Reminder set' : 'No reminder';
+}
+
+function formatBundleSummary(bundle) {
+  if (!bundle || bundle.enabled !== true) {
+    return 'No access condition';
+  }
+
+  if (bundle.conditionType === 'work_timer') {
+    const minutes = Math.max(1, parseInt(bundle.requiredMinutes, 10) || 60);
+    return `Opens after ${minutes} min focus`;
+  }
+
+  return `Opens after ${formatTimeLabel(bundle.afterTime || '17:00')}`;
 }
 
 function formatBundleBadge(bundle) {
-  if (!bundle || bundle.enabled !== true) return '+ Earn access';
+  if (!bundle || bundle.enabled !== true) return 'Set condition';
   if (bundle.conditionType === 'work_timer') {
-    return `${bundle.requiredMinutes || 60} min focus`;
+    return `${bundle.requiredMinutes || 60} min focus`;
   }
-  const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour = h % 12 || 12;
-  return `After ${hour}:${String(m).padStart(2, '0')} ${period}`;
+  return `After ${formatTimeLabel(bundle.afterTime || '17:00')}`;
 }
 
-function buildBundleConfig(entry, topRow) {
+function buildBundleConfig(entry) {
   const bundle = entry.temptationBundle || {};
   const isEnabled = bundle.enabled === true;
   const conditionType = bundle.conditionType || 'time_of_day';
   const afterTime = bundle.afterTime || '17:00';
   const requiredMinutes = bundle.requiredMinutes || 60;
 
-  // ── Badge in top row (always visible) ──────────────────────────
+  const section = document.createElement('div');
+  section.className = 'site-config-section';
+
+  const sectionHead = document.createElement('div');
+  sectionHead.className = 'site-config-section-head';
+
+  const sectionTitle = document.createElement('span');
+  sectionTitle.className = 'site-config-section-title';
+
+  const titleStrong = document.createElement('strong');
+  titleStrong.textContent = 'Access condition';
+
+  const titleSmall = document.createElement('small');
+  titleSmall.textContent = formatBundleSummary(bundle);
+
+  sectionTitle.appendChild(titleStrong);
+  sectionTitle.appendChild(titleSmall);
+
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = `bundle-badge ${isEnabled ? 'bundle-badge--on' : 'bundle-badge--off'}`;
-  badge.setAttribute('title', isEnabled ? 'Edit earn-access rule' : 'Set an earn-access rule');
+  badge.setAttribute('title', isEnabled ? 'Edit access condition' : 'Set an access condition');
   badge.setAttribute('aria-expanded', 'false');
 
   const badgeText = document.createElement('span');
@@ -628,7 +793,9 @@ function buildBundleConfig(entry, topRow) {
   badgeChevron.textContent = '▼';
   badge.appendChild(badgeText);
   badge.appendChild(badgeChevron);
-  topRow.insertBefore(badge, topRow.lastElementChild);
+  sectionHead.appendChild(sectionTitle);
+  sectionHead.appendChild(badge);
+  section.appendChild(sectionHead);
 
   // ── Config panel (expanded when enabled, collapsed otherwise) ──
   const configPanel = document.createElement('div');
@@ -645,7 +812,7 @@ function buildBundleConfig(entry, topRow) {
   // Helper text at top of panel
   const helpText = document.createElement('p');
   helpText.className = 'bundle-help-text';
-  helpText.textContent = 'Instead of blocking, this site grants access only when your condition is met — so you decide intentionally.';
+  helpText.textContent = 'Set a condition before this site can open: a specific time or earned focus time.';
 
   // Enable/disable toggle inside the panel
   const toggleLabel = document.createElement('label');
@@ -654,7 +821,7 @@ function buildBundleConfig(entry, topRow) {
   toggleCheck.type = 'checkbox';
   toggleCheck.checked = isEnabled;
   const toggleSpan = document.createElement('span');
-  toggleSpan.textContent = 'Enable Earn Access for this site';
+  toggleSpan.textContent = 'Require an access condition for this site';
   toggleLabel.appendChild(toggleCheck);
   toggleLabel.appendChild(toggleSpan);
 
@@ -747,7 +914,8 @@ function buildBundleConfig(entry, topRow) {
   configPanel.appendChild(condRow);
   configPanel.appendChild(saveBtn);
 
-  return configPanel;
+  section.appendChild(configPanel);
+  return section;
 }
 
 function saveBundleForEntry(entryId, bundle) {
@@ -758,7 +926,8 @@ function saveBundleForEntry(entryId, bundle) {
     chrome.runtime.sendMessage({ action: 'updateSettings', settings }, function (response) {
       if (response && response.success) {
         cachedSettings = settings;
-        showMessage('Earn Access rule saved.', 'success');
+        loadBlockedSites(settings.blocklist, entryId);
+        showMessage('Access condition saved.', 'success');
       } else {
         showMessage(response?.error || 'Unable to save condition.', 'error');
       }
@@ -771,7 +940,7 @@ function buildPersonalGoalConfig(entry) {
   const hasGoal = goal.trim().length > 0;
 
   const reminderBlock = document.createElement('div');
-  reminderBlock.className = `site-reminder ${hasGoal ? 'site-reminder--set' : 'site-reminder--empty'}`;
+  reminderBlock.className = `site-config-section site-reminder ${hasGoal ? 'site-reminder--set' : 'site-reminder--empty'}`;
 
   const configPanel = document.createElement('div');
   configPanel.className = 'site-reminder-editor';
@@ -827,7 +996,7 @@ function buildPersonalGoalConfig(entry) {
           configPanel.style.display = 'none';
           editBtn.setAttribute('aria-expanded', 'false');
           showMessage(newGoal ? 'Site reminder saved.' : 'Site reminder removed.', 'success');
-          loadBlockedSites(settings.blocklist);
+          loadBlockedSites(settings.blocklist, entry.id);
         } else {
           showMessage(response?.error || 'Unable to save reminder.', 'error');
         }
@@ -852,7 +1021,7 @@ function buildPersonalGoalConfig(entry) {
           configPanel.style.display = 'none';
           editBtn.setAttribute('aria-expanded', 'false');
           showMessage('Site reminder removed.', 'success');
-          loadBlockedSites(settings.blocklist);
+          loadBlockedSites(settings.blocklist, entry.id);
         } else {
           showMessage(response?.error || 'Unable to remove reminder.', 'error');
         }
@@ -967,7 +1136,7 @@ function saveSettings() {
     settings.freeExperience = settings.freeExperience || {};
     settings.freeExperience.manualOverrideDelaySeconds = manualDelay;
     settings.freeExperience.schedule = {
-      enabled: document.getElementById('schedule-enabled').checked,
+      enabled: isScheduleEnabled(),
       days: getSelectedScheduleDays(),
       startTime: document.getElementById('schedule-start-time').value || '09:00',
       endTime: document.getElementById('schedule-end-time').value || '17:00'
@@ -1532,6 +1701,10 @@ if (typeof globalThis !== 'undefined') {
     sanitizeChallengeLevel,
     getTypingChallengeLevel,
     sanitizePreset,
+    formatBlockedSiteSummary,
+    formatBundleSummary,
+    formatScheduleDays,
+    formatTimeLabel,
     getEarnAccessMinChallengeSeconds,
     isProGatedTab
   };

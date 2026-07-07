@@ -180,22 +180,23 @@ function loadBlockedSites() {
 
         const preview = blocklist.slice(0, POPUP_PREVIEW_LIMIT);
         preview.forEach(entry => {
+            const displayDomain = getDisplayDomain(entry.urlPattern);
             const li = document.createElement('li');
             li.className = 'blocked-site-item';
 
             const domainSpan = document.createElement('span');
             domainSpan.className = 'blocked-site-domain';
-            domainSpan.textContent = entry.urlPattern;
+            domainSpan.textContent = displayDomain;
             domainSpan.setAttribute('title', entry.urlPattern);
 
             const removeBtn = document.createElement('button');
             removeBtn.className = 'remove-site-btn';
             removeBtn.type = 'button';
-            removeBtn.setAttribute('aria-label', `Remove ${entry.urlPattern}`);
-            removeBtn.title = `Remove ${entry.urlPattern}`;
+            removeBtn.setAttribute('aria-label', `Remove ${displayDomain}`);
+            removeBtn.title = `Remove ${displayDomain}`;
             removeBtn.textContent = '×';
             removeBtn.addEventListener('click', function () {
-                removeBlockedSite(entry.id, entry.urlPattern);
+                removeBlockedSite(entry.id);
             });
 
             li.appendChild(domainSpan);
@@ -223,6 +224,9 @@ function removeBlockedSite(siteId, domainLabel) {
 
         const settings = response.settings;
         const blocklist = settings.blocklist || [];
+        const removedIndex = blocklist.findIndex((entry) => entry.id === siteId);
+        const removedEntry = removedIndex >= 0 ? blocklist[removedIndex] : null;
+        const removedLabel = getDisplayDomain(removedEntry?.urlPattern || domainLabel || 'Site');
         settings.blocklist = blocklist.filter((entry) => entry.id !== siteId);
 
         chrome.runtime.sendMessage({
@@ -231,9 +235,56 @@ function removeBlockedSite(siteId, domainLabel) {
         }, function (updateResponse) {
             if (updateResponse && updateResponse.success) {
                 loadBlockedSites();
-                showMessage(`${domainLabel} removed from blocklist.`, 'success');
+                showUndoToast(
+                    `${removedLabel} removed.`,
+                    removedEntry ? function () { undoRemoveBlockedSite(removedEntry, removedIndex); } : null
+                );
             } else {
                 showMessage(updateResponse?.error || 'Unable to remove site. Try again.', 'error');
+            }
+        });
+    });
+}
+
+function undoRemoveBlockedSite(entry, index) {
+    chrome.runtime.sendMessage({
+        action: 'getSettings'
+    }, function (response) {
+        if (!(response && response.settings)) {
+            showMessage('Unable to load ResistGate settings.', 'error');
+            return;
+        }
+
+        const settings = response.settings;
+        const blocklist = settings.blocklist || [];
+        const restoredDomain = normalizeDomainInput(entry.urlPattern);
+        const alreadyRestored = blocklist.some((site) => (
+            site.id === entry.id || normalizeDomainInput(site.urlPattern) === restoredDomain
+        ));
+
+        if (alreadyRestored) {
+            showMessage(`${getDisplayDomain(entry.urlPattern)} is already blocked.`, 'info');
+            return;
+        }
+
+        const insertAt = Number.isInteger(index)
+            ? Math.max(0, Math.min(index, blocklist.length))
+            : blocklist.length;
+        settings.blocklist = [
+            ...blocklist.slice(0, insertAt),
+            entry,
+            ...blocklist.slice(insertAt)
+        ];
+
+        chrome.runtime.sendMessage({
+            action: 'updateSettings',
+            settings: settings
+        }, function (updateResponse) {
+            if (updateResponse && updateResponse.success) {
+                loadBlockedSites();
+                showMessage(`${getDisplayDomain(entry.urlPattern)} restored.`, 'success');
+            } else {
+                showMessage(updateResponse?.error || 'Unable to restore site. Try again.', 'error');
             }
         });
     });
@@ -270,6 +321,14 @@ function normalizeDomainInput(value) {
     return domain;
 }
 
+function getDisplayDomain(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    return value.trim().replace(/^www\./i, '');
+}
+
 function getBlockedCountMeta(count) {
     const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
     if (safeCount <= 0) {
@@ -302,6 +361,46 @@ function showMessage(text, type = 'info') {
             messageDiv.remove();
         }
     }, 3000);
+}
+
+function showUndoToast(text, onUndo) {
+    const existingMessage = document.querySelector('.message');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message banner success';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    messageDiv.appendChild(textSpan);
+
+    if (typeof onUndo === 'function') {
+        const undoBtn = document.createElement('button');
+        undoBtn.className = 'undo-btn';
+        undoBtn.type = 'button';
+        undoBtn.textContent = 'Undo';
+        undoBtn.addEventListener('click', function () {
+            messageDiv.remove();
+            onUndo();
+        });
+        messageDiv.appendChild(undoBtn);
+    }
+
+    document.querySelector('.container').appendChild(messageDiv);
+
+    const announcement = document.getElementById('status-announcement');
+    if (announcement) {
+        announcement.textContent = '';
+        setTimeout(() => { announcement.textContent = text; }, 50);
+    }
+
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.remove();
+        }
+    }, 5000);
 }
 
 function isPopupProUser(settings) {
@@ -494,6 +593,7 @@ function showOutcomeTap(domain) {
 if (typeof globalThis !== 'undefined') {
     globalThis.__RESISTGATE_POPUP_TEST_HOOKS__ = {
         normalizeDomainInput,
+        getDisplayDomain,
         getBlockedCountMeta,
         showOutcomeTap
     };

@@ -20,8 +20,38 @@
           <span id="plan-pill" class="plan-pill">Free</span>
         </div>
       </div>
-      <p>Set up your blocker and choose how much friction you want before distracting sites open.</p>
+      <p>Block the sites you want, and decide how hard it should be to get past them.</p>
     </header>
+
+    <section class="tier-guide" aria-labelledby="tier-guide-title">
+      <div>
+        <h2 id="tier-guide-title">Core blocking is free</h2>
+        <p>Pro adds Progress tracking, Weekly Review, and stricter lock modes for when you need more than the basics.</p>
+      </div>
+      <div class="tier-guide-grid">
+        <div class="tier-guide-item">
+          <span class="tier-label tier-label-free">Free</span>
+          <ul class="tier-feature-list">
+            <li>Block any site, on any schedule</li>
+            <li>A short challenge before you get through</li>
+            <li>Optional cooldown before entering</li>
+            <li>A pause to reconsider before you commit</li>
+          </ul>
+        </div>
+        <div class="tier-guide-item">
+          <span class="tier-label tier-label-pro">Pro</span>
+          <p class="tier-guide-note">For when the basics are too easy to get around.</p>
+          <ul class="tier-feature-list">
+            <li>Track your progress over time</li>
+            <li>Weekly report on what you actually did</li>
+            <li>Lock levels that go beyond typing a sentence</li>
+            <li>Commit to a block you can't undo early</li>
+            <li>Tighter rules on how access works</li>
+          </ul>
+          <small>$3.99/mo, $29.99/yr, or $49.99 once.</small>
+        </div>
+      </div>
+    </section>
 
     <nav class="tabs" role="tablist" aria-label="Settings sections">
       <button id="tab-general" class="tab-btn active" data-tab="general" role="tab" aria-selected="true" aria-controls="panel-general">General</button>
@@ -33,7 +63,7 @@
     <section id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
       <section class="panel">
         <h2>Block sites</h2>
-        <p class="helper">Add the domains that pull you off-task. Start with one.</p>
+        <p class="helper">Add the domains that pull you off-task. Reminders are saved per blocked site.</p>
         <div class="block-site-form">
           <label for="new-blocked-site">Site</label>
           <div class="input-group">
@@ -51,8 +81,8 @@
       </section>
 
       <section class="panel">
-        <h2>Friction level</h2>
-        <p class="helper">Choose how hard it should be to enter a blocked site.</p>
+        <h2>Entry difficulty</h2>
+        <p class="helper">Choose how much work is required before a blocked site opens.</p>
 
         <div class="challenge-level-block">
           <span id="challenge-level-label" class="field-label">Typing challenge level</span>
@@ -70,19 +100,19 @@
               <small>5 paragraphs</small>
             </button>
           </div>
-          <p class="helper">Start manageable, then raise the bar when distractions get too easy to bypass.</p>
+          <p class="helper">Pick the level that interrupts autopilot without derailing real work.</p>
         </div>
 
         <div class="settings-grid">
           <div>
             <label for="access-window-minutes">Access window</label>
             <input id="access-window-minutes" type="number" min="1" step="1" aria-describedby="access-window-hint" />
-            <p class="helper" id="access-window-hint">Minutes granted after a completed challenge.</p>
+            <p class="helper" id="access-window-hint">After a challenge or override pause, the site opens for this many minutes, then blocks again.</p>
           </div>
           <div>
             <label for="manual-override-delay">Override pause</label>
             <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
-            <p class="helper" id="override-delay-hint">Free override waits 10 to 15 seconds.</p>
+            <p class="helper" id="override-delay-hint">Override pause can be 10 to 15 seconds.</p>
           </div>
         </div>
       </section>
@@ -91,20 +121,12 @@
         <summary class="disclosure-summary">
           <span>
             <strong>Schedule</strong>
-            <small>Only block during chosen days and hours.</small>
+            <small id="schedule-summary-copy">Off - turn on to block only during chosen hours.</small>
           </span>
           <span id="schedule-summary-state" class="summary-state">Off</span>
         </summary>
 
-        <label class="switch-row schedule-toggle">
-          <input id="schedule-enabled" type="checkbox" />
-          <span>
-            <strong>Use schedule</strong>
-            <small>Turn this on when blocking should follow a daily routine.</small>
-          </span>
-        </label>
-
-        <div id="schedule-config" class="schedule-config">
+        <div id="schedule-config" class="schedule-config" hidden>
           <div class="time-row">
             <div>
               <label for="schedule-start-time">Start time</label>
@@ -129,46 +151,54 @@
         </div>
       </details>
 
-      <section class="panel">
-        <h2>Intention pause</h2>
-        <p class="helper">Show your saved site reminder before the challenge.</p>
+      <details id="intention-panel" class="panel disclosure-panel">
+        <summary class="disclosure-summary">
+          <span>
+            <strong>Intention pause</strong>
+            <small>Show your saved site reminder before the challenge.</small>
+          </span>
+          <span id="intention-summary-state" class="summary-state">Off</span>
+        </summary>
 
-        <div class="intention-preview" aria-label="Intention pause flow preview">
-          <div class="preview-step">
-            <span class="preview-step-index">01</span>
-            <strong>See your reminder</strong>
-            <small>Your saved site reminder appears before the challenge.</small>
-          </div>
-          <div class="preview-step">
-            <span class="preview-step-index">02</span>
-            <strong>Pause before entering</strong>
-            <small>Optionally take a short breathing reset.</small>
-          </div>
-          <div class="preview-step">
-            <span class="preview-step-index">03</span>
-            <strong>Continue deliberately</strong>
-            <small>Go back, use your reminder, or continue to the challenge.</small>
-          </div>
+        <div class="disclosure-body">
+          <label class="switch-row">
+            <input id="intention-page-enabled" type="checkbox" />
+            <span>
+              <strong>Enable this pause</strong>
+              <small>Shows your saved reminder before the typing challenge.</small>
+            </span>
+          </label>
+
+          <label class="switch-row sub-toggle">
+            <input id="breathing-exercise-enabled" type="checkbox" />
+            <span>
+              <strong>Include breathing reset</strong>
+              <small>Adds an optional 4-7-8 reset before continuing.</small>
+            </span>
+          </label>
+
+          <details class="inline-help">
+            <summary>How this works</summary>
+            <div class="intention-preview" aria-label="Intention pause flow preview">
+              <div class="preview-step">
+                <span class="preview-step-index">01</span>
+                <strong>See your reminder</strong>
+                <small>Your saved site reminder appears before the challenge.</small>
+              </div>
+              <div class="preview-step">
+                <span class="preview-step-index">02</span>
+                <strong>Pause before entering</strong>
+                <small>Optionally take a short breathing reset.</small>
+              </div>
+              <div class="preview-step">
+                <span class="preview-step-index">03</span>
+                <strong>Continue deliberately</strong>
+                <small>Go back, use your reminder, or continue to the challenge.</small>
+              </div>
+            </div>
+          </details>
         </div>
-
-        <label class="switch-row">
-          <input id="intention-page-enabled" type="checkbox" />
-          <span>
-            <strong>Use Intention pause</strong>
-            <small>Show a pause screen with your saved site reminder before the challenge.</small>
-          </span>
-        </label>
-
-        <label class="switch-row sub-toggle">
-          <input id="breathing-exercise-enabled" type="checkbox" />
-          <span>
-            <strong>Show breathing exercise</strong>
-            <small>A guided 4-7-8 breathing cycle appears on the blocked page to help you reset.</small>
-          </span>
-        </label>
-
-        <p class="helper">Reminders are saved per blocked site. Add or edit reminders in the Block sites section.</p>
-      </section>
+      </details>
 
       <button id="save-settings-btn" data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
@@ -319,8 +349,8 @@
                 <label class="switch-row sub-toggle">
                   <input id="earn-access-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
                   <span>
-                    <strong>Require finishing the typing challenge to get in</strong>
-                    <small>You can't skip — the site only opens after you complete the full challenge.</small>
+                    <strong>Require the typing challenge</strong>
+                    <small>The site only opens after the full challenge is complete.</small>
                   </span>
                 </label>
 
