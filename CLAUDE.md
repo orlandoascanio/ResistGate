@@ -1,167 +1,206 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working in this repository.
 
 ## Commands
 
 ```bash
-npm install              # Install dev dependencies (vitest, coverage-v8)
+npm install              # Install dev dependencies
 npm test                 # Run all tests once
 npm run test:watch       # Watch mode
-npm run test:coverage    # Run tests + enforce coverage thresholds
+npm run test:coverage    # Run tests and enforce coverage thresholds
 ```
 
-**Run a single test file:**
+Run a single test file:
+
 ```bash
 npx vitest run tests/background.integration.test.js
+npx vitest run tests/feature-matrix.test.js
+npx vitest run tests/friction-page.flow.test.js
+npx vitest run tests/intention-page.flow.test.js
+npx vitest run tests/ui.logic.test.js
 ```
 
-**Run a single test by name:**
+Run a single test by name:
+
 ```bash
 npx vitest run --reporter=verbose -t "opens pricing with the ResistGate product slug"
 ```
 
-No build step — the extension is plain HTML/CSS/JS loaded directly into Chrome via "Load unpacked". After editing any file, click **Reload** on the extension card in `chrome://extensions`.
+No build step. The extension is plain HTML/CSS/JS loaded directly into Chrome with "Load unpacked". After editing any extension file, reload the extension card in `chrome://extensions`.
 
 ## Architecture
 
-ResistGate is a **Manifest V3 Chrome extension** with no bundler. Every JS file runs natively in its own Chrome context.
+ResistGate is a Manifest V3 Chrome extension with no bundler. Every script runs as a plain global in its Chrome page/service-worker context.
 
-### Core data flow
+### Core Flow
 
-1. **`background.js`** (~2250 lines, service worker) is the single source of truth. It owns all `chrome.storage.local` reads/writes and manages `declarativeNetRequest` rules. All other pages communicate with it via `chrome.runtime.sendMessage`.
+1. `background.js` is the source of truth. It owns `chrome.storage.local`, storage sanitizers, `declarativeNetRequest` session rules, alarms, Pro gating, analytics/report aggregation, external activation, and message handling.
+2. UI pages send `{ action: '...' }` with `chrome.runtime.sendMessage()` and receive `{ success: true, ...payload }` or `{ success: false, error }`.
+3. Blocking rules redirect blocked main-frame requests to one of three pages:
+   - `commitment-page/index.html` when Commitment Mode is active.
+   - `intention-page/index.html` when the Intention Page is enabled.
+   - `friction-page/index.html` otherwise.
+4. Redirects pass the destination as `originalUrl`.
+5. Temporary access, access conditions, schedule windows, and work timer state all affect whether a DNR rule is written.
 
-2. **Message protocol**: pages send `{ action: 'actionName', ...payload }` and receive `{ success: bool, ...result }`. All actions are handled in the `switch` starting at ~line 189. Responses follow `{ success: true, ...payload }` or `{ success: false, error: string }`. Pro-gated failures add `proRequired: true`. Strict Mode cooldown responses add `cooldownPending: true, remainingSeconds`.
+### Storage Keys
 
-3. **Storage keys** (constants at top of `background.js`):
-   - `settings` — full settings object (`DEFAULT_SETTINGS` shape)
-   - `temporaryAccess` — map of domain → expiry timestamp
-   - `analytics` — capped array of events (max 3000)
-   - `overrideState` — override cooldown tracking
-   - `welcomeShown` — boolean flag
-   - `installation` — install metadata
-   - `dailyBlockCount` — `{ date, count }` for badge
-   - `resistanceCounters` — per-domain resistance counters
-   - `workTimer` — `{ todayMinutes, date, running, startedAt }`
+All storage is local-only. Do not introduce `chrome.storage.sync` without a deliberate product decision.
 
-   All storage uses `chrome.storage.local` exclusively (never `sync`). Every key has a `sanitize*()` function that normalizes/defaults. Reads/writes go through `getFromStorage()`/`setInStorage()`.
+| Key | Purpose |
+|---|---|
+| `settings` | Full sanitized settings object |
+| `temporaryAccess` | Active temporary access grants |
+| `analytics` | Pro local analytics events, capped at 3,000 |
+| `overrideState` | Override cooldown timestamps and lock window |
+| `installation` | Opaque device ID, first-seen timestamp, PostHog event dedupe flags |
+| `dailyBlockCount` | Toolbar badge count for the current day |
+| `resistanceCounters` | Per-domain daily counters |
+| `workTimer` | Current-day focus timer state |
+| `pendingOutcomeTap` | Expired-access reflection prompt for popup |
+| `welcomeShown` | Declared but currently unused |
+| `whatsNewShown` | Declared but currently unused |
 
-4. **Blocking**: `declarativeNetRequest` dynamic rules redirect blocked URLs to `friction-page/index.html?url=<original>`. Temporary access entries and commitment mode are checked before writing rules — if access is active for a domain or commitment mode is active, its rule is omitted. Rule updates are serialized through `queueRulesUpdate()` — never call `updateBlockingRules()` directly.
+Storage reads/writes in the service worker go through `getFromStorage()` and `setInStorage()`.
 
-5. **Alarms**:
-   - `resistgate-block-expire-*` — per-site blocking window expiry
-   - `resistgate-access-expire-*` — temporary access window expiry
-   - `resistgate-bundle-unlock-*` — temptation bundle unlock timers
-   - `resistgate-commitment-expire` — commitment mode auto-expiry
-   - `resistgate-daily-reset` — midnight daily badge counter reset
+### Rule Updates
 
-6. **Pro entitlement**: stored as `subscription.tier = 'pro'` in `chrome.storage.local`. `hasProAccess(settings)` is the canonical check — reads `subscription.tier === 'pro'`. `isProUser()` in `options/options.js` and `isPopupProUser()` in `popup/popup.js` are the UI-side equivalents. Activation happens exclusively via `chrome.runtime.onMessageExternal` — the website sends `activateProFromWebsite` from a trusted origin (`orlandoascanio.com`) after checkout; background sets `tier = 'pro'` and opens the options page with `?activation=success`.
+Never call `updateBlockingRules()` directly from new code. Use:
 
-### Message actions (background.js switch)
+```js
+queueRulesUpdate(reason)
+```
+
+This serializes DNR mutations and prevents overlapping rule refreshes.
+
+### Message Actions
 
 | Action | Pro-gated | Description |
-|---|---|---|
-| `grantTemporaryAccess` | No | Grant timed bypass for a URL pattern |
-| `recordBlockedVisit` | No | Increment visit counter for a domain |
-| `getResistanceCount` | No | Get resistance count for a domain |
-| `recordAnalyticsEvent` | No | Append a typed analytics event |
-| `getSettings` | No | Return full sanitized settings |
-| `getManualOverrideStatus` | No | Return current override state |
-| `updateSettings` | No | Validate, apply Strict Mode logic, save, re-queue rules |
-| `openPricingPage` | No | Open pricing page in new tab |
-| `getAnalyticsDashboard` | Yes | Return analytics dashboard data |
-| `getWeeklyReport` | Yes | Return weekly report data |
-| `activateCommitmentMode` | Yes | Start irrevocable global lockout (1–24 h) |
-| `deactivateCommitmentMode` | Yes | Always refuses — commitment cannot end early |
-| `getCommitmentModeStatus` | No | Return active status and remaining time |
+|---|---:|---|
+| `grantTemporaryAccess` | No | Grant timed bypass for a domain |
+| `recordBlockedVisit` | No | Increment badge/resistance counters and optionally local analytics |
+| `getResistanceCount` | No | Return today's count for a domain |
+| `recordAnalyticsEvent` | Partially | Track allowlisted PostHog events and selected Pro local events |
+| `getSettings` | No | Return sanitized settings |
+| `getManualOverrideStatus` | No | Return manual override delay/lock state |
+| `updateSettings` | No | Sanitize, enforce locks/tier boundaries, save, refresh rules |
+| `getAnalyticsDashboard` | Yes | Return 7-day analytics dashboard |
+| `getWeeklyReport` | Yes | Return weekly Focus Score report |
+| `activateCommitmentMode` | Yes | Start 1-24h lockout |
+| `deactivateCommitmentMode` | Always refuses | Commitment cannot end early |
 | `getWorkTimerState` | No | Return work timer state |
 | `startWorkTimer` | No | Start work timer |
-| `stopWorkTimer` | No | Stop work timer, accumulate minutes |
+| `stopWorkTimer` | No | Stop timer and accumulate minutes |
+| `getCommitmentModeStatus` | No | Return lockout status/countdown |
+| `openPricingPage` | No | Open website pricing page |
+| `openFeedbackPage` | No | Open website feedback page |
+| `trackPosthogEvent` | No | Track an allowlisted PostHog event once per installation |
 
-External: `activateProFromWebsite` (from `orlandoascanio.com` origins only).
+External message action: `activateProFromWebsite`, accepted only from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`.
 
-### Page scripts
+### Tier Behavior
 
-| Script | Lines | Role |
-|---|---|---|
-| `popup/popup.js` | ~440 | Quick-add/remove blocked sites, view status |
-| `options/options.js` | ~1410 | Full settings UI (General, Analytics, Reports tabs), Pro paywall, plan management |
-| `friction-page/script.js` | ~994 | Typing challenge, manual override, Pro pre-checks (earn-access, task intent, timed wait) |
-| `commitment-page/script.js` | ~128 | Commitment mode status display |
-| `welcome/welcome.js` | ~19 | First-install onboarding redirect |
+Free:
 
-### Pro feature gating
+- domain blocking;
+- schedule blocking;
+- graduated typing challenges;
+- temporary access;
+- manual override with 10-15 second delay;
+- popup and options settings;
+- daily badge and resistance counters;
+- work timer;
+- per-site time/work access conditions;
+- Intention Page with per-site reminders and optional breathing.
 
-Pro features gated by `hasProAccess(settings)` in background.js:
-- **Strict Mode**: Locks settings during active schedule; disable has configurable cooldown
-- **Override cooldown**: Threshold-based escalating delay (threshold → lock)
-- **Behavioral friction**: Task intent prompt, timed wait, earn-access bonus minutes
-- **Analytics dashboard**: 7-day rolling stats, top domains, override trend
-- **Weekly discipline report**: Focus score, comparison, feedback line
-- **Commitment Mode**: Irrevocable global lockout (1–24 h), no overrides or settings changes
-- **Intention Page**: Replace generic friction message with personal goal + optional breathing exercise
+Pro:
 
-### Testing approach
+- Strict Mode and disable cooldown;
+- Commitment Mode;
+- override cooldown/lockouts;
+- behavioral friction precheck;
+- earn-access minimum challenge time and bonus minutes;
+- accountability presets;
+- analytics dashboard;
+- weekly report and Focus Score;
+- custom challenge prompt.
 
-Tests run in Node.js via Vitest using a `vm`-based sandbox (`tests/helpers/vm-env.js`). Each test file:
-1. Calls `createChromeMock()` to get a full fake Chrome API with in-memory storage
-2. Loads the target script into a `vm.Script` context with `chrome` injected as a global
-3. Calls exposed hook objects to invoke internal functions directly
+Note: current code and tests treat per-site access condition setup as free.
 
-**Test hook globals** (set at bottom of each file under `if (typeof globalThis !== 'undefined')`):
-- `background.js` → `__RESISTGATE_TEST_HOOKS__`
-- `options/options.js` → `__RESISTGATE_OPTIONS_TEST_HOOKS__`
-- `popup/popup.js` → `__RESISTGATE_POPUP_TEST_HOOKS__`
-- `friction-page/script.js` → `__RESISTGATE_FRICTION_TEST_HOOKS__`
+### Page Scripts
 
-**Do not remove these blocks.** When adding new logic, expose relevant pure functions through the existing hook object.
+| Script | Role |
+|---|---|
+| `popup/popup.js` | Quick add/remove, block current tab, work timer, commitment status, feedback, outcome tap prompt |
+| `options/options.js` | Full settings UI, blocklist, per-site reminders/access conditions, Pro paywall, analytics/report tabs |
+| `intention-page/script.js` | Standalone pause layer, optional reason/task intent, breathing pause, short challenge |
+| `friction-page/script.js` | Full challenge, manual override, Pro precheck, access-condition progress |
+| `commitment-page/script.js` | Commitment Mode countdown page |
+| `welcome/welcome.js` | Onboarding lifecycle page |
+| `whats-new/whats-new.js` | Release notes page actions and update-seen telemetry |
 
-**Test suites:**
-- `background.integration.test.js` — Service worker message handling and storage lifecycle
-- `feature-matrix.test.js` — Pro features, entitlement, analytics, alarms
-- `friction-page.flow.test.js` — Typing challenge, manual override, temporary access grant
-- `ui.logic.test.js` — Popup and options page settings logic
+## Testing
 
-Prefer integration-style tests (send a message, assert storage/response) over mocking internal functions. Use `beforeEach` for fresh environments. For bug fixes, add regression tests that reproduce the exact failing condition first.
+Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expose hook globals for pure-function tests:
 
-### Coverage thresholds (enforced by CI)
+| Script | Hook |
+|---|---|
+| `background.js` | `__RESISTGATE_TEST_HOOKS__` |
+| `options/options.js` | `__RESISTGATE_OPTIONS_TEST_HOOKS__` |
+| `popup/popup.js` | `__RESISTGATE_POPUP_TEST_HOOKS__` |
+| `friction-page/script.js` | `__RESISTGATE_FRICTION_TEST_HOOKS__` |
+| `intention-page/script.js` | `__RESISTGATE_INTENTION_TEST_HOOKS__` |
+| `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
+| `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
+
+Current verified state on 2026-07-07:
+
+- `npm test`: 5 files, 152 tests passing.
+- `npm run test:coverage`: passing.
+- `background.js`: 88.4% lines/statements, 76.44% branches, 96.66% functions.
+
+Coverage thresholds:
 
 | Scope | Lines | Statements | Functions | Branches |
-|---|---|---|---|---|
+|---|---:|---:|---:|---:|
+| Global covered files | 43% | 43% | 48% | 70% |
 | `background.js` | 85% | 85% | 95% | 70% |
-| All other covered files | 45% | 45% | 50% | 70% |
 
-### CI/CD (`.github/workflows/ci-cd.yml`)
+For bug fixes, add a regression test that reproduces the failing condition before or alongside the fix.
 
-- **test** job: runs on every push/PR to `main`. `npm ci` → `npm run test:coverage`.
-- **release** job: runs on `v*` tags only. Zips extension (excludes `node_modules/`, `tests/`, `.git/`, `.github/`), publishes GitHub Release with auto-generated notes.
+## Coding Conventions
 
-To cut a release: `git tag v1.X.Y && git push origin v1.X.Y`
+- 2-space indentation in JS, JSON, and CSS.
+- Exception: `popup/popup.js` currently uses 4 spaces. Prefer 2 spaces for new code in that file, but do not reindent unrelated code.
+- Use `const`/`let`, never `var`.
+- camelCase variables/functions; SCREAMING_SNAKE_CASE module constants; kebab-case folders/files/DOM IDs.
+- Extension scripts remain plain globals; do not add top-level imports to runtime scripts.
+- Background message handlers should return structured errors instead of swallowing failures.
+- New settings must be added to `DEFAULT_SETTINGS`, sanitized, and guarded if Pro-only.
 
-## Coding conventions
+## Release Checklist
 
-- **Indentation**: 2 spaces in all JS, JSON, CSS. Exception: `popup/popup.js` uses 4 spaces — do not widen the gap; use 2 spaces in any new code added there.
-- **Variables**: `const`/`let` only; never `var`.
-- **Naming**: camelCase for variables/functions; SCREAMING_SNAKE_CASE for module-level constants; kebab-case for folders/files and DOM IDs.
-- **Module type**: `package.json` sets `"type": "module"`. Test files use ESM `import`/`export`. Extension scripts run as plain globals (no `import`/`export` at top level).
-- **Error handling**: wrap every `case` block in the message switch with its own `try/catch`. Fire-and-forget async calls use `void` prefix. Never swallow errors silently.
-- **Defensive defaults**: every `sanitize*()` function returns a full valid object even for `null`/`undefined` input; use `DEFAULT_SETTINGS` as the canonical shape reference.
-- **Adding new settings**: add field to `DEFAULT_SETTINGS`, update `sanitizeSettings()` (and relevant nested sanitizer), and add a Pro guard with `hasProAccess(settings)` if Pro-only.
+1. Bump `manifest.json` and `package.json`.
+2. Update `changelog.md`.
+3. Run `npm run test:coverage`.
+4. Manually smoke-test popup, options, Intention Page, friction page, Commitment Mode, schedule, temporary access, and work-timer access conditions.
+5. Tag with `vX.Y.Z` to trigger the release workflow.
 
-## Release checklist
+## Security Notes
 
-1. Bump version in both `manifest.json` and `package.json`
-2. Update `changelog.md`
-3. `npm run test:coverage` — must pass all thresholds
-4. Commit `Release vX.Y.Z`, tag, push → CI zips and creates GitHub Release
-5. Upload zip to Chrome Web Store
+- External activation must stay restricted to trusted website origins.
+- Internal messages must never elevate a user to Pro.
+- All blocking decisions stay local.
+- Document any new network call. Current telemetry surfaces are bundled Sentry diagnostics and allowlisted PostHog lifecycle/funnel events.
+- Never log tokens, emails, checkout identifiers, or other sensitive fields.
 
-## Security notes
+## Known Issues To Respect
 
-- External message origins validated against `TRUSTED_EXTERNAL_ORIGINS` (`orlandoascanio.com` only) — do not relax.
-- Pro activation is exclusively via `activateProFromWebsite` from trusted origins; never trust a locally-sent message to self-elevate to Pro.
-- Never log sensitive fields (tokens, email addresses) to `console`.
-- All user data stays in `chrome.storage.local`; no external network calls in core logic.
+- `pendingOutcomeTap` is partially implemented, but popup responses are not currently persisted because the message payload shape is wrong. See `docs/Implementation.md`.
+- `WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are unused.
+- UI line coverage is much lower than background coverage; add focused tests when touching UI behavior.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill

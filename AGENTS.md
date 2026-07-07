@@ -10,15 +10,21 @@ ResistGate/
 ├── popup/                 — quick-actions UI (popup.html, popup.css, popup.js)
 ├── options/               — full settings UI (options.html, options.css, options.js)
 ├── friction-page/         — redirect challenge page (index.html, style.css, script.js)
+├── intention-page/        — standalone pause + short challenge page
+├── commitment-page/       — Commitment Mode lockout page
 ├── welcome/               — first-install onboarding page (welcome.html, welcome.css, welcome.js)
+├── whats-new/             — update notes page
+├── shared/                — shared CSS design-system tokens/utilities
+├── vendor/                — vendored Sentry runtime + init
 ├── icons/                 — extension icon assets (16×16, 48×48, 128×128)
 ├── tests/                 — Vitest test suite
 │   ├── helpers/vm-env.js  — VM context loader and chrome mock factory
 │   ├── background.integration.test.js
 │   ├── feature-matrix.test.js
 │   ├── friction-page.flow.test.js
+│   ├── intention-page.flow.test.js
 │   └── ui.logic.test.js
-├── package.json           — devDependencies: vitest ^2.1.8, @vitest/coverage-v8
+├── package.json           — devDependencies: vitest ^2.1.8 (lockfile resolves 2.1.9), @vitest/coverage-v8
 ├── vitest.config.js       — test config and coverage thresholds
 └── .github/workflows/ci-cd.yml — CI (test gate) + release pipeline
 ```
@@ -38,6 +44,7 @@ npm run test:coverage        # vitest run --coverage (enforces thresholds; requi
 npx vitest run tests/background.integration.test.js
 npx vitest run tests/feature-matrix.test.js
 npx vitest run tests/friction-page.flow.test.js
+npx vitest run tests/intention-page.flow.test.js
 npx vitest run tests/ui.logic.test.js
 ```
 
@@ -53,10 +60,12 @@ To load the extension locally:
 
 Manual smoke-test flows to verify after any change:
 - Add/remove a blocked site; confirm `declarativeNetRequest` rule activates.
-- Navigate to a blocked site; confirm redirect to `friction-page/index.html`.
+- Navigate to a blocked site; confirm redirect to `intention-page/index.html` when the Intention Page is enabled and to `friction-page/index.html` when it is disabled.
 - Complete the typing challenge; confirm temporary access is granted and expires.
 - Test schedule-based blocking (enable schedule, adjust system clock or wait).
 - Test Strict Mode toggle and cooldown delay.
+- Test Commitment Mode redirects to `commitment-page/index.html` and cannot be bypassed early.
+- Test work-timer access conditions from popup start/stop through rule refresh.
 
 ## Coding Style & Naming Conventions
 - **Indentation:** 2 spaces in all JS, JSON, and CSS files.
@@ -85,15 +94,21 @@ Manual smoke-test flows to verify after any change:
 ## Architecture & Key Patterns
 
 ### Storage
-All persistence uses `chrome.storage.local` exclusively (never `chrome.storage.sync`). Five storage domains, each with a dedicated constant key and sanitize function:
+All persistence uses `chrome.storage.local` exclusively (never `chrome.storage.sync`). Runtime storage domains:
 
 | Key constant         | Key string          | Sanitize function            |
 |----------------------|---------------------|------------------------------|
 | `SETTINGS_KEY`       | `'settings'`        | `sanitizeSettings()`         |
 | `TEMP_ACCESS_KEY`    | `'temporaryAccess'` | `sanitizeTemporaryAccess()`  |
 | `ANALYTICS_KEY`      | `'analytics'`       | `sanitizeAnalytics()`        |
-| `OVERRIDE_STATE_KEY` | `'overrideState'`   | *(inline in initializeExtension)* |
-| `WELCOME_SHOWN_KEY`  | `'welcomeShown'`    | *(boolean flag)*             |
+| `OVERRIDE_STATE_KEY` | `'overrideState'`   | `sanitizeOverrideState()`    |
+| `INSTALLATION_KEY`   | `'installation'`    | `sanitizeInstallation()`     |
+| `DAILY_COUNT_KEY`    | `'dailyBlockCount'` | *(inline badge reset logic)* |
+| `RESISTANCE_COUNTERS_KEY` | `'resistanceCounters'` | *(inline counter logic)* |
+| `WORK_TIMER_KEY`     | `'workTimer'`       | `sanitizeWorkTimer()`        |
+| `PENDING_OUTCOME_TAP_KEY` | `'pendingOutcomeTap'` | `sanitizePendingOutcomeTap()` exists; startup does not currently normalize this key |
+| `WELCOME_SHOWN_KEY`  | `'welcomeShown'`    | Declared but unused          |
+| `WHATS_NEW_SHOWN_KEY` | `'whatsNewShown'`  | Declared but unused          |
 
 All reads and writes go through promise-wrapping utilities `getFromStorage(key)` / `setInStorage(key, value)`. On initialization every domain is read, sanitized, and written back if the value changed.
 
@@ -103,12 +118,12 @@ All `declarativeNetRequest` rule changes are serialized through a promise queue:
 ```js
 let updateQueue = Promise.resolve();
 function queueRulesUpdate(reason) {
-  updateQueue = updateQueue.then(() => updateRules(reason));
+  updateQueue = updateQueue.then(() => updateBlockingRules(reason));
   return updateQueue;
 }
 ```
 
-Never call `updateRules()` directly from new code; always go through `queueRulesUpdate()`.
+Never call `updateBlockingRules()` directly from new code; always go through `queueRulesUpdate()`.
 
 ### Message Passing
 **Background listener** (`chrome.runtime.onMessage`) uses the `void (async () => { ... })(); return true;` pattern to keep the message channel open for async responses.
@@ -130,13 +145,22 @@ Special extended shapes:
 |---|---|
 | `grantTemporaryAccess` | Grant timed bypass for a URL pattern |
 | `recordBlockedVisit` | Increment visit counter for a domain |
+| `getResistanceCount` | Return today's per-domain resistance count |
 | `recordAnalyticsEvent` | Append a typed analytics event |
 | `getSettings` | Return full sanitized settings object |
 | `getManualOverrideStatus` | Return current override state |
 | `updateSettings` | Validate, apply Strict Mode logic, save, re-queue rules |
-| `openPricingPage` | Open `orlandoascanio.com/en/pricing` in a new tab |
 | `getAnalyticsDashboard` | Return analytics data (Pro only) |
 | `getWeeklyReport` | Return weekly report data (Pro only) |
+| `activateCommitmentMode` | Start Pro-only 1–24h lockout |
+| `deactivateCommitmentMode` | Always refuses early deactivation |
+| `getWorkTimerState` | Return work timer state |
+| `startWorkTimer` | Start current-day work timer |
+| `stopWorkTimer` | Stop work timer and accumulate minutes |
+| `getCommitmentModeStatus` | Return Commitment Mode status/countdown |
+| `openPricingPage` | Open `orlandoascanio.com/en/pricing` in a new tab |
+| `openFeedbackPage` | Open the ResistGate feedback page |
+| `trackPosthogEvent` | Track an allowlisted PostHog event once per installation |
 
 ### External Message Actions (`chrome.runtime.onMessageExternal`)
 | Action | Trusted origins | Description |
@@ -176,7 +200,7 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 **Free tier (available to all users):**
 - Domain blocking via `declarativeNetRequest` (unlimited sites)
 - Schedule-based blocking (days + time windows)
-- Typing challenge gate (5 paragraphs, 100% accuracy, paste disabled)
+- Graduated typing challenge gate (easy code, moderate 1-2 sentences, hard 5 paragraphs, 100% accuracy, paste disabled)
 - Temporary access with configurable duration + auto-reblock
 - Manual override with configurable 10–15s delay countdown
 - Quick-add popup UI (add/remove sites, block current tab)
@@ -185,13 +209,13 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 - Per-site resistance counters
 - Focus/work timer with session persistence
 - Work timer (start/stop, tracked minutes per day)
-- Temptation bundle condition checking (time-of-day + work-timer) — checking only; setup is Pro
+- Temptation bundle / access-condition setup and checking (time-of-day + work-timer). Current code and tests treat this as free.
 - Intention page (per-site personal goals + optional 4-7-8 breathing)
 
 **Pro tier (requires `subscription.tier === 'pro'`):**
-- Strict mode lock (prevents settings changes during active schedule)
-- Strict mode disable cooldown (10–300s configurable delay)
-- Commitment mode (1–24h total lockout, no override, no challenge)
+- Strict mode lock (prevents settings changes during the active schedule, or globally when no schedule is enabled)
+- Strict mode disable cooldown (10-300s configurable delay)
+- Commitment mode (1-24h total lockout, no override, no challenge)
 - Override cooldown system (progressive lock after threshold)
 - Behavioral friction system (task intent input, timed wait, earn-access mode)
 - Earn-access bonus minutes (extra time for extended challenge completion)
@@ -199,8 +223,7 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 - Focus analytics dashboard (7-day blocked attempts, override trends, top domains)
 - Focus Score (0–100 weekly discipline score)
 - Weekly discipline report (auto-generated, week-over-week trends)
-- Full analytics event logging (`blocked_visit`, `access_granted`, `override_attempt`, etc.)
-- Temptation bundle setup and configuration (creation in options)
+- Full local analytics event logging for supported Pro events (`blocked_visit`, `access_granted`, `override_triggered`, etc.)
 - Custom challenge prompt (personalized reminder message)
 
 **Message actions gated by Pro (`hasProAccess` check):**
@@ -211,12 +234,12 @@ Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/
 | `activateCommitmentMode` | Pro only |
 
 **UI elements gated by Pro (`isProUser` / `isPopupProUser`):**
-- Options: Analytics tab, Weekly Report tab, Strict Mode toggle, Accountability preset selector, Behavioral friction configuration, Commitment mode activation, Override cooldown config, Temptation bundle setup
+- Options: Analytics tab, Weekly Report tab, Strict Mode toggle, Accountability preset selector, Behavioral friction configuration, Commitment mode activation, Override cooldown config
 - Popup: Pro plan pill
 - Friction page: Pro precheck panel (task intent, timed wait, earn-access, custom challenge prompt)
 
 ## Testing Guidelines
-The project has a full automated test suite using **Vitest 2.1.8**. All tests must pass (including coverage thresholds) before a PR is merged — CI enforces this.
+The project has a full automated test suite using **Vitest 2.1.x**. All tests must pass (including coverage thresholds) before a PR is merged — CI enforces this.
 
 ### Test Structure
 Tests live in `tests/` and are loaded by Vitest via `tests/**/*.test.js`.
@@ -234,6 +257,9 @@ Each script exposes internal functions for unit-level testing via a `globalThis`
 | `options/options.js` | `__RESISTGATE_OPTIONS_TEST_HOOKS__` |
 | `popup/popup.js` | `__RESISTGATE_POPUP_TEST_HOOKS__` |
 | `friction-page/script.js` | `__RESISTGATE_FRICTION_TEST_HOOKS__` |
+| `intention-page/script.js` | `__RESISTGATE_INTENTION_TEST_HOOKS__` |
+| `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
+| `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
 
 When adding new logic to any of these files, expose the relevant pure functions through the existing hook object.
 
@@ -241,7 +267,7 @@ When adding new logic to any of these files, expose the relevant pure functions 
 | Scope | Lines | Statements | Functions | Branches |
 |---|---|---|---|---|
 | `background.js` | 85% | 85% | 95% | 70% |
-| All other covered files | 45% | 45% | 50% | 70% |
+| Global covered files | 43% | 43% | 48% | 70% |
 
 Run `npm run test:coverage` locally before pushing to confirm thresholds pass.
 
