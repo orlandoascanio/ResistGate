@@ -1087,15 +1087,15 @@ label {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
-  border-color: var(--primary);
+  border-color: var(--btn-primary-bg);
   box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-bg-hover);
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
