@@ -21,6 +21,9 @@
   --primary-hover: #3d167d;
   --primary-active: #2d0f5e;
   --primary-subtle: #b996ea;
+  --primary-action: var(--primary);
+  --primary-action-hover: var(--primary-hover);
+  --primary-action-active: var(--primary-active);
   --lavender: #efe7fb;
   --lavender-2: #f4edff;
   --surface-strong: #fbfaff;
@@ -94,6 +97,9 @@
     --primary-hover: #7c3aed;
     --primary-active: #6d28d9;
     --primary-subtle: #a78bfa;
+    --primary-action: #6d28d9;
+    --primary-action-hover: #5b21b6;
+    --primary-action-active: #4c1d95;
     --lavender: #26193a;
     --lavender-2: #1f1232;
     --surface-strong: #211633;
@@ -631,18 +637,18 @@ body {
 
 /* Primary button */
 .btn-primary {
-  background: var(--primary);
+  background: var(--primary-action);
   color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: var(--primary-action-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-button-hover);
 }
 
 .btn-primary:active:not(:disabled) {
-  background: var(--primary-active);
+  background: var(--primary-action-active);
   transform: translateY(0);
   box-shadow: var(--shadow-button-active);
 }
