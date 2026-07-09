@@ -250,6 +250,9 @@
     --shadow-elevated: 0 12px 28px rgba(0 0 0 / 0.45);
 
     /* Component-specific */
+    --btn-primary-bg: var(--color-purple-700);
+    --btn-primary-bg-hover: var(--color-purple-800);
+    --btn-primary-bg-active: var(--color-purple-900);
     --btn-secondary-bg-hover: var(--primary-bg);
   }
 }
