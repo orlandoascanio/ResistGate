@@ -50,7 +50,7 @@ button {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--btn-primary-text);
-  background: var(--primary);
+  background: var(--btn-primary-bg);
   box-shadow: var(--shadow-md);
   transform: translateY(-160%);
   transition: transform var(--duration-base) var(--ease-out);
@@ -332,8 +332,8 @@ h1 {
 
 .reason-chip[aria-pressed="true"] {
   color: var(--btn-primary-text);
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
   box-shadow: var(--shadow-md);
 }
 
@@ -412,7 +412,7 @@ h1 {
   place-items: center;
   border-radius: 999px;
   color: var(--btn-primary-text);
-  background: var(--primary);
+  background: var(--btn-primary-bg);
   font-size: var(--text-heading-lg);
   font-weight: var(--font-weight-extrabold);
   font-variant-numeric: tabular-nums;
