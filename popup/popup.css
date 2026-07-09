@@ -20,6 +20,8 @@
   --primary: #4a1d96;
   --primary-hover: #3d167d;
   --primary-subtle: #b996ea;
+  --primary-action: var(--primary);
+  --primary-action-hover: var(--primary-hover);
   --lavender: #efe7fb;
   --lavender-2: #f4edff;
 
@@ -56,6 +58,8 @@
     --primary: #8b5cf6;
     --primary-hover: #7c3aed;
     --primary-subtle: #6d28d9;
+    --primary-action: #6d28d9;
+    --primary-action-hover: #5b21b6;
     --lavender: #26193a;
     --lavender-2: #1f1232;
 
@@ -172,12 +176,12 @@ input:focus {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--primary-action);
   color: #fff;
 }
 
 .btn-primary:hover {
-  background: var(--primary-hover);
+  background: var(--primary-action-hover);
 }
 
 .current-tab-btn {
@@ -436,13 +440,13 @@ input:focus {
 }
 
 .btn-work-timer.running {
-  background: var(--primary);
+  background: var(--primary-action);
   color: #fff;
-  border-color: var(--primary);
+  border-color: var(--primary-action);
 }
 
 .btn-work-timer.running:hover {
-  background: var(--primary-hover);
+  background: var(--primary-action-hover);
 }
 
 /* ── Undo toast button ──────────────────────────────────────────── */
