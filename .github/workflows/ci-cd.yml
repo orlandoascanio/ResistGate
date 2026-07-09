@@ -58,35 +58,37 @@ jobs:
 
       - name: Create extension zip
         run: |
-          zip -r "resistgate-extension-${{ steps.version.outputs.version }}.zip" . \
-            -x "node_modules/*" \
-               "tests/*" \
-               "docs/*" \
-               "overview/*" \
-               ".git/*" \
-               ".github/*" \
-               ".pi/*" \
-               ".agent/*" \
-               ".agents/*" \
-               ".opencode/*" \
-               ".claude/*" \
-               ".codex/*" \
-               ".qwen/*" \
-               ".vscode/*" \
-               ".idea/*" \
-               "coverage/*" \
-               "*.DS_Store" \
-               ".env*" \
-               "*.log" \
-               "package*.json" \
-               "vitest.config.js" \
-               "AGENTS.md" \
-               "README.md" \
-               "Overview.md" \
-               "Architecture.md" \
-               "features2.md" \
-               ".impeccable.md" \
-               ".gitignore"
+          set -euo pipefail
+
+          ZIP_NAME="resistgate-extension-${{ steps.version.outputs.version }}.zip"
+          EXTENSION_PATHS=(
+            manifest.json
+            background.js
+            popup
+            options
+            friction-page
+            intention-page
+            commitment-page
+            welcome
+            whats-new
+            shared
+            vendor
+            icons
+          )
+
+          zip -r "$ZIP_NAME" "${EXTENSION_PATHS[@]}" \
+            -x "._*" \
+               "*/._*" \
+               ".DS_Store" \
+               "*/.DS_Store" \
+               "CleanShot*.png" \
+               "*/CleanShot*.png"
+
+          BAD_ENTRIES="$(zipinfo -1 "$ZIP_NAME" | grep -E '(^|/)\._|(^|/)\.DS_Store$|(^|/)CleanShot.*\.png$' || true)"
+          if [[ -n "$BAD_ENTRIES" ]]; then
+            printf 'Release zip contains local metadata or screenshots:\n%s\n' "$BAD_ENTRIES" >&2
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
