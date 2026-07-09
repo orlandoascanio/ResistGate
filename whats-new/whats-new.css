@@ -581,14 +581,14 @@ h1 {
 
 .btn-primary {
   color: var(--primary-contrast);
-  background: var(--primary);
-  border-color: var(--primary);
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 20%, transparent);
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--btn-primary-bg) 20%, transparent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-bg-hover);
 }
 
 .btn-secondary {
