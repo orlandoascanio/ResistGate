@@ -613,3 +613,50 @@ body {
     border: 2px solid currentColor;
   }
 }
+
+/* ───────────────────────────────────────────────────────────────────
+   RESISTGATE EXPERIENCE ARCHITECTURE TOKENS
+   Shared semantic layer for alternate UI explorations and future pages.
+   These tokens describe product intent rather than one visual theme.
+   ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  --rg-font-sans: var(--font-family-base);
+  --rg-font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --rg-font-code: var(--font-family-mono);
+
+  --rg-surface-canvas: var(--bg);
+  --rg-surface-card: var(--card);
+  --rg-surface-raised: var(--bg-alt);
+  --rg-surface-interrupt: var(--primary-bg-subtle);
+  --rg-surface-commitment: var(--error-bg);
+
+  --rg-ink-primary: var(--text);
+  --rg-ink-secondary: var(--text-secondary);
+  --rg-ink-muted: var(--muted);
+  --rg-ink-inverse: var(--color-gray-0);
+
+  --rg-accent-primary: var(--primary);
+  --rg-accent-focus: #2563eb;
+  --rg-accent-success: var(--success);
+  --rg-accent-caution: var(--warning);
+  --rg-accent-danger: var(--error);
+
+  --rg-radius-control: var(--radius-sm);
+  --rg-radius-panel: calc(var(--radius-xl) + var(--space-2));
+  --rg-radius-display: 2rem;
+
+  --rg-rhythm-xs: var(--space-2);
+  --rg-rhythm-sm: var(--space-3);
+  --rg-rhythm-md: var(--space-5);
+  --rg-rhythm-lg: var(--space-8);
+  --rg-rhythm-xl: var(--space-12);
+
+  --rg-shadow-resting: var(--shadow-card);
+  --rg-shadow-floating: var(--shadow-elevated);
+  --rg-shadow-interrupt: 0 24px 70px rgba(var(--shadow-color) / 0.18);
+
+  --rg-motion-enter: 420ms var(--ease-out);
+  --rg-motion-press: 140ms var(--ease-out);
+  --rg-motion-ritual: 900ms cubic-bezier(0.19, 1, 0.22, 1);
+}
