@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ResistGate — Website Blocker with Typing Challenge",
+  "name": "ResistGate \u2014 Website Blocker with Typing Challenge",
   "version": "1.3.3",
   "description": "Add a typing challenge before distracting sites so you stop browsing on autopilot. A speed bump for your bad internet habits.",
   "icons": {
@@ -20,13 +20,26 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "ResistGate — Website Blocker with Typing Challenge"
+    "default_title": "ResistGate \u2014 Website Blocker with Typing Challenge"
   },
   "options_page": "options/options.html",
   "web_accessible_resources": [
     {
-      "resources": ["welcome/welcome.html", "commitment-page/index.html", "intention-page/index.html", "whats-new/whats-new.html"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "welcome/welcome.html",
+        "commitment-page/index.html",
+        "intention-page/index.html",
+        "whats-new/whats-new.html",
+        "testing/page-1/index.html",
+        "testing/page-2/index.html",
+        "testing/page-3/index.html",
+        "testing/page-4/index.html",
+        "testing/page-5/index.html",
+        "testing/testing.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "externally_connectable": {
