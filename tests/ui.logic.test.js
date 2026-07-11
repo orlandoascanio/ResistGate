@@ -39,6 +39,10 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).not.toContain('id="blocking-status"');
     expect(optionsHtml).not.toContain('sidebar-brand-mark');
     expect(optionsHtml).not.toContain('>RG</');
+    expect(optionsHtml).toContain('id="site-editor-modal"');
+    expect(optionsHtml).toContain('id="site-editor-content"');
+    expect(optionsJs).toContain('showBlockedSiteEditor(entry, toggleButton)');
+    expect(optionsJs).not.toContain('setBlockedSiteExpanded(');
     expect(optionsHtml).toContain('<h2>Entry difficulty</h2>');
     expect(optionsHtml).toContain('Pick the level that interrupts autopilot without derailing real work.');
     expect(optionsHtml).toContain('Override pause can be 10 to 15 seconds.');

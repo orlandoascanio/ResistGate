@@ -55,6 +55,7 @@ let queuedProScreen = null;
 let cachedSettings = null;
 let _paywallReturnFocus = null;
 let _comparisonReturnFocus = null;
+let _siteEditorReturnFocus = null;
 let commitmentCountdownTimer = null;
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -172,6 +173,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('close-comparison-btn').addEventListener('click', hidePlanComparison);
+  document.getElementById('close-site-editor-btn').addEventListener('click', hideBlockedSiteEditor);
   // refresh-entitlement-btn removed
 
   document.getElementById('activate-commitment-btn').addEventListener('click', function () {
@@ -664,7 +666,7 @@ function addBlockedSite() {
       if (updateResponse && updateResponse.success) {
         input.value = '';
         cachedSettings = settings;
-        loadBlockedSites(settings.blocklist, newEntry.id);
+        loadBlockedSites(settings.blocklist);
         showMessage('Site added to ResistGate.', 'success');
       } else {
         showMessage(updateResponse?.error || 'Unable to add site. Try again.', 'error');
@@ -673,7 +675,7 @@ function addBlockedSite() {
   });
 }
 
-function loadBlockedSites(blocklist = [], expandedEntryId = null) {
+function loadBlockedSites(blocklist = []) {
   const listElement = document.getElementById('blocked-sites-list');
   listElement.innerHTML = '';
 
@@ -692,7 +694,7 @@ function loadBlockedSites(blocklist = [], expandedEntryId = null) {
     const toggleButton = document.createElement('button');
     toggleButton.type = 'button';
     toggleButton.className = 'blocked-site-toggle';
-    toggleButton.setAttribute('aria-expanded', 'false');
+    toggleButton.setAttribute('aria-haspopup', 'dialog');
 
     const siteDomain = document.createElement('span');
     siteDomain.className = 'site-domain';
@@ -708,54 +710,83 @@ function loadBlockedSites(blocklist = [], expandedEntryId = null) {
     primary.appendChild(siteDomain);
     primary.appendChild(siteSummary);
 
-    const chevron = document.createElement('span');
-    chevron.className = 'site-chevron';
-    chevron.setAttribute('aria-hidden', 'true');
+    const editLabel = document.createElement('span');
+    editLabel.className = 'site-edit-label';
+    editLabel.textContent = 'Edit';
 
     toggleButton.appendChild(primary);
-    toggleButton.appendChild(chevron);
-
-    const configPanel = document.createElement('div');
-    configPanel.className = 'blocked-site-config';
-    configPanel.hidden = true;
-    configPanel.setAttribute('inert', '');
-    configPanel.appendChild(buildBundleConfig(entry));
-
-    // Site reminder config stays inside the expanded per-site editor.
-    configPanel.appendChild(buildPersonalGoalConfig(entry));
-
-    const actions = document.createElement('div');
-    actions.className = 'blocked-site-actions';
-
-    const removeButton = document.createElement('button');
-    removeButton.className = 'btn btn-danger';
-    removeButton.type = 'button';
-    removeButton.textContent = 'Remove site';
-    removeButton.addEventListener('click', function () {
-      removeBlockedSite(entry.id);
-    });
-
-    actions.appendChild(removeButton);
-    configPanel.appendChild(actions);
+    toggleButton.appendChild(editLabel);
 
     toggleButton.addEventListener('click', function () {
-      setBlockedSiteExpanded(toggleButton, configPanel, configPanel.hidden);
+      showBlockedSiteEditor(entry, toggleButton);
     });
 
     li.appendChild(toggleButton);
-    li.appendChild(configPanel);
     listElement.appendChild(li);
-
-    if (expandedEntryId && entry.id === expandedEntryId) {
-      setBlockedSiteExpanded(toggleButton, configPanel, true);
-    }
   });
 }
 
-function setBlockedSiteExpanded(toggleButton, configPanel, expanded) {
-  toggleButton.setAttribute('aria-expanded', String(expanded));
-  configPanel.hidden = expanded !== true;
-  configPanel.toggleAttribute('inert', expanded !== true);
+function showBlockedSiteEditor(entry, returnFocus) {
+  _siteEditorReturnFocus = returnFocus || document.activeElement;
+  const modal = document.getElementById('site-editor-modal');
+  modal.dataset.entryId = entry.id;
+  populateBlockedSiteEditor(entry);
+  modal.classList.remove('hidden');
+  const firstFocusable = modal.querySelector('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])');
+  if (firstFocusable) {
+    firstFocusable.focus();
+  }
+  _attachModalFocusTrap(modal, hideBlockedSiteEditor);
+}
+
+function populateBlockedSiteEditor(entry) {
+  const title = document.getElementById('site-editor-title');
+  const summary = document.getElementById('site-editor-summary');
+  const content = document.getElementById('site-editor-content');
+  if (!title || !summary || !content) {
+    return;
+  }
+
+  title.textContent = entry.urlPattern;
+  summary.textContent = formatBlockedSiteSummary(entry);
+  content.innerHTML = '';
+  content.appendChild(buildBundleConfig(entry));
+  content.appendChild(buildPersonalGoalConfig(entry));
+
+  const actions = document.createElement('div');
+  actions.className = 'blocked-site-actions';
+  const removeButton = document.createElement('button');
+  removeButton.className = 'btn btn-danger';
+  removeButton.type = 'button';
+  removeButton.textContent = 'Remove site';
+  removeButton.addEventListener('click', function () {
+    removeBlockedSite(entry.id);
+  });
+  actions.appendChild(removeButton);
+  content.appendChild(actions);
+}
+
+function refreshBlockedSiteEditor(entryId, settings) {
+  const modal = document.getElementById('site-editor-modal');
+  if (modal.classList.contains('hidden') || modal.dataset.entryId !== entryId) {
+    return;
+  }
+
+  const entry = (settings.blocklist || []).find((item) => item.id === entryId);
+  if (entry) {
+    populateBlockedSiteEditor(entry);
+  }
+}
+
+function hideBlockedSiteEditor() {
+  const modal = document.getElementById('site-editor-modal');
+  _detachModalFocusTrap(modal);
+  modal.classList.add('hidden');
+  delete modal.dataset.entryId;
+  if (_siteEditorReturnFocus && typeof _siteEditorReturnFocus.focus === 'function') {
+    _siteEditorReturnFocus.focus();
+  }
+  _siteEditorReturnFocus = null;
 }
 
 function formatBlockedSiteSummary(entry) {
@@ -958,7 +989,8 @@ function saveBundleForEntry(entryId, bundle) {
     chrome.runtime.sendMessage({ action: 'updateSettings', settings }, function (response) {
       if (response && response.success) {
         cachedSettings = settings;
-        loadBlockedSites(settings.blocklist, entryId);
+        loadBlockedSites(settings.blocklist);
+        refreshBlockedSiteEditor(entryId, settings);
         showMessage('Access condition saved.', 'success');
       } else {
         showMessage(response?.error || 'Unable to save condition.', 'error');
@@ -1028,7 +1060,8 @@ function buildPersonalGoalConfig(entry) {
           configPanel.style.display = 'none';
           editBtn.setAttribute('aria-expanded', 'false');
           showMessage(newGoal ? 'Site reminder saved.' : 'Site reminder removed.', 'success');
-          loadBlockedSites(settings.blocklist, entry.id);
+          loadBlockedSites(settings.blocklist);
+          refreshBlockedSiteEditor(entry.id, settings);
         } else {
           showMessage(response?.error || 'Unable to save reminder.', 'error');
         }
@@ -1053,7 +1086,8 @@ function buildPersonalGoalConfig(entry) {
           configPanel.style.display = 'none';
           editBtn.setAttribute('aria-expanded', 'false');
           showMessage('Site reminder removed.', 'success');
-          loadBlockedSites(settings.blocklist, entry.id);
+          loadBlockedSites(settings.blocklist);
+          refreshBlockedSiteEditor(entry.id, settings);
         } else {
           showMessage(response?.error || 'Unable to remove reminder.', 'error');
         }
@@ -1086,6 +1120,10 @@ function removeBlockedSite(id) {
     }, function (updateResponse) {
       if (updateResponse && updateResponse.success) {
         cachedSettings = settings;
+        const siteEditor = document.getElementById('site-editor-modal');
+        if (!siteEditor.classList.contains('hidden') && siteEditor.dataset.entryId === id) {
+          hideBlockedSiteEditor();
+        }
         loadBlockedSites(settings.blocklist);
         showUndoToast(
           `${removedEntry ? removedEntry.urlPattern : 'Site'} removed.`,

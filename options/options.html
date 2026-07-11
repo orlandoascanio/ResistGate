@@ -509,6 +509,20 @@
     </div>
   </div>
 
+  <div id="site-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="site-editor-title">
+    <div class="modal-card site-editor-card">
+      <header class="site-editor-header">
+        <p class="site-editor-eyebrow">Blocked site</p>
+        <h2 id="site-editor-title">Site settings</h2>
+        <p id="site-editor-summary"></p>
+      </header>
+      <div id="site-editor-content" class="site-editor-content"></div>
+      <div class="modal-actions site-editor-actions">
+        <button id="close-site-editor-btn" class="btn btn-secondary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <p id="status-announcement" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
   <script src="options.js"></script>
 </body>

@@ -2547,7 +2547,7 @@ body {
 }
 
 .general-settings-grid #blocked-sites-list {
-  max-height: 220px;
+  max-height: 240px;
   gap: 0;
   padding-right: 4px;
   border-top: 1px solid var(--line);
@@ -2577,18 +2577,77 @@ body {
   color: var(--primary);
 }
 
-.general-settings-grid .blocked-site-config {
-  padding: 16px 2px 18px;
-  border-top: 1px dashed var(--line-2);
-  background: transparent;
-}
-
 .general-settings-grid .site-domain {
   font-size: 15px;
 }
 
 .general-settings-grid .site-rule-summary {
   font-size: 13px;
+}
+
+.site-edit-label {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.site-editor-card {
+  max-width: 620px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.site-editor-header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.site-editor-eyebrow {
+  margin: 0 0 5px !important;
+  color: var(--primary) !important;
+  font-size: 12px !important;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-editor-header h2 {
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+  font-size: 24px;
+}
+
+.site-editor-header > p:last-child {
+  margin: 0;
+  font-size: 14px;
+}
+
+.site-editor-content {
+  display: grid;
+  gap: 20px;
+  padding-top: 20px;
+}
+
+.site-editor-card .site-config-section {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.site-editor-card .site-config-section + .site-config-section,
+.site-editor-card .blocked-site-actions {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.site-editor-card .blocked-site-actions {
+  justify-content: flex-start;
+}
+
+.site-editor-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 .general-settings-grid .disclosure-panel {
