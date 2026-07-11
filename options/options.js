@@ -54,6 +54,7 @@ let activeTab = 'general';
 let queuedProScreen = null;
 let cachedSettings = null;
 let _paywallReturnFocus = null;
+let _comparisonReturnFocus = null;
 let commitmentCountdownTimer = null;
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -146,8 +147,12 @@ document.addEventListener('DOMContentLoaded', function () {
     openPricingPage();
   });
 
+  document.getElementById('compare-plans-btn').addEventListener('click', function () {
+    showPlanComparison();
+  });
+
   document.getElementById('whats-new-btn').addEventListener('click', function () {
-    chrome.tabs.create({ url: chrome.runtime.getURL('whats-new/whats-new.html') });
+    chrome.tabs.create({ url: 'https://www.orlandoascanio.com/resistgate/updated?from=1.3.3' });
   });
 
   document.getElementById('open-feedback-btn').addEventListener('click', function () {
@@ -160,6 +165,13 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
+
+  document.getElementById('view-comparison-pricing-btn').addEventListener('click', function () {
+    hidePlanComparison();
+    openPricingPage();
+  });
+
+  document.getElementById('close-comparison-btn').addEventListener('click', hidePlanComparison);
   // refresh-entitlement-btn removed
 
   document.getElementById('activate-commitment-btn').addEventListener('click', function () {
@@ -291,6 +303,11 @@ function renderSettings() {
 function renderPlanPill() {
   const planPill = document.getElementById('plan-pill');
   const openPricingBtn = document.getElementById('open-pricing-btn');
+  const planCard = document.querySelector('.sidebar-plan-card');
+  const sidebarPlanLabel = document.getElementById('sidebar-plan-label');
+  const sidebarPlanTitle = document.getElementById('sidebar-plan-title');
+  const sidebarPlanCopy = document.getElementById('sidebar-plan-copy');
+  const comparePlansBtn = document.getElementById('compare-plans-btn');
   if (!planPill || !openPricingBtn) {
     return;
   }
@@ -299,6 +316,13 @@ function renderPlanPill() {
     planPill.textContent = 'Unlocked';
     planPill.classList.add('pro');
     openPricingBtn.style.display = 'none';
+    planCard?.classList.add('is-pro');
+    if (sidebarPlanLabel) sidebarPlanLabel.textContent = 'Pro plan';
+    if (sidebarPlanTitle) sidebarPlanTitle.textContent = 'Stronger locks active';
+    if (sidebarPlanCopy) {
+      sidebarPlanCopy.textContent = 'Progress, Weekly Review, stricter access rules, and Commitment Mode are unlocked.';
+    }
+    if (comparePlansBtn) comparePlansBtn.hidden = true;
     return;
   }
 
@@ -306,6 +330,14 @@ function renderPlanPill() {
   planPill.classList.remove('pro');
   openPricingBtn.style.display = '';
   openPricingBtn.textContent = 'See upgrade options';
+  planCard?.classList.remove('is-pro');
+  if (sidebarPlanLabel) sidebarPlanLabel.textContent = 'Free plan';
+  if (sidebarPlanTitle) sidebarPlanTitle.textContent = 'Core blocking is free';
+  if (sidebarPlanCopy) {
+    sidebarPlanCopy.textContent =
+      'Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.';
+  }
+  if (comparePlansBtn) comparePlansBtn.hidden = false;
 }
 
 function renderSubscriptionStatus() {
@@ -1471,7 +1503,7 @@ function showPaywall(source) {
   if (firstFocusable) {
     firstFocusable.focus();
   }
-  _attachModalFocusTrap(modal);
+  _attachModalFocusTrap(modal, hidePaywall);
 }
 
 function hidePaywall() {
@@ -1489,7 +1521,28 @@ function hidePaywall() {
   _paywallReturnFocus = null;
 }
 
-function _attachModalFocusTrap(modal) {
+function showPlanComparison() {
+  _comparisonReturnFocus = document.activeElement;
+  const modal = document.getElementById('plan-comparison-modal');
+  modal.classList.remove('hidden');
+  const firstFocusable = modal.querySelector('button, [href], [tabindex]:not([tabindex="-1"])');
+  if (firstFocusable) {
+    firstFocusable.focus();
+  }
+  _attachModalFocusTrap(modal, hidePlanComparison);
+}
+
+function hidePlanComparison() {
+  const modal = document.getElementById('plan-comparison-modal');
+  _detachModalFocusTrap(modal);
+  modal.classList.add('hidden');
+  if (_comparisonReturnFocus && typeof _comparisonReturnFocus.focus === 'function') {
+    _comparisonReturnFocus.focus();
+  }
+  _comparisonReturnFocus = null;
+}
+
+function _attachModalFocusTrap(modal, closeModal) {
   const focusableSelectors = 'button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])';
   function getFocusable() {
     return Array.from(modal.querySelectorAll(focusableSelectors));
@@ -1497,7 +1550,7 @@ function _attachModalFocusTrap(modal) {
 
   function handler(e) {
     if (e.key === 'Escape') {
-      hidePaywall();
+      closeModal();
       return;
     }
     if (e.key === 'Tab') {

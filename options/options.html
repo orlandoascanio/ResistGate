@@ -10,10 +10,49 @@
   <script src="../vendor/sentry-init.js"></script>
 </head>
 <body>
-  <main class="container">
+  <div class="options-shell">
+    <aside class="options-sidebar" aria-label="ResistGate settings navigation">
+      <div class="sidebar-brand">
+        <span>
+          <strong>ResistGate</strong>
+          <small>Website blocker</small>
+        </span>
+      </div>
+
+      <nav class="tabs" role="tablist" aria-label="Settings sections">
+        <button id="tab-general" class="tab-btn active" data-tab="general" role="tab" aria-selected="true" aria-controls="panel-general">
+          <span class="tab-icon" aria-hidden="true">⌂</span>
+          <span class="tab-label">General</span>
+        </button>
+        <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">
+          <span class="tab-icon" aria-hidden="true">↗</span>
+          <span class="tab-label">Progress</span>
+          <span class="tab-pro-label">Pro</span>
+        </button>
+        <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">
+          <span class="tab-icon" aria-hidden="true">▤</span>
+          <span class="tab-label">Weekly Review</span>
+          <span class="tab-pro-label">Pro</span>
+        </button>
+        <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">
+          <span class="tab-icon" aria-hidden="true">◎</span>
+          <span class="tab-label">Stronger Locks</span>
+          <span class="tab-pro-label">Pro</span>
+        </button>
+      </nav>
+
+      <section class="sidebar-plan-card" aria-labelledby="sidebar-plan-title">
+        <span id="sidebar-plan-label">Free plan</span>
+        <h2 id="sidebar-plan-title">Core blocking is free</h2>
+        <p id="sidebar-plan-copy">Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.</p>
+        <button id="compare-plans-btn" class="btn btn-secondary">Compare plans</button>
+      </section>
+    </aside>
+
+    <main class="container">
     <header class="header">
       <div class="header-row">
-        <h1>ResistGate Settings</h1>
+        <h1>Settings</h1>
         <div class="header-meta">
           <button id="open-feedback-btn" class="btn btn-secondary btn-sm">Help improve ResistGate</button>
           <button id="whats-new-btn" class="btn btn-secondary btn-sm">What's New</button>
@@ -23,45 +62,16 @@
       <p>Block the sites you want, and decide how hard it should be to get past them.</p>
     </header>
 
-    <section class="tier-guide" aria-labelledby="tier-guide-title">
-      <div>
-        <h2 id="tier-guide-title">Core blocking is free</h2>
-        <p>Pro adds Progress tracking, Weekly Review, and stricter lock modes for when you need more than the basics.</p>
-      </div>
-      <div class="tier-guide-grid">
-        <div class="tier-guide-item">
-          <span class="tier-label tier-label-free">Free</span>
-          <ul class="tier-feature-list">
-            <li>Block any site, on any schedule</li>
-            <li>A short challenge before you get through</li>
-            <li>Optional cooldown before entering</li>
-            <li>A pause to reconsider before you commit</li>
-          </ul>
-        </div>
-        <div class="tier-guide-item">
-          <span class="tier-label tier-label-pro">Pro</span>
-          <p class="tier-guide-note">For when the basics are too easy to get around.</p>
-          <ul class="tier-feature-list">
-            <li>Track your progress over time</li>
-            <li>Weekly report on what you actually did</li>
-            <li>Lock levels that go beyond typing a sentence</li>
-            <li>Commit to a block you can't undo early</li>
-            <li>Tighter rules on how access works</li>
-          </ul>
-          <small>$3.99/mo, $29.99/yr, or $49.99 once.</small>
-        </div>
-      </div>
-    </section>
-
-    <nav class="tabs" role="tablist" aria-label="Settings sections">
-      <button id="tab-general" class="tab-btn active" data-tab="general" role="tab" aria-selected="true" aria-controls="panel-general">General</button>
-      <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Progress</button>
-      <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">Weekly Review</button>
-      <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Stronger Locks</button>
-    </nav>
-
     <section id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
-      <section class="panel">
+      <header class="section-header">
+        <div>
+          <h2>General</h2>
+          <p>Sites, entry challenge, access time, and schedule.</p>
+        </div>
+      </header>
+
+      <div class="general-settings-grid">
+      <section class="panel panel-block-sites">
         <h2>Block sites</h2>
         <p class="helper">Add the domains that pull you off-task. Reminders are saved per blocked site.</p>
         <div class="block-site-form">
@@ -73,14 +83,13 @@
         </div>
         <ul id="blocked-sites-list">
           <li class="empty-state">
-            <div class="empty-icon" aria-hidden="true">RG</div>
             <p>No sites blocked yet</p>
             <span>Add a site above to start building your focus zone</span>
           </li>
         </ul>
       </section>
 
-      <section class="panel">
+      <section class="panel panel-entry-difficulty">
         <h2>Entry difficulty</h2>
         <p class="helper">Choose how much work is required before a blocked site opens.</p>
 
@@ -117,7 +126,7 @@
         </div>
       </section>
 
-      <details id="schedule-panel" class="panel disclosure-panel">
+      <details id="schedule-panel" class="panel disclosure-panel panel-schedule">
         <summary class="disclosure-summary">
           <span>
             <strong>Schedule</strong>
@@ -151,7 +160,7 @@
         </div>
       </details>
 
-      <details id="intention-panel" class="panel disclosure-panel">
+      <details id="intention-panel" class="panel disclosure-panel panel-intention">
         <summary class="disclosure-summary">
           <span>
             <strong>Intention pause</strong>
@@ -199,6 +208,7 @@
           </details>
         </div>
       </details>
+      </div>
 
       <button id="save-settings-btn" data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
@@ -390,7 +400,8 @@
 
       <button data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
-  </main>
+    </main>
+  </div>
 
   <div id="paywall-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
     <div class="modal-card">
@@ -422,6 +433,78 @@
       <div class="modal-actions">
         <button id="view-pricing-btn" class="btn btn-primary">View upgrade options</button>
         <button id="close-paywall-btn" class="btn btn-secondary">Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="plan-comparison-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="plan-comparison-title">
+    <div class="modal-card plan-comparison-card">
+      <header class="plan-comparison-header">
+        <h2 id="plan-comparison-title">Compare Free and Pro</h2>
+        <p>Core blocking stays free. Pro adds stronger locks and progress tools.</p>
+      </header>
+
+      <table class="plan-comparison-table">
+        <thead>
+          <tr>
+            <th scope="col">Feature</th>
+            <th scope="col">Free</th>
+            <th scope="col">Pro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Unlimited blocked sites</th>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Schedules, typing challenges, and temporary access</th>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Intention pauses and work timer</th>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Progress dashboard and Focus Score</th>
+            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Weekly Review</th>
+            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Strict Mode and override cooldowns</th>
+            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Commitment Mode</th>
+            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Behavioral Friction and custom challenge prompt</th>
+            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
+            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="plan-comparison-pricing">
+        <strong>Free:</strong> $0, no account required.
+        <span aria-hidden="true">·</span>
+        <strong>Pro:</strong> $3.99/month, $29.99/year, or $49.99 lifetime.
+      </p>
+
+      <div class="modal-actions">
+        <button id="view-comparison-pricing-btn" class="btn btn-primary">See Pro pricing</button>
+        <button id="close-comparison-btn" class="btn btn-secondary">Keep Free</button>
       </div>
     </div>
   </div>

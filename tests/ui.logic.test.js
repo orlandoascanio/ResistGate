@@ -11,6 +11,7 @@ const repoRoot = path.resolve(__dirname, '..');
 describe('UI copy and state logic', () => {
   it('keeps key product copy aligned with discipline positioning', () => {
     const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
+    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
     const popupHtml = fs.readFileSync(path.resolve(repoRoot, 'popup/popup.html'), 'utf8');
     const frictionHtml = fs.readFileSync(path.resolve(repoRoot, 'friction-page/index.html'), 'utf8');
     const intentionHtml = fs.readFileSync(path.resolve(repoRoot, 'intention-page/index.html'), 'utf8');
@@ -24,22 +25,30 @@ describe('UI copy and state logic', () => {
     expect(popupHtml).toContain('I\'m improving ResistGate based on real feedback.');
     expect(popupHtml).toContain('Help improve ResistGate');
     expect(optionsHtml).toContain('Weekly Review');
+    expect(optionsHtml).toContain('<h1>Settings</h1>');
     expect(optionsHtml).toContain('Block the sites you want, and decide how hard it should be to get past them.');
     expect(optionsHtml).not.toContain('Set up your blocker and choose how much friction you want before distracting sites open.');
     expect(optionsHtml).not.toContain('Plan guide');
     expect(optionsHtml).toContain('Core blocking is free');
-    expect(optionsHtml).toContain('Pro adds Progress tracking, Weekly Review, and stricter lock modes for when you need more than the basics.');
-    expect(optionsHtml).toContain('Block any site, on any schedule');
-    expect(optionsHtml).toContain("Commit to a block you can't undo early");
-    expect(optionsHtml).toContain('$3.99/mo, $29.99/yr, or $49.99 once.');
+    expect(optionsHtml).toContain('Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.');
+    expect(optionsHtml).toContain('id="compare-plans-btn"');
+    expect(optionsHtml).toContain('Compare plans');
+    expect(optionsJs).toContain("https://www.orlandoascanio.com/resistgate/updated?from=1.3.3");
+    expect(optionsJs).not.toContain("chrome.runtime.getURL('whats-new/whats-new.html')");
+    expect(optionsHtml).toContain('class="general-settings-grid"');
+    expect(optionsHtml).not.toContain('id="blocking-status"');
+    expect(optionsHtml).not.toContain('sidebar-brand-mark');
+    expect(optionsHtml).not.toContain('>RG</');
     expect(optionsHtml).toContain('<h2>Entry difficulty</h2>');
     expect(optionsHtml).toContain('Pick the level that interrupts autopilot without derailing real work.');
     expect(optionsHtml).toContain('Override pause can be 10 to 15 seconds.');
     expect(optionsHtml).not.toContain('Friction level');
     expect(optionsHtml).not.toContain('Start manageable, then raise the bar when distractions get too easy to bypass.');
     expect(optionsHtml).not.toContain('Free override waits 10 to 15 seconds.');
-    expect(optionsHtml).toContain('data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">Progress</button>');
-    expect(optionsHtml).toContain('data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">Stronger Locks</button>');
+    expect(optionsHtml).toContain('id="tab-analytics" class="tab-btn" data-tab="analytics"');
+    expect(optionsHtml).toContain('<span class="tab-label">Progress</span>');
+    expect(optionsHtml).toContain('id="tab-pro" class="tab-btn" data-tab="pro"');
+    expect(optionsHtml).toContain('<span class="tab-label">Stronger Locks</span>');
     expect(optionsHtml).toContain('Help improve ResistGate');
     expect(optionsHtml).toContain('Unlock stronger locks, progress tracking, and weekly reviews.');
     expect(frictionHtml).toContain('You blocked this for a reason.');
@@ -53,6 +62,23 @@ describe('UI copy and state logic', () => {
     expect(whatsNewHtml).toContain('Set your first intention');
   });
 
+  it('opens a real Free versus Pro comparison from the sidebar', () => {
+    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
+    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
+
+    expect(optionsJs).toContain('showPlanComparison()');
+    expect(optionsJs).not.toContain("showPaywall('sidebar-compare-plans')");
+    expect(optionsHtml).toContain('id="plan-comparison-modal"');
+    expect(optionsHtml).toContain('Compare Free and Pro');
+    expect(optionsHtml).toContain('Unlimited blocked sites');
+    expect(optionsHtml).toContain('Progress dashboard and Focus Score');
+    expect(optionsHtml).toContain('Strict Mode and override cooldowns');
+    expect(optionsHtml).toContain('$0, no account required.');
+    expect(optionsHtml).toContain('$3.99/month, $29.99/year, or $49.99 lifetime.');
+    expect(optionsHtml).toContain('id="view-comparison-pricing-btn"');
+    expect(optionsHtml).toContain('id="close-comparison-btn"');
+  });
+
   it('labels Intention pause as available and keeps it out of paywall gating', () => {
     const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
 
@@ -61,12 +87,12 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('Show your saved site reminder before the challenge.');
     expect(optionsHtml).toContain('Reminders are saved per blocked site.');
     expect(optionsHtml).not.toContain('Add optional reminder');
-    expect(optionsHtml).toContain('<details id="schedule-panel" class="panel disclosure-panel">');
+    expect(optionsHtml).toContain('<details id="schedule-panel" class="panel disclosure-panel panel-schedule">');
     expect(optionsHtml).toContain('<div id="schedule-config" class="schedule-config" hidden>');
     expect(optionsHtml).toContain('Off - turn on to block only during chosen hours.');
     expect(optionsHtml).not.toContain('id="schedule-enabled"');
     expect(optionsHtml).not.toContain('Use schedule');
-    expect(optionsHtml).toContain('<details id="intention-panel" class="panel disclosure-panel">');
+    expect(optionsHtml).toContain('<details id="intention-panel" class="panel disclosure-panel panel-intention">');
     expect(optionsHtml).toContain('How this works');
     expect(optionsHtml).not.toContain('data-pro-feature="intentionPage"');
     expect(optionsHtml).not.toContain('Intention Page — personal goals &amp; breathing exercises');
