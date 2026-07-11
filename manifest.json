@@ -29,13 +29,7 @@
         "welcome/welcome.html",
         "commitment-page/index.html",
         "intention-page/index.html",
-        "whats-new/whats-new.html",
-        "testing/page-1/index.html",
-        "testing/page-2/index.html",
-        "testing/page-3/index.html",
-        "testing/page-4/index.html",
-        "testing/page-5/index.html",
-        "testing/testing.css"
+        "whats-new/whats-new.html"
       ],
       "matches": [
         "<all_urls>"
