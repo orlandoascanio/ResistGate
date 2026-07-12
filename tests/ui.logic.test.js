@@ -54,7 +54,7 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('id="tab-pro" class="tab-btn" data-tab="pro"');
     expect(optionsHtml).toContain('<span class="tab-label">Stronger Locks</span>');
     expect(optionsHtml).toContain('Help improve ResistGate');
-    expect(optionsHtml).toContain('Unlock stronger locks, progress tracking, and weekly reviews.');
+    expect(optionsHtml).toContain('Pick a plan and checkout opens in a new tab.');
     expect(frictionHtml).toContain('You blocked this for a reason.');
     expect(intentionHtml).toContain('Pause before you enter.');
     expect(intentionHtml).toContain('Decision gate');
@@ -64,6 +64,39 @@ describe('UI copy and state logic', () => {
     expect(whatsNewHtml).toContain('Your intention, front and center.');
     expect(whatsNewHtml).toContain('Release highlights');
     expect(whatsNewHtml).toContain('Set your first intention');
+  });
+
+  it('lets the user pick a plan inside the extension before checkout opens', () => {
+    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
+    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
+
+    for (const plan of ['monthly', 'yearly', 'lifetime']) {
+      expect(optionsHtml).toContain(`name="checkout-plan" value="${plan}"`);
+    }
+    expect(optionsHtml).toContain('name="checkout-plan" value="yearly" checked');
+    expect(optionsHtml).toContain('id="checkout-status"');
+    expect(optionsJs).toContain("chrome.runtime.sendMessage({ action: 'openPricingPage', plan }");
+    expect(optionsJs).toContain('startCheckout(getSelectedPlan())');
+  });
+
+  it('offers a manual recheck when website activation does not land', () => {
+    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
+    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
+
+    expect(optionsHtml).toContain('id="refresh-entitlement-btn"');
+    expect(optionsJs).toContain("action: 'refreshEntitlement'");
+    expect(optionsJs).toContain("action: 'getBillingState'");
+  });
+
+  it('allows the extension to reach the ResistGate API from extension pages', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.resolve(repoRoot, 'manifest.json'), 'utf8'));
+    const connectSrc = manifest.content_security_policy.extension_pages;
+
+    expect(connectSrc).toContain('https://www.orlandoascanio.com');
+    expect(manifest.externally_connectable.matches).toEqual([
+      'https://www.orlandoascanio.com/*',
+      'https://orlandoascanio.com/*'
+    ]);
   });
 
   it('opens a real Free versus Pro comparison from the sidebar', () => {
@@ -100,7 +133,7 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('How this works');
     expect(optionsHtml).not.toContain('data-pro-feature="intentionPage"');
     expect(optionsHtml).not.toContain('Intention Page — personal goals &amp; breathing exercises');
-    expect(optionsHtml).toContain('Behavioral Friction — stronger pre-entry prompts');
+    expect(optionsHtml).toContain('Behavioral Friction before you open a site');
   });
 
   it('registers the distinct intention page as an extension resource', () => {

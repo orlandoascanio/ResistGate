@@ -1,21 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
+import {
+  createBillingApiMock,
+  createChromeMock,
+  loadScriptInVm,
+  purchaseProInTest
+} from './helpers/vm-env.js';
 
 describe('ResistGate background integration', () => {
   let env;
+  let api;
 
   beforeEach(async () => {
     env = createChromeMock();
-    await loadScriptInVm('background.js', { chrome: env.chrome });
+    api = createBillingApiMock();
+    await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
   });
 
-  async function activateProForTest(targetEnv = env) {
-    const response = await targetEnv.sendExternalMessage(
-      { action: 'activateProFromWebsite' },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(response.success).toBe(true);
+  async function activateProForTest(targetEnv = env, targetApi = api) {
+    const { activation } = await purchaseProInTest(targetEnv, targetApi);
+    expect(activation.success).toBe(true);
   }
 
   it('normalizes and saves free settings for blocklist/schedule', async () => {
@@ -48,13 +51,61 @@ describe('ResistGate background integration', () => {
     expect(saved.settings.freeExperience.schedule.days).toEqual([1, 2, 6]);
   });
 
-  it('opens pricing page via message handler', async () => {
-    const response = await env.sendMessage({ action: 'openPricingPage' });
+  it('opens pricing with an opaque checkout id and no device identifiers', async () => {
+    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'monthly' });
     expect(response.success).toBe(true);
-    expect(response.url).toContain('https://www.orlandoascanio.com/en/pricing');
-    expect(response.url).toContain('source=extension');
-    expect(env.createdTabs).toHaveLength(1);
-    expect(env.createdTabs[0].url).toContain('https://www.orlandoascanio.com/en/pricing');
+    expect(response.plan).toBe('monthly');
+
+    const url = new URL(response.url);
+    expect(url.origin + url.pathname).toBe('https://www.orlandoascanio.com/en/pricing');
+    expect(url.searchParams.get('source')).toBe('extension');
+    expect(url.searchParams.get('plan')).toBe('monthly');
+    expect(url.searchParams.get('checkout')).toBe(api.latestCheckoutId());
+
+    const installation = env.storageData.installation;
+    expect(response.url).not.toContain(installation.deviceId);
+    expect(response.url).not.toContain(installation.installCredential);
+    expect(response.url).not.toContain(env.chrome.runtime.id);
+    expect(env.createdTabs.at(-1).url).toBe(response.url);
+  });
+
+  it('binds each checkout session to the validated plan and defaults generic upgrades to yearly', async () => {
+    for (const plan of ['monthly', 'yearly', 'lifetime']) {
+      const response = await env.sendMessage({ action: 'openPricingPage', plan });
+      expect(response.success).toBe(true);
+      expect(api.sessions.get(response.checkoutId).plan).toBe(plan);
+    }
+
+    const generic = await env.sendMessage({ action: 'openPricingPage' });
+    expect(generic.success).toBe(true);
+    expect(api.sessions.get(generic.checkoutId).plan).toBe('yearly');
+  });
+
+  it('refuses unsupported plans without opening checkout', async () => {
+    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'weekly' });
+    expect(response.success).toBe(false);
+    expect(response.retryable).toBe(false);
+    expect(api.calls).toHaveLength(0);
+    expect(env.createdTabs).toHaveLength(0);
+  });
+
+  it('does not open checkout when the session cannot be created', async () => {
+    api.override(api.endpoints.checkout, 'network-error');
+
+    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
+    expect(response.success).toBe(false);
+    expect(response.retryable).toBe(true);
+    expect(env.createdTabs).toHaveLength(0);
+  });
+
+  it('sends the install credential to the checkout API but never stores it in the URL', async () => {
+    await env.sendMessage({ action: 'openPricingPage', plan: 'lifetime' });
+
+    const checkoutCall = api.calls.find((call) => call.url === api.endpoints.checkout);
+    expect(checkoutCall.body.installCredential).toMatch(/^[0-9a-f]{64}$/);
+    expect(checkoutCall.body.extensionId).toBe(env.chrome.runtime.id);
+    expect(checkoutCall.body.deviceId).toBe(env.storageData.installation.deviceId);
+    expect(env.storageData.installation.installCredential).toBe(checkoutCall.body.installCredential);
   });
 
   it('opens feedback page via message handler', async () => {
@@ -69,21 +120,154 @@ describe('ResistGate background integration', () => {
     expect(env.createdTabs.at(-1).url).toBe(response.url);
   });
 
-  it('activates Pro automatically from a trusted website message', async () => {
-    const activationEnv = createChromeMock();
-    await loadScriptInVm('background.js', {
-      chrome: activationEnv.chrome
-    });
+  it('activates Pro after the server verifies the activation token', async () => {
+    const { activation } = await purchaseProInTest(env, api, 'lifetime');
 
-    const response = await activationEnv.sendExternalMessage(
+    expect(activation.success).toBe(true);
+    expect(activation.subscription.tier).toBe('pro');
+    expect(activation.plan).toBe('lifetime');
+    expect(env.storageData.settings.subscription.tier).toBe('pro');
+    expect(env.storageData.installation.entitlement).toMatchObject({
+      pro: true,
+      plan: 'lifetime',
+      status: 'active'
+    });
+    expect(env.createdTabs.at(-1).url).toContain('options/options.html?activation=success');
+
+    const activationCall = api.calls.find((call) => call.url === api.endpoints.activate);
+    expect(activationCall.body.extensionId).toBe(env.chrome.runtime.id);
+    expect(activationCall.body.installCredential).toBe(env.storageData.installation.installCredential);
+  });
+
+  it('rejects an external activation with no token', async () => {
+    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
+
+    const response = await env.sendExternalMessage(
       { action: 'activateProFromWebsite' },
       { url: 'https://www.orlandoascanio.com/en/pricing' }
     );
 
+    expect(response.success).toBe(false);
+    expect(response.error).toContain('Missing activation token');
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+    expect(api.calls.some((call) => call.url === api.endpoints.activate)).toBe(false);
+  });
+
+  it('rejects an external activation from an untrusted origin', async () => {
+    const { checkout } = { checkout: await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' }) };
+    const activationToken = api.issueActivationToken(checkout.checkoutId);
+
+    const response = await env.sendExternalMessage(
+      { action: 'activateProFromWebsite', activationToken },
+      { url: 'https://evil.example.com/pricing' }
+    );
+
+    expect(response.success).toBe(false);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+  });
+
+  it('cannot grant Pro when the server rejects the exchange', async () => {
+    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
+
+    const response = await env.sendExternalMessage(
+      { action: 'activateProFromWebsite', activationToken: 'forged-token' },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(response.success).toBe(false);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+    expect(env.storageData.installation.entitlement).toBeNull();
+  });
+
+  it('cannot activate a token minted for another installation', async () => {
+    const otherEnv = createChromeMock();
+    await loadScriptInVm('background.js', { chrome: otherEnv.chrome, fetch: api.fetch });
+    const otherCheckout = await otherEnv.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
+    const otherToken = api.issueActivationToken(otherCheckout.checkoutId);
+
+    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
+    const response = await env.sendExternalMessage(
+      { action: 'activateProFromWebsite', activationToken: otherToken },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(response.success).toBe(false);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+  });
+
+  it('replaying a valid activation token is idempotent', async () => {
+    const { activationToken } = await purchaseProInTest(env, api, 'yearly');
+    const credential = env.storageData.installation.installCredential;
+
+    const replay = await env.sendExternalMessage(
+      { action: 'activateProFromWebsite', activationToken },
+      { url: 'https://www.orlandoascanio.com/en/pricing' }
+    );
+
+    expect(replay.success).toBe(true);
+    expect(env.storageData.settings.subscription.tier).toBe('pro');
+    expect(env.storageData.installation.installCredential).toBe(credential);
+  });
+
+  it('revokes Pro when a forced sync reports a verified inactive grant', async () => {
+    await activateProForTest();
+
+    api.setGrant({ pro: false, status: 'canceled' });
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
     expect(response.success).toBe(true);
-    expect(response.subscription.tier).toBe('pro');
-    expect(activationEnv.storageData.settings.subscription.tier).toBe('pro');
-    expect(activationEnv.createdTabs.at(-1).url).toContain('options/options.html?activation=success');
+    expect(response.pro).toBe(false);
+    expect(response.changed).toBe(true);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+  });
+
+  it('preserves Pro when a sync fails transiently', async () => {
+    await activateProForTest();
+
+    api.override(api.endpoints.status, 'network-error');
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(false);
+    expect(response.retryable).toBe(true);
+    expect(env.storageData.settings.subscription.tier).toBe('pro');
+    expect(env.storageData.installation.entitlement.pro).toBe(true);
+  });
+
+  it('clears local billing credentials when the server rejects the install credential', async () => {
+    await activateProForTest();
+
+    api.override(api.endpoints.status, { status: 403, body: { error: 'Unknown install credential' } });
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(false);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+    expect(env.storageData.installation.installCredential).toBeNull();
+    expect(env.storageData.installation.entitlement).toBeNull();
+  });
+
+  it('does not sync entitlement for an install that never started checkout', async () => {
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(false);
+    expect(api.calls.some((call) => call.url === api.endpoints.status)).toBe(false);
+  });
+
+  it('syncs entitlement on the six-hour alarm', async () => {
+    await activateProForTest();
+    api.setGrant({ pro: false, status: 'paused' });
+
+    await env.triggerAlarm({ name: 'resistgate-entitlement-sync' });
+
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+  });
+
+  it('reports billing state to the options page without leaking secrets', async () => {
+    await activateProForTest();
+
+    const response = await env.sendMessage({ action: 'getBillingState' });
+    expect(response.success).toBe(true);
+    expect(response.state).toMatchObject({ pro: true, plan: 'yearly', hasCheckout: true });
+    expect(JSON.stringify(response.state)).not.toContain(env.storageData.installation.installCredential);
   });
 
   it('enforces strict mode lock during active schedule', async () => {

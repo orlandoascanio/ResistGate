@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
+import { createBillingApiMock, createChromeMock, loadScriptInVm, purchaseProInTest } from './helpers/vm-env.js';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -7,21 +7,19 @@ function clone(value) {
 
 describe('Feature Matrix Coverage', () => {
   let env;
+  let api;
   let hooks;
 
   beforeEach(async () => {
     env = createChromeMock();
-    const context = await loadScriptInVm('background.js', { chrome: env.chrome });
+    api = createBillingApiMock();
+    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
     hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
 
   async function activateProForTest() {
-    const response = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite' },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(response.success).toBe(true);
+    const { activation } = await purchaseProInTest(env, api);
+    expect(activation.success).toBe(true);
   }
 
   describe('Free: Domain Blocking', () => {
