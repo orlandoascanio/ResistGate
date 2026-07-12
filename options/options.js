@@ -145,11 +145,15 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('open-pricing-btn').addEventListener('click', function () {
-    openPricingPage();
+    showPaywall('pro-panel');
   });
 
   document.getElementById('compare-plans-btn').addEventListener('click', function () {
     showPlanComparison();
+  });
+
+  document.getElementById('refresh-entitlement-btn').addEventListener('click', function () {
+    refreshEntitlement();
   });
 
   document.getElementById('whats-new-btn').addEventListener('click', function () {
@@ -161,15 +165,14 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('view-pricing-btn').addEventListener('click', function () {
-    hidePaywall();
-    openPricingPage();
+    startCheckout(getSelectedPlan());
   });
 
   document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
 
   document.getElementById('view-comparison-pricing-btn').addEventListener('click', function () {
     hidePlanComparison();
-    openPricingPage();
+    showPaywall('plan-comparison');
   });
 
   document.getElementById('close-comparison-btn').addEventListener('click', hidePlanComparison);
@@ -216,7 +219,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('activation') === 'success') {
-      showMessage('Stronger locks are active. Your checkout went through and this browser is ready.', 'success');
+      const planLabel = PLAN_LABELS[params.get('plan')] || 'Pro';
+      setActiveTab('pro');
+      showMessage(
+        `${planLabel} is active. Your payment went through and this browser is already using the stronger locks.`,
+        'success'
+      );
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   });
@@ -349,11 +357,55 @@ function renderSubscriptionStatus() {
   }
 
   if (isProUser()) {
-    statusNode.textContent = 'Stronger locks are active.';
+    statusNode.textContent = 'Stronger locks are active on this browser.';
+  } else {
+    statusNode.textContent = 'Unlock stronger locks. Pay once at checkout and this browser activates itself.';
+  }
+
+  renderEntitlementRow();
+}
+
+function renderEntitlementRow() {
+  const row = document.getElementById('entitlement-row');
+  const detail = document.getElementById('entitlement-detail');
+  if (!row || !detail) {
     return;
   }
 
-  statusNode.textContent = 'Unlock stronger locks. After checkout, this browser activates automatically.';
+  chrome.runtime.sendMessage({ action: 'getBillingState' }, function (response) {
+    const state = response?.state;
+    if (!(response && response.success) || !state?.hasCheckout) {
+      row.classList.add('hidden');
+      return;
+    }
+
+    row.classList.remove('hidden');
+    detail.textContent = state.pro
+      ? `${PLAN_LABELS[state.plan] || 'Pro'} plan, verified ${formatCheckedAt(state.checkedAt)}.`
+      : 'Checkout started on this browser. If you already paid, recheck your access.';
+  });
+}
+
+function formatCheckedAt(checkedAt) {
+  if (!checkedAt) {
+    return 'recently';
+  }
+
+  const minutes = Math.max(0, Math.round((Date.now() - checkedAt) / 60000));
+  if (minutes < 2) {
+    return 'just now';
+  }
+  if (minutes < 60) {
+    return `${minutes} minutes ago`;
+  }
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  }
+
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 function renderScheduleInputs(schedule) {
@@ -1536,6 +1588,12 @@ function showPaywall(source) {
   const modal = document.getElementById('paywall-modal');
   modal.dataset.source = source || 'unknown';
   modal.classList.remove('hidden');
+  setCheckoutStatus('');
+  const checkoutBtn = document.getElementById('view-pricing-btn');
+  if (checkoutBtn) {
+    checkoutBtn.disabled = false;
+    checkoutBtn.textContent = 'Continue to checkout';
+  }
   // Focus the first interactive element in the modal
   const firstFocusable = modal.querySelector('input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])');
   if (firstFocusable) {
@@ -1548,10 +1606,7 @@ function hidePaywall() {
   const modal = document.getElementById('paywall-modal');
   _detachModalFocusTrap(modal);
   modal.classList.add('hidden');
-  const emailInput = document.getElementById('paywall-email');
-  const emailError = document.getElementById('paywall-email-error');
-  if (emailInput) emailInput.value = '';
-  if (emailError) emailError.classList.add('hidden');
+  setCheckoutStatus('');
   // Restore focus to the element that opened the modal
   if (_paywallReturnFocus && typeof _paywallReturnFocus.focus === 'function') {
     _paywallReturnFocus.focus();
@@ -1621,27 +1676,88 @@ function _detachModalFocusTrap(modal) {
   }
 }
 
-function getPaywallEmail() {
-  const input = document.getElementById('paywall-email');
-  return input ? input.value.trim() : '';
+const PLAN_LABELS = {
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+  lifetime: 'Lifetime'
+};
+
+function getSelectedPlan() {
+  const checked = document.querySelector('input[name="checkout-plan"]:checked');
+  return checked ? checked.value : 'yearly';
 }
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function openPricingPage(email) {
-  const message = { action: 'openPricingPage' };
-  if (email) {
-    message.email = email;
+function setCheckoutStatus(text, tone) {
+  const status = document.getElementById('checkout-status');
+  if (!status) {
+    return;
   }
-  chrome.runtime.sendMessage(message, function (response) {
+
+  status.textContent = text || '';
+  status.classList.remove('is-success', 'is-error');
+  status.classList.toggle('hidden', !text);
+  if (tone) {
+    status.classList.add(tone === 'success' ? 'is-success' : 'is-error');
+  }
+}
+
+function startCheckout(plan) {
+  const button = document.getElementById('view-pricing-btn');
+  const planLabel = PLAN_LABELS[plan] || 'Pro';
+
+  if (button) {
+    button.disabled = true;
+  }
+  setCheckoutStatus('Preparing secure checkout…');
+
+  chrome.runtime.sendMessage({ action: 'openPricingPage', plan }, function (response) {
+    if (button) {
+      button.disabled = false;
+    }
+
     if (!(response && response.success)) {
-      showMessage(response?.error || 'Unable to open pricing right now.', 'error');
+      const retryable = response?.retryable !== false;
+      setCheckoutStatus(response?.error || 'Checkout could not be opened.', 'error');
+      if (button) {
+        button.textContent = retryable ? 'Try again' : 'Continue to checkout';
+      }
       return;
     }
 
-    showMessage('Upgrade options opened in a new tab. Complete checkout and this browser activates automatically.', 'success');
+    if (button) {
+      button.textContent = 'Reopen checkout';
+    }
+    setCheckoutStatus(
+      `${planLabel} checkout opened in a new tab. Pay there, and Pro switches on here by itself — you can leave this page open.`,
+      'success'
+    );
+  });
+}
+
+function refreshEntitlement() {
+  const button = document.getElementById('refresh-entitlement-btn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Checking…';
+  }
+
+  chrome.runtime.sendMessage({ action: 'refreshEntitlement' }, function (response) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Recheck access';
+    }
+
+    if (!(response && response.success)) {
+      showMessage(response?.error || 'Could not check your access right now.', 'error');
+      return;
+    }
+
+    loadSettings();
+    if (response.pro) {
+      showMessage(response.changed ? 'Pro is active on this browser.' : 'Pro is active. Nothing to change.', 'success');
+    } else {
+      showMessage('No active Pro purchase is linked to this browser.', 'error');
+    }
   });
 }
 

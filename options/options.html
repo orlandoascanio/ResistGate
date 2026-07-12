@@ -297,10 +297,14 @@
       <section class="panel pro-panel">
         <div class="pro-panel-head">
           <h2>Stronger Locks</h2>
-          <button id="open-pricing-btn" class="btn btn-secondary">See upgrade options</button>
+          <button id="open-pricing-btn" class="btn btn-primary">Upgrade to Pro</button>
         </div>
         <div id="subscription-status" class="subscription-status">
           Unlock stronger locks. After checkout, this browser activates automatically.
+        </div>
+        <div id="entitlement-row" class="entitlement-row hidden">
+          <span id="entitlement-detail" class="entitlement-detail"></span>
+          <button id="refresh-entitlement-btn" class="btn btn-secondary btn-sm">Recheck access</button>
         </div>
         <p class="helper">Add extra friction between you and a blocked site — so you only visit when it's genuinely worth it.</p>
 
@@ -404,36 +408,65 @@
   </div>
 
   <div id="paywall-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
-    <div class="modal-card">
-      <h2 id="paywall-title">Unlock stronger locks</h2>
-      <p>Unlock stronger locks, progress tracking, and weekly reviews.</p>
+    <div class="modal-card checkout-card">
+      <header class="checkout-header">
+        <p class="checkout-eyebrow">ResistGate Pro</p>
+        <h2 id="paywall-title">Make the gate harder to walk through</h2>
+        <p>Pick a plan and checkout opens in a new tab. Pay, and this browser unlocks on its own — no codes, no account, no copy-paste.</p>
+      </header>
+
+      <fieldset class="plan-picker">
+        <legend class="sr-only">Choose a plan</legend>
+
+        <label class="plan-option">
+          <input type="radio" name="checkout-plan" value="monthly">
+          <span class="plan-option-body">
+            <span class="plan-option-top">
+              <span class="plan-option-name">Monthly</span>
+              <span class="plan-option-price"><strong>$3.99</strong><span class="plan-option-cycle">/mo</span></span>
+            </span>
+            <span class="plan-option-note">Try it for a month. Cancel any time.</span>
+          </span>
+        </label>
+
+        <label class="plan-option">
+          <input type="radio" name="checkout-plan" value="yearly" checked>
+          <span class="plan-option-body">
+            <span class="plan-option-top">
+              <span class="plan-option-name">Yearly <span class="plan-option-badge">Best value</span></span>
+              <span class="plan-option-price"><strong>$29.99</strong><span class="plan-option-cycle">/yr</span></span>
+            </span>
+            <span class="plan-option-note">Works out to $2.50 a month.</span>
+          </span>
+        </label>
+
+        <label class="plan-option">
+          <input type="radio" name="checkout-plan" value="lifetime">
+          <span class="plan-option-body">
+            <span class="plan-option-top">
+              <span class="plan-option-name">Lifetime</span>
+              <span class="plan-option-price"><strong>$49.99</strong><span class="plan-option-cycle">once</span></span>
+            </span>
+            <span class="plan-option-note">Founding member. Pay once, keep it.</span>
+          </span>
+        </label>
+      </fieldset>
+
       <ul class="price-points">
-        <li>Progress dashboard</li>
-        <li>Weekly reviews</li>
         <li>Commitment Mode — total lockout, no override</li>
-        <li>Behavioral Friction — stronger pre-entry prompts</li>
-        <li>Strict Mode and stronger access rules</li>
+        <li>Strict Mode, override cooldowns, and earn-access rules</li>
+        <li>Behavioral Friction before you open a site</li>
+        <li>Progress dashboard and Weekly Review</li>
       </ul>
-      <div class="price-tiers">
-        <div class="price-tier">
-          <span class="price-amount">$3.99</span>
-          <span class="price-cycle">/ month</span>
-        </div>
-        <div class="price-tier price-tier-featured">
-          <span class="price-amount">$29.99</span>
-          <span class="price-cycle">/ year</span>
-          <span class="price-badge">Best value</span>
-        </div>
-        <div class="price-tier">
-          <span class="price-amount">$49.99</span>
-          <span class="price-cycle">once</span>
-          <small class="price-note">Lifetime · Founding member</small>
-        </div>
-      </div>
+
+      <p id="checkout-status" class="checkout-status hidden" role="status" aria-live="polite"></p>
+
       <div class="modal-actions">
-        <button id="view-pricing-btn" class="btn btn-primary">View upgrade options</button>
+        <button id="view-pricing-btn" class="btn btn-primary">Continue to checkout</button>
         <button id="close-paywall-btn" class="btn btn-secondary">Not now</button>
       </div>
+
+      <p class="checkout-fineprint">Secure checkout is handled by Paddle on orlandoascanio.com. ResistGate never sees your card.</p>
     </div>
   </div>
 
@@ -503,7 +536,7 @@
       </p>
 
       <div class="modal-actions">
-        <button id="view-comparison-pricing-btn" class="btn btn-primary">See Pro pricing</button>
+        <button id="view-comparison-pricing-btn" class="btn btn-primary">Choose a plan</button>
         <button id="close-comparison-btn" class="btn btn-secondary">Keep Free</button>
       </div>
     </div>

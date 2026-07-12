@@ -1861,60 +1861,175 @@ details[open] .advanced-tuning .tuning-body,
   text-decoration: underline;
 }
 
-/* ── Paywall pricing tiers ──────────────────────────────────────── */
+/* ── Checkout plan picker ───────────────────────────────────────── */
 
-.price-tiers {
-  display: flex;
-  gap: 8px;
-  margin: 14px 0 16px;
+.checkout-card {
+  max-width: 520px;
 }
 
-.price-tier {
-  flex: 1;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 8px;
-  text-align: center;
+.checkout-header {
+  margin-bottom: var(--space-lg);
+}
+
+.checkout-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+
+.checkout-header p:last-child {
+  margin-bottom: 0;
+}
+
+.plan-picker {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 8px;
+  border: 0;
+  margin: 0 0 var(--space-lg);
+}
+
+.plan-option {
+  display: block;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.plan-option:hover {
+  border-color: var(--line-2);
+  background: var(--bg-subtle);
+}
+
+.plan-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.plan-option:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--lavender-2);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.plan-option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.plan-option-body {
+  display: flex;
+  flex-direction: column;
   gap: 3px;
 }
 
-.price-tier-featured {
-  border-color: var(--primary);
-  background: var(--lavender-2);
+.plan-option-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.price-amount {
+.plan-option-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-option-price {
+  white-space: nowrap;
+}
+
+.plan-option-price strong {
   font-size: 17px;
   font-weight: 800;
   color: var(--text);
-  line-height: 1;
 }
 
-.price-cycle {
+.plan-option-cycle {
   font-size: 11px;
   color: var(--muted);
+  margin-left: 2px;
 }
 
-.price-badge {
-  margin-top: 4px;
+.plan-option-badge {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--primary);
-  background: var(--lavender-2);
+  background: var(--lavender);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
-.price-note {
-  font-size: 10px;
+.plan-option-note {
+  font-size: 12px;
   color: var(--muted);
-  display: block;
-  margin-top: 2px;
+}
+
+.checkout-status {
+  margin: 0 0 var(--space-md);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.checkout-status.is-success {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.checkout-status.is-error {
+  border-color: var(--err);
+  background: color-mix(in srgb, var(--err) 10%, var(--card));
+  color: var(--err);
+}
+
+.checkout-fineprint {
+  margin: var(--space-md) 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.modal-card .checkout-fineprint {
+  margin-bottom: 0;
+}
+
+/* ── Entitlement status row ─────────────────────────────────────── */
+
+.entitlement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.entitlement-detail {
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 /* ── Free vs Pro comparison ────────────────────────────────────── */
