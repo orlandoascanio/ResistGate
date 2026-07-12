@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.4.0] - 2026-07-12
+
+Buying Pro is now one continuous action. Pick a plan in the extension, pay on the website, and this browser unlocks itself — no license key, no account, no copy-paste.
+
+### Added
+- **Instant activation after checkout**: The extension creates a server-side checkout session, hands the pricing page only an opaque checkout ID, and unlocks Pro once the server verifies a short-lived signed activation token against a credential that never leaves this install.
+- **In-extension plan picker**: Monthly, Yearly, and Lifetime are now explicit choices in the upgrade dialog. The selected plan is bound to the checkout session, so the website cannot silently switch prices mid-session. Generic upgrade entry points default to Yearly.
+- **Recheck access**: If the website-to-extension handoff is interrupted, the Pro tab offers a manual recheck instead of asking the user to pay again.
+- **Entitlement sync**: Startup and a six-hour alarm reconcile Pro with the server. A canceled or paused subscription revokes Pro; a network failure preserves the last verified state.
+
+### Changed
+- **Activation is no longer trust-on-origin**: `activateProFromWebsite` now requires a signed activation token and a server exchange. A message from a trusted origin can no longer grant Pro on its own.
+- The extension can no longer be messaged by `localhost`; only the two production website origins remain.
+
+### Security
+- Device ID, extension ID, and the install credential never enter the checkout URL or Paddle custom data.
+- Only an explicit `401`/`403` from the server clears local billing credentials. Outages, rate limits, and timeouts leave a paying user's Pro intact.
+
+---
+
 ## [1.3.0] - 2026-04-29
 
 This release makes your personal goals impossible to ignore — and the options page easier to navigate. Every pause now starts with remembering why you blocked the site in the first place.

@@ -54,7 +54,7 @@ All storage is local-only. Do not introduce `chrome.storage.sync` without a deli
 | `temporaryAccess` | Active temporary access grants |
 | `analytics` | Pro local analytics events, capped at 3,000 |
 | `overrideState` | Override cooldown timestamps and lock window |
-| `installation` | Opaque device ID, first-seen timestamp, PostHog event dedupe flags |
+| `installation` | Opaque device ID, first-seen timestamp, PostHog event dedupe flags, Paddle install credential, verified entitlement |
 | `dailyBlockCount` | Toolbar badge count for the current day |
 | `resistanceCounters` | Per-domain daily counters |
 | `workTimer` | Current-day focus timer state |
@@ -93,11 +93,28 @@ This serializes DNR mutations and prevents overlapping rule refreshes.
 | `startWorkTimer` | No | Start work timer |
 | `stopWorkTimer` | No | Stop timer and accumulate minutes |
 | `getCommitmentModeStatus` | No | Return lockout status/countdown |
-| `openPricingPage` | No | Open website pricing page |
+| `openPricingPage` | No | Validate plan, create a server checkout session, open pricing with only the opaque checkout ID |
 | `openFeedbackPage` | No | Open website feedback page |
 | `trackPosthogEvent` | No | Track an allowlisted PostHog event once per installation |
+| `getBillingState` | No | Return verified tier, plan, and last-checked time for the options page |
+| `refreshEntitlement` | No | Force a server entitlement sync (manual "Recheck access") |
 
-External message action: `activateProFromWebsite`, accepted only from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`.
+External message actions, accepted only from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`:
+
+| Action | Description |
+|---|---|
+| `activateProFromWebsite` | Requires a signed `activationToken`. Exchanges it plus the local install credential with the server and grants Pro only when the server returns `pro: true`. |
+| `getActivationState` | Returns `{ installed: true, pro }` so the pricing page can confirm the extension is reachable. |
+
+### Billing and Activation
+
+Pro is never granted locally. `background.js` creates a server checkout session, hands the website only an opaque
+checkout ID, and flips the tier only after `/api/entitlement/activate-install` verifies a short-lived signed token
+against a 256-bit install credential stored in `installation.installCredential`. Startup (throttled to hourly) and a
+six-hour `resistgate-entitlement-sync` alarm reconcile with the server: a verified inactive grant revokes Pro, a `401`/
+`403` clears local billing credentials, and any transient failure preserves the last verified state.
+
+The full server contract lives in `docs/paddle-activation-api-contract.md`. The website is a separate repository.
 
 ### Tier Behavior
 
@@ -154,11 +171,14 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 | `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
 | `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
 
-Current verified state on 2026-07-07:
+Current verified state on 2026-07-12:
 
-- `npm test`: 5 files, 152 tests passing.
+- `npm test`: 5 files, 171 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 88.4% lines/statements, 76.44% branches, 96.66% functions.
+- `background.js`: 88.61% lines/statements, 77.36% branches, 97.08% functions.
+
+`tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
+run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.
 
 Coverage thresholds:
 
