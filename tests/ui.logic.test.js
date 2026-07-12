@@ -45,7 +45,7 @@ describe('UI copy and state logic', () => {
     expect(optionsJs).not.toContain('setBlockedSiteExpanded(');
     expect(optionsHtml).toContain('<h2>Entry difficulty</h2>');
     expect(optionsHtml).toContain('Pick the level that interrupts autopilot without derailing real work.');
-    expect(optionsHtml).toContain('Override pause can be 10 to 15 seconds.');
+    expect(optionsHtml).toContain('Skip the challenge by waiting this many seconds.');
     expect(optionsHtml).not.toContain('Friction level');
     expect(optionsHtml).not.toContain('Start manageable, then raise the bar when distractions get too easy to bypass.');
     expect(optionsHtml).not.toContain('Free override waits 10 to 15 seconds.');

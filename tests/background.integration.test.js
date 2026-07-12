@@ -233,16 +233,72 @@ describe('ResistGate background integration', () => {
     expect(env.storageData.installation.entitlement.pro).toBe(true);
   });
 
-  it('clears local billing credentials when the server rejects the install credential', async () => {
+  it('keeps Pro through a transient failure until the grace period runs out', async () => {
     await activateProForTest();
+
+    // Age the last verified check past the 72-hour ceiling, then fail every sync. This is the
+    // "server unreachable indefinitely" case: without a bound, Pro would persist forever.
+    env.storageData.installation.entitlement.checkedAt = Date.now() - (73 * 60 * 60 * 1000);
+    api.override(api.endpoints.status, 'network-error');
+
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(false);
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+    expect(env.storageData.installation.entitlement.stale).toBe(true);
+
+    // Expiry withdraws access but not the ability to recover: the credential survives, so
+    // getting back online restores Pro without a second payment.
+    expect(env.storageData.installation.installCredential).toBeTruthy();
+  });
+
+  it('restores Pro after grace expiry once the server is reachable again', async () => {
+    await activateProForTest();
+
+    env.storageData.installation.entitlement.checkedAt = Date.now() - (73 * 60 * 60 * 1000);
+    api.override(api.endpoints.status, 'network-error');
+    await env.sendMessage({ action: 'refreshEntitlement' });
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+
+    api.override(api.endpoints.status, null);
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(true);
+    expect(env.storageData.settings.subscription.tier).toBe('pro');
+    expect(env.storageData.installation.entitlement.stale).toBe(false);
+  });
+
+  it('drops Pro but keeps the install credential when the server rejects it', async () => {
+    await activateProForTest();
+    const credential = env.storageData.installation.installCredential;
 
     api.override(api.endpoints.status, { status: 403, body: { error: 'Unknown install credential' } });
     const response = await env.sendMessage({ action: 'refreshEntitlement' });
 
     expect(response.success).toBe(false);
     expect(env.storageData.settings.subscription.tier).toBe('free');
-    expect(env.storageData.installation.installCredential).toBeNull();
     expect(env.storageData.installation.entitlement).toBeNull();
+
+    // The credential is this browser's only handle back to its own purchase. A 403 revokes
+    // access, but destroying the credential would make the revocation permanent and
+    // unrecoverable — including for a Lifetime buyer hit by a single bad response.
+    expect(env.storageData.installation.installCredential).toBe(credential);
+  });
+
+  it('restores Pro on a later successful sync after a rejection', async () => {
+    await activateProForTest();
+
+    api.override(api.endpoints.status, { status: 403, body: { error: 'Unknown install credential' } });
+    await env.sendMessage({ action: 'refreshEntitlement' });
+    expect(env.storageData.settings.subscription.tier).toBe('free');
+
+    // The server recognizes the install again. Because the credential survived, recovery needs
+    // no action from the user and no second payment.
+    api.override(api.endpoints.status, null);
+    const response = await env.sendMessage({ action: 'refreshEntitlement' });
+
+    expect(response.success).toBe(true);
+    expect(env.storageData.settings.subscription.tier).toBe('pro');
   });
 
   it('does not sync entitlement for an install that never started checkout', async () => {

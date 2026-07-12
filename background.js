@@ -48,6 +48,15 @@ const DEFAULT_CHECKOUT_PLAN = 'yearly';
 const ENTITLEMENT_SYNC_ALARM = 'resistgate-entitlement-sync';
 const ENTITLEMENT_SYNC_PERIOD_MINUTES = 360;
 const ENTITLEMENT_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
+// How long a verified grant is trusted without the server confirming it again.
+//
+// Transient failures preserve the last verified state so a brief outage never signs a paying
+// customer out. But that trust has to end somewhere: without a ceiling, a subscription that
+// lapsed at Paddle keeps Pro forever as long as the client never completes another sync —
+// whether that is a week-long outage, or someone simply keeping the extension offline. At the
+// ceiling the extension drops to Free and asks the user to reconnect, rather than extending
+// trust indefinitely.
+const ENTITLEMENT_GRACE_PERIOD_MS = 72 * 60 * 60 * 1000;
 const INSTALL_CREDENTIAL_PATTERN = /^[0-9a-f]{64}$/;
 
 const DEFAULT_SETTINGS = {
@@ -522,7 +531,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               plan: installation.entitlement?.plan || null,
               status: installation.entitlement?.status || null,
               checkedAt: installation.entitlement?.checkedAt || null,
-              hasCheckout: Boolean(installation.installCredential)
+              hasCheckout: Boolean(installation.installCredential),
+              // A grant that aged out of the grace window. The user paid, but we have not been
+              // able to confirm it for long enough that Pro had to lapse — they need to get
+              // back online and recheck, not buy again.
+              needsReconnect: installation.entitlement?.stale === true
             }
           });
           return;
@@ -713,7 +726,10 @@ function sanitizeEntitlement(raw) {
     pro: incoming.pro === true,
     plan: sanitizeOpaqueString(incoming.plan),
     status: sanitizeOpaqueString(incoming.status),
-    checkedAt
+    checkedAt,
+    // Set when a grant aged past the grace period without the server confirming it. Keeps
+    // the options page able to say "reconnect" rather than the bare "you are on Free".
+    stale: incoming.stale === true
   };
 }
 
@@ -776,10 +792,17 @@ async function ensureInstallCredential() {
   return { installation, credential: installation.installCredential };
 }
 
+// Drop the verified grant, but keep the install credential.
+//
+// The credential is the only handle this browser has back to its own purchase: it is what
+// `install-status` is keyed on, and it exists nowhere the user can reach. Destroying it turns
+// a recoverable state ("the server currently says no") into a permanent one ("this browser can
+// never ask again"), which for a Lifetime buyer means losing something they own outright to a
+// single bad 403. Keeping it costs nothing — a credential the server does not recognize is
+// inert — and it means a later successful sync can restore access on its own.
 async function clearBillingCredentials() {
   const installation = await getInstallation();
   const hadServerGrant = installation.entitlement?.pro === true;
-  installation.installCredential = null;
   installation.entitlement = null;
   await saveInstallation(installation);
 
@@ -904,10 +927,42 @@ async function syncEntitlement(reason, { force = false } = {}) {
       return { ok: false, cleared: true, transient: false, error: result.error };
     }
 
-    return { ok: false, transient: true, error: result.error };
+    // Transient failure. Preserve the last verified grant — unless it has now gone
+    // unconfirmed for longer than the grace period, at which point trust expires.
+    const expired = await expireStaleEntitlement();
+    return { ok: false, transient: true, expired, error: result.error };
   }
 
   return { ok: true, ...(await applyVerifiedEntitlement(result.data, `sync:${reason}`)) };
+}
+
+// Returns true when a grant was too old to keep trusting and Pro was withdrawn.
+//
+// Only the verified grant is dropped: the install credential survives, so a single successful
+// sync once the server is reachable again restores Pro with no action from the user.
+async function expireStaleEntitlement() {
+  const installation = await getInstallation();
+  const entitlement = installation.entitlement;
+
+  if (entitlement?.pro !== true || !entitlement.checkedAt) {
+    return false;
+  }
+
+  if (Date.now() - entitlement.checkedAt <= ENTITLEMENT_GRACE_PERIOD_MS) {
+    return false;
+  }
+
+  installation.entitlement = { ...entitlement, pro: false, stale: true };
+  await saveInstallation(installation);
+
+  const settings = await getSettings();
+  if (hasProAccess(settings)) {
+    settings.subscription = { tier: 'free' };
+    await saveSettings(settings);
+    await queueRulesUpdate('entitlement:grace-expired');
+  }
+
+  return true;
 }
 
 async function initializeExtension(reason) {
