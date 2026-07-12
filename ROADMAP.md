@@ -7,10 +7,10 @@
 **v1.2.0 shipped:** April 27, 2026 — Graduated challenges, feedback links, onboarding refresh, Pro access fixes.
 **v1.3.0 shipped:** April 29, 2026 — Intention Page moved to free, options/friction/welcome redesign, per-site reminders.
 
-### v1.3.3 Baseline Metrics
-- 152 tests passing across 5 test files (Vitest 2.1.9)
-- `background.js`: 88.4% line coverage, 76.44% branch coverage, 96.66% function coverage
-- Free + Pro tiers use trust-based, PayPal-triggered activation from the website
+### v1.4.0 Baseline Metrics
+- 174 tests passing across 5 test files (Vitest 2.1.9)
+- `background.js`: 88.77% line coverage, 77.6% branch coverage, 97.11% function coverage
+- Pro is server-verified: a signed activation token exchanged against a per-install credential, with Paddle as merchant of record. Trust-on-origin activation is gone.
 - PostHog lifecycle/funnel telemetry and Sentry diagnostics are present
 - Stable core engine with current audit gaps tracked in `docs/Implementation.md`
 
@@ -21,8 +21,8 @@
 - **Free** = Block distractions + typing challenge + temporary access + Intention Page + work timer + per-site access conditions
 - **Pro** = Strict mode + commitment mode + stronger behavioral friction + analytics + weekly report + earn-access challenge timing/bonus
 - **$3.99/month** or **$29.99/year** or **$49.99 lifetime** (pay once, own forever)
-- Pro activates via PayPal checkout on orlandoascanio.com; no license keys, no expiration checks
-- Monthly and yearly are PayPal subscriptions (cancel anytime); lifetime is one-time payment
+- Pro activates via Paddle checkout on orlandoascanio.com; no license keys and no account, but entitlement is server-verified and periodically rechecked
+- Monthly and yearly are Paddle subscriptions (cancel anytime); lifetime is a one-time payment that subscription lifecycle events cannot revoke
 
 ---
 

@@ -37,7 +37,7 @@ ResistGate is a Chrome website blocker built around intentional friction: users 
 | Earn-access challenge time | Requires 30-900 seconds on the challenge before access. Longer challenge effort can grant bonus minutes. | earn access, bonus access |
 | Analytics dashboard | 7-day blocked attempts, override trend, top blocked domains, and strict-session minutes. | focus analytics |
 | Weekly report | Focus Score, week-over-week trend, top domains, highlights, and risk notes. | weekly focus report, productivity score |
-| Pro activation | Website checkout activates Pro through trusted external messaging from `orlandoascanio.com`. | PayPal activation, extension upgrade |
+| Pro activation | Paddle checkout on `orlandoascanio.com` hands the extension a signed activation token, which the server verifies against a per-install credential before Pro is granted. | Paddle activation, extension upgrade |
 
 ## Technical And Trust Features
 

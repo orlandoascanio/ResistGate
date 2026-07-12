@@ -21,18 +21,18 @@ Free users get the complete blocking and friction engine: schedule-based blockin
 
 | Detail | Value |
 |---|---|
-| **Version** | 1.3.3 |
+| **Version** | 1.4.0 |
 | **Manifest** | V3 |
 | **Platform** | Google Chrome (desktop) |
 | **Free tier** | No account required — full blocking engine included |
-| **Pro Monthly** | $3.99 / month (PayPal subscription, cancel anytime) |
-| **Pro Yearly** | $29.99 / year (PayPal subscription, cancel anytime) |
+| **Pro Monthly** | $3.99 / month (Paddle subscription, cancel anytime) |
+| **Pro Yearly** | $29.99 / year (Paddle subscription, cancel anytime) |
 | **Pro Lifetime** | $49.99 one-time payment |
-| **Pro activation** | PayPal checkout on orlandoascanio.com → extension activates automatically |
+| **Pro activation** | Paddle checkout on orlandoascanio.com → extension activates automatically |
 | **Build step** | None — plain ES2020+ HTML / CSS / JS |
 | **Storage** | `chrome.storage.local` only (local-first, per browser profile) |
 | **External services** | Sentry crash telemetry + PostHog allowlisted lifecycle/funnel events |
-| **Test suite** | 152 tests · 5 files · Vitest 2.1.9 |
+| **Test suite** | 174 tests · 5 files · Vitest 2.1.9 |
 | **Background coverage** | 88.4% lines/statements · 76.44% branches · 96.66% functions |
 | **License** | See `LICENSE` |
 
@@ -147,7 +147,7 @@ Calculated over a rolling 7-day window. Compared week-over-week in the Weekly Re
   - Focus Score (0–100)
   - blocked attempts, overrides, top domains, trend vs last week
 
-## Pricing (live, PayPal)
+## Pricing (live, Paddle)
 
 | Plan | Price |
 |---|---:|
@@ -156,26 +156,40 @@ Calculated over a rolling 7-day window. Compared week-over-week in the Weekly Re
 | Pro Yearly | $29.99 / year |
 | Pro Lifetime | $49.99 one-time |
 
-The extension links to the pricing page here:
-- `https://www.orlandoascanio.com/en/pricing?source=extension`
+Paddle is the merchant of record and the only source of truth for who has paid.
 
 ### Pricing sources (keeping things in sync)
 
 - **Extension paywall modal** (the prices shown inside the extension UI): `options/options.html`
-- **Website pricing page + PayPal checkout UI** (canonical pricing): `Profesional-Portfolio/client/app/[locale]/pricing/page.tsx`
+- **Website pricing page + Paddle checkout UI** (canonical pricing): `Profesional-Portfolio/client/app/[locale]/pricing/page.tsx`
 - **ResistGate landing page copy / feature list**: `Profesional-Portfolio/client/app/[locale]/products/_data/resistgate.ts`
-- **PayPal plan IDs** (monthly/yearly/lifetime): `Profesional-Portfolio/client/.env.local` → `PAYPAL_PLAN_MAP`
+- **Paddle price IDs** (monthly/yearly/lifetime): `Profesional-Portfolio/client/.env.local` → `PADDLE_PRICE_MAP`
 
 ## How Pro activation works (current implementation)
 
-1. The extension opens the pricing page (`openPricingPage`).
-2. After PayPal checkout on `orlandoascanio.com`, the website activates Pro in the extension via **external messaging** (`chrome.runtime.sendMessage(extensionId, { action: 'activateProFromWebsite', ... })`).
-3. The extension service worker (`background.js`) accepts activation **only from trusted origins** (`https://www.orlandoascanio.com` and `https://orlandoascanio.com`) and sets:
-   - `settings.subscription.tier = 'pro'`
+Pro is **never granted locally**. The extension proves possession of a secret it generated, and the
+server tells it the answer.
+
+1. The extension asks the server to open a checkout session (`openPricingPage` → `POST /api/checkout/session`), sending an install credential it generated. The server stores only the credential's hash.
+2. The extension opens the pricing page with nothing but an opaque checkout ID, and the Paddle overlay opens on the chosen plan.
+3. Paddle's webhook — the only payment source of truth — records the purchase against the session.
+4. The pricing page requests a short-lived signed activation token and hands it to the extension via external messaging (`chrome.runtime.sendMessage(extensionId, { action: 'activateProFromWebsite', activationToken })`).
+5. `background.js` exchanges that token plus its install credential at `POST /api/entitlement/activate-install`, and flips the tier **only** if the server returns `pro: true`.
+
+A message from a trusted origin cannot grant Pro on its own — without a token the server verifies,
+the extension stays Free.
+
+Startup (throttled hourly) and a six-hour alarm reconcile with `POST /api/entitlement/install-status`.
+Transient failures preserve the last verified state for up to 72 hours, then Pro lapses and the
+options page asks the user to reconnect. A rejected credential drops Pro but is never deleted, so a
+later successful sync restores access with no user action and no second payment.
 
 Notes:
-- Pro activation is **per-browser profile** (stored in `chrome.storage.local`).
-- This repo contains the extension logic. The PayPal checkout + activation API lives in the separate website repo (`Profesional-Portfolio`).
+- Pro activation is **per-browser profile** (stored in `chrome.storage.local`). There is no account
+  layer: a user who switches machines currently has no self-serve way to recover Pro.
+- This repo contains the extension logic. The Paddle checkout + entitlement API lives in the separate
+  website repo (`Profesional-Portfolio`). The contract between them is
+  `docs/paddle-activation-api-contract.md` — change it before changing either side.
 
 ## Privacy & telemetry
 
