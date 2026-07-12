@@ -111,10 +111,24 @@ External message actions, accepted only from `https://www.orlandoascanio.com` or
 Pro is never granted locally. `background.js` creates a server checkout session, hands the website only an opaque
 checkout ID, and flips the tier only after `/api/entitlement/activate-install` verifies a short-lived signed token
 against a 256-bit install credential stored in `installation.installCredential`. Startup (throttled to hourly) and a
-six-hour `resistgate-entitlement-sync` alarm reconcile with the server: a verified inactive grant revokes Pro, a `401`/
-`403` clears local billing credentials, and any transient failure preserves the last verified state.
+six-hour `resistgate-entitlement-sync` alarm reconcile with the server via `/api/entitlement/install-status`.
 
-The full server contract lives in `docs/paddle-activation-api-contract.md`. The website is a separate repository.
+Sync outcomes:
+
+- a verified inactive grant revokes Pro;
+- a `401`/`403` drops the entitlement and falls to Free, but **keeps** `installCredential` — it is the only handle this
+  browser has back to its own purchase, and destroying it would make an erroneous rejection unrecoverable;
+- a transient failure preserves the last verified state, but only for `ENTITLEMENT_GRACE_PERIOD_MS` (72 hours). Past
+  that, the next failed sync withdraws Pro and marks `installation.entitlement.stale`, which the options page surfaces
+  as "reconnect". This bounds the fail-open window: without it, a lapsed subscription would keep Pro forever as long as
+  the client never reached the server again.
+
+Expiry and rejection both withdraw access without withdrawing the ability to recover — one successful sync restores Pro
+with no user action and no second payment.
+
+The full server contract lives in `docs/paddle-activation-api-contract.md`, and is implemented by the website
+(a separate repository, `Profesional-Portfolio`). Payments run through Paddle as merchant of record; PayPal was removed
+on 2026-07-12. Change the contract doc before changing either side.
 
 ### Tier Behavior
 
@@ -173,12 +187,17 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 
 Current verified state on 2026-07-12:
 
-- `npm test`: 5 files, 171 tests passing.
+- `npm test`: 5 files, 174 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 88.61% lines/statements, 77.36% branches, 97.08% functions.
+- `background.js`: 88.77% lines/statements, 77.6% branches, 97.11% functions.
 
 `tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
 run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.
+
+`createBillingApiMock()` models the three endpoints in `docs/paddle-activation-api-contract.md`. It is hand-written, so
+it can only prove the extension is self-consistent — it cannot prove the server agrees. It once diverged badly: the mock
+served endpoints the real website had never implemented, and the whole suite stayed green while checkout was dead in
+production. When you change the mock, check the route handlers in the website repo, not just these tests.
 
 Coverage thresholds:
 

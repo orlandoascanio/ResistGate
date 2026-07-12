@@ -185,8 +185,9 @@ Special extended shapes:
 | Pro Yearly | $29.99/yr |
 | Pro Lifetime | $49.99 one-time |
 
-Monthly and yearly are PayPal subscriptions (cancel anytime). Lifetime is a one-time payment.
-Checkout lives in `Profesional-Portfolio/client/app/[locale]/pricing/page.tsx` and `PayPalSubscribeCard.tsx`.
+Monthly and yearly are Paddle subscriptions (cancel anytime). Lifetime is a one-time payment, and
+subscription lifecycle events cannot revoke it.
+Checkout lives in `Profesional-Portfolio/client/app/[locale]/pricing/page.tsx` and `PaddleCheckoutCard.tsx`.
 Product copy lives in `Profesional-Portfolio/client/app/[locale]/products/_data/resistgate.ts`.
 
 ### Pro Gating
@@ -312,3 +313,6 @@ When writing or modifying JavaScript code that integrates with Paddle:
 - For destructive account changes (updating prices, archiving products, cancelling subscriptions), ask for explicit confirmation before calling the `paddle-sandbox` or `paddle-live` MCP server.
 - Use `paddle-sandbox` by default. Only call `paddle-live` when the prompt explicitly mentions live, production, or real customer data.
 - API keys and webhook secrets live in environment variables — never inline credentials into code.
+- The server side of this flow lives in a **separate repository** (`Profesional-Portfolio`), and the contract between them is `docs/paddle-activation-api-contract.md`. Change the contract document before changing either side. It previously described three endpoints the website had never implemented: the extension's own test mock was written to match the extension rather than the server, so the whole suite stayed green while checkout was dead in production. A green `npm test` does not prove the server agrees with us.
+- Checkout custom data carries only `{ checkoutId, source }`. It is a lookup pointer, never a claim about what was purchased — the server derives the plan from signed line items. Do not start trusting it for plan or price.
+- Never return or expect `401`/`403` from `install-status` for a transient condition. The extension treats those as "this credential is invalid" and drops to Free; a `403` served during an outage would sign out every paying customer at once.

@@ -3,7 +3,7 @@
 Last audited: 2026-07-07
 Verified version: 1.3.3
 
-This file tracks the current codebase state and the next implementation risks. It replaces the older Pro-license plan, which no longer matched the shipped PayPal/external-message activation flow.
+This file tracks the current codebase state and the next implementation risks. Last reconciled with the code on 2026-07-12, when billing moved to Paddle and activation became server-verified.
 
 ## Verified Commands
 
@@ -99,21 +99,40 @@ The previous `Architecture.md` and `docs/Implementation.md` described a planned 
 
 Status: fixed in this docs pass.
 
-### P2: Pro Entitlement Is Trust-Based Per Browser Profile
+### P2: Pro Entitlement Is Tied To A Device, With No Account Recovery
 
-Current activation is:
+Status: **partially fixed on 2026-07-12.** Activation is no longer trust-based — it is a signed
+activation token exchanged against a per-install credential, verified by the server, with Paddle as
+the payment source of truth. Cancellation and refund downgrade now works through
+`/api/entitlement/install-status`, bounded by a 72-hour grace period.
 
-1. Extension opens `https://www.orlandoascanio.com/en/pricing?source=extension`.
-2. Website completes PayPal checkout.
-3. Website sends external message `activateProFromWebsite`.
-4. Extension accepts only trusted origins and writes `settings.subscription.tier = 'pro'`.
+Three things were wrong and are now fixed:
 
-There is no local license key, expiry, or cancellation recheck in this repo. That is intentional for the current product shape, but subscription cancellation/refund downgrade handling remains a product/backend gap.
+- The website implemented none of the endpoints the extension called, so checkout 404'd and
+  entitlement sync had never once run. The server now implements
+  `docs/paddle-activation-api-contract.md`.
+- The fail-open path had no ceiling: a lapsed subscription kept Pro forever if the client never
+  reached the server. It is now bounded at 72 hours.
+- A `401`/`403` deleted `installCredential`, permanently unenrolling the customer with no way back.
+  The credential now survives rejection.
 
-Recommended follow-up before scale:
+**What remains a genuine gap:** entitlement lives entirely at the device/install level. There is no
+account layer and no email recovery. A user who reinstalls Chrome, wipes the extension, or switches
+machines loses `installCredential`, and `install-status` then returns `{ skipped: 'no-credential' }` —
+"Recheck access" is a no-op. Their only recovery is emailing support. This will produce tickets and
+refund requests, and it lands hardest on Lifetime buyers, who are the most likely to still be around
+when they change laptops.
 
-- Decide whether Pro is intentionally lifetime-per-browser after activation.
-- If not, add a privacy-preserving downgrade/verification path from the website.
+Recommended follow-up, in order:
+
+1. **Email-based reactivation.** The server already keys entitlements by `(product_slug, email)` and
+   Paddle supplies the email at webhook time, so the data model already supports it. Add an endpoint
+   that takes the purchase email, mints a fresh signed activation token, and mails it — reusing the
+   existing `activate-install` path. This turns "email Orlando" into a self-serve flow without
+   building accounts.
+2. Add a test harness to the website repo. The Lifetime-vs-canceled guards are enforced in SQL and
+   are currently unverified by any test.
+3. Rate-limit `/api/checkout/session` per device and per IP, as the contract requires.
 
 ### P2: Tier Split Around Access Conditions Needs Product Confirmation
 
