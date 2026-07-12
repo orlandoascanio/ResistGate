@@ -37,6 +37,19 @@ const RESISTGATE_LIFECYCLE_URLS = {
   update: 'https://orlandoascanio.com/resistgate/updated'
 };
 
+const RESISTGATE_SITE_ORIGIN = 'https://www.orlandoascanio.com';
+const PRICING_PAGE_URL = `${RESISTGATE_SITE_ORIGIN}/en/pricing`;
+const CHECKOUT_SESSION_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/checkout/session`;
+const ACTIVATE_INSTALL_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/entitlement/activate-install`;
+const INSTALL_STATUS_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/entitlement/install-status`;
+const BILLING_REQUEST_TIMEOUT_MS = 15000;
+const CHECKOUT_PLANS = new Set(['monthly', 'yearly', 'lifetime']);
+const DEFAULT_CHECKOUT_PLAN = 'yearly';
+const ENTITLEMENT_SYNC_ALARM = 'resistgate-entitlement-sync';
+const ENTITLEMENT_SYNC_PERIOD_MINUTES = 360;
+const ENTITLEMENT_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
+const INSTALL_CREDENTIAL_PATTERN = /^[0-9a-f]{64}$/;
+
 const DEFAULT_SETTINGS = {
   enabled: true,
   defaultAccessDuration: 15, // minutes
@@ -181,6 +194,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         console.error('Failed to write pendingOutcomeTap:', err);
       }
     })();
+  }
+
+  if (alarm.name === ENTITLEMENT_SYNC_ALARM) {
+    void syncEntitlement('alarm', { force: true });
   }
 
   if (alarm.name === COMMITMENT_ALARM) {
@@ -472,9 +489,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         case 'openPricingPage': {
-          const url = 'https://www.orlandoascanio.com/en/pricing?source=extension';
+          const plan = resolveCheckoutPlan(request.plan);
+          if (!plan) {
+            sendResponse({ success: false, error: 'That plan is not available.', retryable: false });
+            return;
+          }
+
+          const session = await createCheckoutSession(plan);
+          if (!session.ok) {
+            sendResponse({ success: false, error: session.error, retryable: session.transient === true, plan });
+            return;
+          }
+
+          const url = buildPricingUrl(session.checkoutId, plan);
           await chrome.tabs.create({ url });
-          sendResponse({ success: true, url });
+          sendResponse({
+            success: true,
+            url,
+            plan,
+            checkoutId: session.checkoutId,
+            expiresAt: session.expiresAt
+          });
+          return;
+        }
+
+        case 'getBillingState': {
+          const [installation, settings] = await Promise.all([getInstallation(), getSettings()]);
+          sendResponse({
+            success: true,
+            state: {
+              pro: hasProAccess(settings),
+              plan: installation.entitlement?.plan || null,
+              status: installation.entitlement?.status || null,
+              checkedAt: installation.entitlement?.checkedAt || null,
+              hasCheckout: Boolean(installation.installCredential)
+            }
+          });
+          return;
+        }
+
+        case 'refreshEntitlement': {
+          const result = await syncEntitlement('manual', { force: true });
+          if (result.skipped) {
+            sendResponse({
+              success: false,
+              error: 'No purchase is linked to this browser yet.',
+              retryable: false
+            });
+            return;
+          }
+
+          if (!result.ok) {
+            sendResponse({ success: false, error: result.error, retryable: result.transient === true });
+            return;
+          }
+
+          sendResponse({ success: true, pro: result.pro, changed: result.changed });
           return;
         }
 
@@ -531,15 +601,49 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     void (async () => {
       try {
         await initializeExtension('external-message');
-        const settings = await getSettings();
-        settings.subscription = { tier: 'pro' };
-        await saveSettings(settings);
-        await queueRulesUpdate('activate-pro');
-        await chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html?activation=success') });
-        sendResponse({ success: true, subscription: settings.subscription });
+
+        const activationToken = sanitizeOpaqueString(request.activationToken);
+        if (!activationToken) {
+          sendResponse({ success: false, error: 'Missing activation token', retryable: false });
+          return;
+        }
+
+        const result = await activateInstallWithToken(activationToken);
+        if (!result.ok) {
+          sendResponse({ success: false, error: result.error, retryable: result.transient === true });
+          return;
+        }
+
+        const successUrl = new URL(chrome.runtime.getURL('options/options.html'));
+        successUrl.searchParams.set('activation', 'success');
+        if (result.plan) {
+          successUrl.searchParams.set('plan', result.plan);
+        }
+        await chrome.tabs.create({ url: successUrl.toString() });
+
+        sendResponse({
+          success: true,
+          subscription: { tier: 'pro' },
+          plan: result.plan,
+          status: result.status
+        });
       } catch (error) {
         console.error('Pro activation failed:', error);
-        sendResponse({ success: false, error: error?.message || 'Activation failed' });
+        sendResponse({ success: false, error: error?.message || 'Activation failed', retryable: true });
+      }
+    })();
+    return true;
+  }
+
+  // Lets the pricing page confirm the extension is reachable before it promises instant activation.
+  if (request.action === 'getActivationState') {
+    void (async () => {
+      try {
+        await initializeExtension('external-state');
+        const settings = await getSettings();
+        sendResponse({ success: true, installed: true, pro: hasProAccess(settings) });
+      } catch (error) {
+        sendResponse({ success: false, error: error?.message || 'Unavailable' });
       }
     })();
     return true;
@@ -548,6 +652,263 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   sendResponse({ success: false, error: 'Unknown action' });
   return false;
 });
+
+// ── Billing and entitlement ───────────────────────────────────────
+// The extension never decides who is Pro. It creates a server checkout session,
+// hands the website an opaque checkout ID, and only flips the local tier after the
+// server verifies a signed activation token against this install's credential.
+
+function resolveCheckoutPlan(rawPlan) {
+  if (rawPlan === undefined || rawPlan === null || rawPlan === '') {
+    return DEFAULT_CHECKOUT_PLAN;
+  }
+
+  if (typeof rawPlan !== 'string') {
+    return null;
+  }
+
+  const plan = rawPlan.trim().toLowerCase();
+  return CHECKOUT_PLANS.has(plan) ? plan : null;
+}
+
+function buildPricingUrl(checkoutId, plan) {
+  const url = new URL(PRICING_PAGE_URL);
+  url.searchParams.set('source', 'extension');
+  url.searchParams.set('plan', plan);
+  url.searchParams.set('checkout', checkoutId);
+  return url.toString();
+}
+
+function generateInstallCredential() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  let credential = '';
+  while (credential.length < 64) {
+    credential += Math.floor(Math.random() * 16).toString(16);
+  }
+  return credential;
+}
+
+function sanitizeInstallCredential(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const credential = value.trim().toLowerCase();
+  return INSTALL_CREDENTIAL_PATTERN.test(credential) ? credential : null;
+}
+
+function sanitizeEntitlement(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const checkedAt = sanitizeTimestamp(incoming.checkedAt);
+
+  if (incoming.pro !== true && !incoming.status && !checkedAt) {
+    return null;
+  }
+
+  return {
+    pro: incoming.pro === true,
+    plan: sanitizeOpaqueString(incoming.plan),
+    status: sanitizeOpaqueString(incoming.status),
+    checkedAt
+  };
+}
+
+function fetchWithTimeout(url, init) {
+  if (typeof AbortController !== 'function') {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BILLING_REQUEST_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+async function requestBillingApi(endpoint, payload) {
+  if (typeof fetch !== 'function') {
+    return { ok: false, transient: true, error: 'Network unavailable in this browser.' };
+  }
+
+  let response;
+  try {
+    response = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.error(`Billing request failed (${endpoint}):`, error?.name || 'network error');
+    return { ok: false, transient: true, error: 'Could not reach ResistGate. Check your connection and try again.' };
+  }
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const transient = response.status === 408 || response.status === 429 || response.status >= 500;
+    return {
+      ok: false,
+      transient,
+      status: response.status,
+      error: sanitizeOpaqueString(data?.error) || `ResistGate could not complete this request (${response.status}).`
+    };
+  }
+
+  return { ok: true, status: response.status, data: data || {} };
+}
+
+async function ensureInstallCredential() {
+  const installation = await getInstallation();
+  const existing = sanitizeInstallCredential(installation.installCredential);
+  if (existing) {
+    return { installation, credential: existing };
+  }
+
+  installation.installCredential = generateInstallCredential();
+  await saveInstallation(installation);
+  return { installation, credential: installation.installCredential };
+}
+
+async function clearBillingCredentials() {
+  const installation = await getInstallation();
+  const hadServerGrant = installation.entitlement?.pro === true;
+  installation.installCredential = null;
+  installation.entitlement = null;
+  await saveInstallation(installation);
+
+  if (hadServerGrant) {
+    const settings = await getSettings();
+    if (hasProAccess(settings)) {
+      settings.subscription = { tier: 'free' };
+      await saveSettings(settings);
+      await queueRulesUpdate('entitlement:credential-cleared');
+    }
+  }
+}
+
+async function applyVerifiedEntitlement(grant, reason) {
+  const pro = grant?.pro === true;
+
+  const installation = await getInstallation();
+  installation.entitlement = {
+    pro,
+    plan: sanitizeOpaqueString(grant?.plan),
+    status: sanitizeOpaqueString(grant?.status),
+    checkedAt: Date.now()
+  };
+  await saveInstallation(installation);
+
+  const settings = await getSettings();
+  const wasPro = hasProAccess(settings);
+  if (wasPro !== pro) {
+    settings.subscription = { tier: pro ? 'pro' : 'free' };
+    await saveSettings(settings);
+    await queueRulesUpdate(`entitlement:${reason}`);
+  }
+
+  return {
+    pro,
+    changed: wasPro !== pro,
+    plan: installation.entitlement.plan,
+    status: installation.entitlement.status
+  };
+}
+
+async function createCheckoutSession(plan) {
+  const { installation, credential } = await ensureInstallCredential();
+
+  const result = await requestBillingApi(CHECKOUT_SESSION_ENDPOINT, {
+    plan,
+    source: 'extension',
+    extensionId: chrome.runtime.id,
+    deviceId: installation.deviceId,
+    installCredential: credential
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: result.error, transient: result.transient };
+  }
+
+  const checkoutId = sanitizeOpaqueString(result.data.checkoutId);
+  if (!checkoutId) {
+    return { ok: false, error: 'Checkout could not be started. Please try again.', transient: true };
+  }
+
+  return { ok: true, checkoutId, expiresAt: sanitizeTimestamp(result.data.expiresAt) };
+}
+
+async function activateInstallWithToken(activationToken) {
+  const installation = await getInstallation();
+  const credential = sanitizeInstallCredential(installation.installCredential);
+  if (!credential) {
+    return {
+      ok: false,
+      transient: false,
+      error: 'This browser has no checkout in progress. Start the upgrade from ResistGate.'
+    };
+  }
+
+  const result = await requestBillingApi(ACTIVATE_INSTALL_ENDPOINT, {
+    activationToken,
+    installCredential: credential,
+    deviceId: installation.deviceId,
+    extensionId: chrome.runtime.id
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: result.error, transient: result.transient };
+  }
+
+  if (result.data.pro !== true) {
+    return {
+      ok: false,
+      transient: false,
+      error: sanitizeOpaqueString(result.data.error) || 'This purchase could not be confirmed yet.'
+    };
+  }
+
+  const applied = await applyVerifiedEntitlement(result.data, 'activation');
+  return { ok: true, plan: applied.plan, status: applied.status };
+}
+
+async function syncEntitlement(reason, { force = false } = {}) {
+  const installation = await getInstallation();
+  const credential = sanitizeInstallCredential(installation.installCredential);
+  if (!credential) {
+    return { ok: false, skipped: true, reason: 'no-credential' };
+  }
+
+  const checkedAt = installation.entitlement?.checkedAt || 0;
+  if (!force && Date.now() - checkedAt < ENTITLEMENT_SYNC_MIN_INTERVAL_MS) {
+    return { ok: true, skipped: true, reason: 'recently-checked' };
+  }
+
+  const result = await requestBillingApi(INSTALL_STATUS_ENDPOINT, {
+    installCredential: credential,
+    deviceId: installation.deviceId,
+    extensionId: chrome.runtime.id
+  });
+
+  if (!result.ok) {
+    // Only an explicit rejection of the credential invalidates local billing state.
+    // Network failures, rate limits, and server errors preserve the last verified grant.
+    if (result.status === 401 || result.status === 403) {
+      await clearBillingCredentials();
+      return { ok: false, cleared: true, transient: false, error: result.error };
+    }
+
+    return { ok: false, transient: true, error: result.error };
+  }
+
+  return { ok: true, ...(await applyVerifiedEntitlement(result.data, `sync:${reason}`)) };
+}
 
 async function initializeExtension(reason) {
   if (initialized) {
@@ -610,6 +971,11 @@ async function initializeExtension(reason) {
     const nextMidnight = new Date();
     nextMidnight.setHours(24, 0, 0, 0);
     chrome.alarms.create(DAILY_RESET_ALARM, { when: nextMidnight.getTime(), periodInMinutes: 1440 });
+
+    chrome.alarms.create(ENTITLEMENT_SYNC_ALARM, {
+      periodInMinutes: ENTITLEMENT_SYNC_PERIOD_MINUTES
+    });
+    void syncEntitlement(reason);
 
     // Restore badge count for today (survives service worker restarts)
     await restoreDailyBadge();
@@ -1226,7 +1592,9 @@ function sanitizeInstallation(installation) {
   return {
     deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId(),
     firstSeenAt: sanitizeTimestamp(incoming.firstSeenAt),
-    posthogSentEvents: sanitizePosthogSentEvents(incoming.posthogSentEvents)
+    posthogSentEvents: sanitizePosthogSentEvents(incoming.posthogSentEvents),
+    installCredential: sanitizeInstallCredential(incoming.installCredential),
+    entitlement: sanitizeEntitlement(incoming.entitlement)
   };
 }
 
@@ -2281,6 +2649,14 @@ if (typeof globalThis !== 'undefined') {
     isBundleConditionMet,
     getEffectiveWorkMinutes,
     syncBundleUnlockAlarms,
-    BUNDLE_UNLOCK_ALARM_PREFIX
+    resolveCheckoutPlan,
+    buildPricingUrl,
+    sanitizeInstallation,
+    sanitizeInstallCredential,
+    sanitizeEntitlement,
+    generateInstallCredential,
+    syncEntitlement,
+    BUNDLE_UNLOCK_ALARM_PREFIX,
+    ENTITLEMENT_SYNC_ALARM
   };
 }
