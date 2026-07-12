@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [Unreleased]
+
+Entitlement hardening, and the server finally implements the activation contract.
+
+### Fixed
+- **Checkout could never succeed.** The extension called `/api/checkout/session` and `/api/entitlement/install-status`; the website implemented neither, and was still running PayPal. Clicking Upgrade returned a 404 and never opened the pricing page. The website now implements the contract in `docs/paddle-activation-api-contract.md`, and PayPal is gone.
+- **Entitlement sync had never run.** `install-status` was a 404, which fell through to the transient-failure branch on every call. Pro was therefore never revoked for anyone, under any circumstances — the fail-open path was not a fallback, it was the only path.
+- **A rejected install could never recover.** A `401`/`403` from the server deleted `installCredential`, which is the only handle a browser has back to its own purchase. One bad response permanently unenrolled the customer, with no self-serve way back — worst of all for Lifetime buyers. The credential now survives rejection: access is withdrawn, the ability to recover is not, and a later successful sync restores Pro with no user action and no second payment.
+
+### Added
+- **Bounded grace period.** A verified grant is trusted for 72 hours without server confirmation. Transient failures still preserve the last verified state, but no longer indefinitely: past the ceiling, the next failed sync withdraws Pro and marks the entitlement stale, and the options page asks the user to reconnect. Previously a subscription that lapsed at Paddle kept Pro forever as long as the client never reached the server again.
+- **Lifetime is structurally protected from subscription events.** Enforced in SQL rather than in a branch that can be forgotten: lifetime rows are excluded from subscription-lifecycle updates, and cannot be set to `pro = false` without an explicit refund flag. A canceled or paused subscription cannot revoke a purchase made outright.
+- Regression tests for all four behaviours above (174 tests, up from 171).
+
+### Notes
+- `db/006_paddle_migration.sql` must be applied in the website repo before the new code runs.
+- The Paddle flow has been typechecked and built, but **not yet exercised against real Paddle**.
+
+---
+
 ## [1.4.0] - 2026-07-12
 
 Buying Pro is now one continuous action. Pick a plan in the extension, pay on the website, and this browser unlocks itself — no license key, no account, no copy-paste.
