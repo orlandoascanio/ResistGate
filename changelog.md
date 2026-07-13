@@ -39,6 +39,8 @@ Buying Pro is now one continuous action. Pick a plan in the extension, pay on th
 ### Changed
 - **Activation is no longer trust-on-origin**: `activateProFromWebsite` now requires a signed activation token and a server exchange. A message from a trusted origin can no longer grant Pro on its own.
 - The extension can no longer be messaged by `localhost`; only the two production website origins remain.
+- **Options redesign**: Refreshed settings and plan comparison, moved blocked-site controls into an editor dialog, clarified helper text, and replaced the tab icons with SVGs.
+- **Dark-mode action polish**: Improved primary-action contrast across the popup, friction, intention, welcome, What’s New, and options pages.
 
 ### Security
 - Device ID, extension ID, and the install credential never enter the checkout URL or Paddle custom data.
