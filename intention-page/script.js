@@ -249,11 +249,31 @@ function setActivePanel(panel) {
 }
 
 function getChallengeText() {
+  const customPhrase = getCustomChallengePhrase();
+  if (customPhrase) {
+    return customPhrase;
+  }
+
   const level = currentSettings?.challengeTypes?.typing?.level;
   if (level === 'easy' || level === 'moderate' || level === 'hard') {
     return CHALLENGE_TEXT[level];
   }
   return CHALLENGE_TEXT.hard;
+}
+
+// Pro only. Free settings can still carry a phrase from a lapsed subscription, so the
+// tier is checked here rather than trusting the stored flag.
+function getCustomChallengePhrase(settings = currentSettings) {
+  if (settings?.subscription?.tier !== 'pro') {
+    return '';
+  }
+
+  const custom = settings?.proFeatures?.customChallengePhrase;
+  if (custom?.enabled !== true || typeof custom.text !== 'string') {
+    return '';
+  }
+
+  return custom.text.trim();
 }
 
 function getAccessDurationMinutes() {
@@ -416,6 +436,7 @@ if (typeof globalThis !== 'undefined') {
     updateChallengeState,
     completeChallenge,
     getChallengeText,
+    getCustomChallengePhrase,
     getAccessDurationMinutes,
     openChallengePage,
     renderIntentionPage,

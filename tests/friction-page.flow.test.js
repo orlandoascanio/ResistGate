@@ -104,6 +104,54 @@ describe('Friction page flow logic', () => {
     expect(new Set(hard.map((segment) => segment.text))).toHaveLength(5);
   });
 
+  it('uses a pro custom phrase as the whole challenge, whatever the level', () => {
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      challengeTypes: { typing: { level: 'hard' } },
+      proFeatures: {
+        customChallengePhrase: { enabled: true, text: 'I promised myself deep work until noon.' }
+      }
+    });
+
+    expect(hooks.getEffectiveChallengeLevel()).toBe('custom');
+    const segments = hooks.buildTypingChallengeSegments();
+    expect(segments).toEqual([{ text: 'I promised myself deep work until noon.' }]);
+    expect(hooks.getChallengeLevelCopy('custom').unitLabel).toBe('Phrase');
+  });
+
+  it('ignores a custom phrase left behind by a lapsed pro subscription', () => {
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'free' },
+      challengeTypes: { typing: { level: 'hard' } },
+      proFeatures: {
+        customChallengePhrase: { enabled: true, text: 'let me in' }
+      }
+    });
+
+    expect(hooks.getCustomChallengePhrase()).toBe('');
+    expect(hooks.getEffectiveChallengeLevel()).toBe('hard');
+    expect(hooks.buildTypingChallengeSegments()).toHaveLength(5);
+  });
+
+  it('falls back to the level bank when the custom phrase is off or empty', () => {
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      challengeTypes: { typing: { level: 'easy' } },
+      proFeatures: {
+        customChallengePhrase: { enabled: false, text: 'I promised myself deep work until noon.' }
+      }
+    });
+    expect(hooks.getEffectiveChallengeLevel()).toBe('easy');
+
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      challengeTypes: { typing: { level: 'easy' } },
+      proFeatures: { customChallengePhrase: { enabled: true, text: '   ' } }
+    });
+    expect(hooks.getEffectiveChallengeLevel()).toBe('easy');
+    expect(hooks.buildTypingChallengeSegments()[0].text).toMatch(/^[A-Z2-9]{12}$/);
+  });
+
   it('keeps a large unique bank for hard challenge paragraphs', () => {
     const promptBank = hooks.getChallengePromptBank();
 

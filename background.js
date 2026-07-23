@@ -58,6 +58,7 @@ const ENTITLEMENT_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
 // trust indefinitely.
 const ENTITLEMENT_GRACE_PERIOD_MS = 72 * 60 * 60 * 1000;
 const INSTALL_CREDENTIAL_PATTERN = /^[0-9a-f]{64}$/;
+const CUSTOM_CHALLENGE_PHRASE_MAX_LENGTH = 200;
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -80,6 +81,10 @@ const DEFAULT_SETTINGS = {
   },
   proFeatures: {
     accountabilityPreset: 'balanced',
+    customChallengePhrase: {
+      enabled: false,
+      text: ''
+    },
     strictModeEnabled: false,
     strictModeDisableDelaySeconds: 30,
     strictModeDisableRequestedAt: null,
@@ -350,6 +355,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             if (nextSettings.proFeatures) {
               nextSettings.proFeatures.accountabilityPreset = currentSettings.proFeatures.accountabilityPreset;
+              nextSettings.proFeatures.customChallengePhrase = currentSettings.proFeatures.customChallengePhrase;
               nextSettings.proFeatures.strictModeDisableDelaySeconds = currentSettings.proFeatures.strictModeDisableDelaySeconds;
               nextSettings.proFeatures.behavioralFriction = currentSettings.proFeatures.behavioralFriction;
               nextSettings.proFeatures.overrideCooldown = currentSettings.proFeatures.overrideCooldown;
@@ -564,6 +570,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'openFeedbackPage': {
           const surface = typeof request.surface === 'string' ? request.surface : 'extension';
           const url = `https://www.orlandoascanio.com/en/resistgate/feedback?source=${encodeURIComponent(surface)}`;
+          await chrome.tabs.create({ url });
+          sendResponse({ success: true, url });
+          return;
+        }
+
+        case 'openReviewPage': {
+          const url = `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`;
           await chrome.tabs.create({ url });
           sendResponse({ success: true, url });
           return;
@@ -1571,6 +1584,7 @@ function sanitizeSettings(settings) {
   const incomingOverrideCooldown = incoming.proFeatures?.overrideCooldown || {};
   const proFeatures = {
     accountabilityPreset: sanitizeAccountabilityPreset(incoming.proFeatures?.accountabilityPreset),
+    customChallengePhrase: sanitizeCustomChallengePhrase(incoming.proFeatures?.customChallengePhrase),
     strictModeEnabled: incoming.proFeatures?.strictModeEnabled === true,
     strictModeDisableDelaySeconds: clamp(
       positiveInt(
@@ -2166,6 +2180,28 @@ function sanitizeChallengePrompt(value) {
   return value.trim().slice(0, 120);
 }
 
+function sanitizeCustomChallengePhrase(value) {
+  const incoming = value && typeof value === 'object' ? value : {};
+  const text = sanitizeChallengePhraseText(incoming.text);
+
+  // A phrase-less "enabled" would silently fall back to the built-in banks, so the
+  // stored flag only ever means "there is a phrase to type".
+  return {
+    enabled: incoming.enabled === true && text.length > 0,
+    text
+  };
+}
+
+function sanitizeChallengePhraseText(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  // The phrase is typed back character for character, so it has to stay a single
+  // line: newlines and runs of spaces are impossible to reproduce exactly.
+  return value.replace(/\s+/g, ' ').trim().slice(0, CUSTOM_CHALLENGE_PHRASE_MAX_LENGTH);
+}
+
 
 
 function sanitizeAccountabilityPreset(value) {
@@ -2673,6 +2709,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__RESISTGATE_TEST_HOOKS__ = {
     sanitizeSettings,
     sanitizeTypingChallengeLevel,
+    sanitizeCustomChallengePhrase,
     sanitizeTemporaryAccess,
     sanitizeAnalytics,
     sanitizeBlocklist,

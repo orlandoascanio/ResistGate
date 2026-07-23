@@ -4,10 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ResistGate</title>
+  <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="popup.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="../vendor/sentry.min.js"></script>
   <script src="../vendor/sentry-init.js"></script>
 </head>
@@ -55,7 +53,10 @@
 
       <footer class="popup-footer">
         <p class="feedback-context">I'm improving ResistGate based on real feedback.</p>
-        <button id="open-feedback-btn" type="button" class="feedback-link">Help improve ResistGate</button>
+        <div class="footer-links">
+          <button id="open-feedback-btn" type="button" class="feedback-link">Help improve ResistGate</button>
+          <button id="open-review-btn" type="button" class="feedback-link">Rate ResistGate ⭐</button>
+        </div>
       </footer>
     </main>
   </div>

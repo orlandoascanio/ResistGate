@@ -187,6 +187,28 @@ describe('Intention page pause layer', () => {
     expect(stored.resistgateIntentionPrecheck).toContain('"reason":""');
   });
 
+  it('types the pro custom phrase instead of the built-in challenge line', async () => {
+    const { context } = await loadIntentionPage();
+    const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
+    const customChallengePhrase = { enabled: true, text: 'I promised myself deep work until noon.' };
+
+    hooks.__setCurrentSettingsForTest({
+      challengeTypes: { typing: { level: 'easy' } },
+      subscription: { tier: 'pro' },
+      proFeatures: { intentionPage: { enabled: true }, customChallengePhrase }
+    });
+    expect(hooks.getChallengeText()).toBe('I promised myself deep work until noon.');
+
+    // A lapsed subscription must not keep the user's phrase in place of the built-in line.
+    hooks.__setCurrentSettingsForTest({
+      challengeTypes: { typing: { level: 'easy' } },
+      subscription: { tier: 'free' },
+      proFeatures: { intentionPage: { enabled: true }, customChallengePhrase }
+    });
+    expect(hooks.getCustomChallengePhrase()).toBe('');
+    expect(hooks.getChallengeText()).toBe('I am choosing this visit intentionally.');
+  });
+
   it('grants temporary access from the in-page challenge', async () => {
     let grantRequest = null;
     const { context, elements, classSets } = await loadIntentionPage({

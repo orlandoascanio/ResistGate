@@ -52,6 +52,12 @@ const CHALLENGE_LEVEL_COPY = {
     precheck: 'Hard mode: complete 5 paragraphs with full accuracy.',
     instruction: 'Type the text exactly as shown to continue.',
     unitLabel: 'Paragraph'
+  },
+  custom: {
+    badge: 'Your phrase',
+    precheck: 'Your phrase: type the line you wrote, with full accuracy.',
+    instruction: 'Type your phrase exactly as you wrote it to continue.',
+    unitLabel: 'Phrase'
   }
 };
 
@@ -854,7 +860,7 @@ function showTypingChallenge(originalUrl) {
   const container = document.getElementById('phase-challenge');
   container.innerHTML = '';
 
-  const challengeLevel = getTypingChallengeLevel();
+  const challengeLevel = getEffectiveChallengeLevel();
   const challengeCopy = getChallengeLevelCopy(challengeLevel);
   const selectedSegments = buildTypingChallengeSegments(challengeLevel);
   const totalSegments = selectedSegments.length;
@@ -983,7 +989,7 @@ function renderChallengeSummary() {
     return;
   }
 
-  subtitle.textContent = getChallengeLevelCopy(getTypingChallengeLevel()).precheck;
+  subtitle.textContent = getChallengeLevelCopy(getEffectiveChallengeLevel()).precheck;
 }
 
 function sanitizeChallengeLevel(level) {
@@ -1009,10 +1015,44 @@ function getTypingChallengeLevel(settings = currentSettings) {
 }
 
 function getChallengeLevelCopy(level) {
+  if (level === 'custom') {
+    return CHALLENGE_LEVEL_COPY.custom;
+  }
   return CHALLENGE_LEVEL_COPY[sanitizeChallengeLevel(level)];
 }
 
-function buildTypingChallengeSegments(level = getTypingChallengeLevel()) {
+// Pro only. Free settings can still carry a phrase from a lapsed subscription, so the
+// tier is checked here rather than trusting the stored flag.
+function getCustomChallengePhrase(settings = currentSettings) {
+  if (settings?.subscription?.tier !== 'pro') {
+    return '';
+  }
+
+  const custom = settings?.proFeatures?.customChallengePhrase;
+  if (custom?.enabled !== true || typeof custom.text !== 'string') {
+    return '';
+  }
+
+  return custom.text.trim();
+}
+
+// A custom phrase replaces the level's text bank entirely: the phrase is typed once,
+// whatever the level says.
+function getEffectiveChallengeLevel(settings = currentSettings) {
+  if (getCustomChallengePhrase(settings)) {
+    return 'custom';
+  }
+  return getTypingChallengeLevel(settings);
+}
+
+function buildTypingChallengeSegments(level = getEffectiveChallengeLevel()) {
+  if (level === 'custom') {
+    const phrase = getCustomChallengePhrase();
+    if (phrase) {
+      return [{ text: phrase }];
+    }
+  }
+
   const selectedLevel = sanitizeChallengeLevel(level);
   if (selectedLevel === 'easy') {
     return [{ text: generateRandomCharacterSequence(12) }];
@@ -1306,6 +1346,8 @@ if (typeof globalThis !== 'undefined') {
     getSafeTargetUrl,
     sanitizeChallengeLevel,
     getTypingChallengeLevel,
+    getEffectiveChallengeLevel,
+    getCustomChallengePhrase,
     getChallengeLevelCopy,
     buildTypingChallengeSegments,
     canUseIntentionPage,

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ResistGate Settings</title>
+  <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/design-system.css" />
   <link rel="stylesheet" href="options.css" />
   <script src="../vendor/sentry.min.js"></script>
@@ -55,6 +56,7 @@
         <h1>Settings</h1>
         <div class="header-meta">
           <button id="open-feedback-btn" class="btn btn-secondary btn-sm">Help improve ResistGate</button>
+          <button id="open-review-btn" class="btn btn-secondary btn-sm">Rate ResistGate ⭐</button>
           <button id="whats-new-btn" class="btn btn-secondary btn-sm">What's New</button>
           <span id="plan-pill" class="plan-pill">Free</span>
         </div>
@@ -380,6 +382,25 @@
                   maxlength="120"
                   placeholder="Example: Remember — you only need 10 minutes, not 2 hours"
                   data-pro-feature="behavioralFriction"
+                />
+
+                <label class="switch-row">
+                  <input id="custom-challenge-phrase-enabled" type="checkbox" data-pro-feature="customChallengePhrase" />
+                  <span>
+                    <strong>Write your own challenge phrase</strong>
+                    <small>Replaces the built-in challenge text with a line you wrote. You type it once, whatever the challenge level.</small>
+                  </span>
+                </label>
+
+                <label for="custom-challenge-phrase-text" class="sub-field">Your challenge phrase</label>
+                <p class="helper">Make it a promise in your own words — you'll have to type it out, exactly, before a blocked site opens.</p>
+                <input
+                  id="custom-challenge-phrase-text"
+                  class="sub-field"
+                  type="text"
+                  maxlength="200"
+                  placeholder="Example: I promised myself deep work until noon, and this can wait."
+                  data-pro-feature="customChallengePhrase"
                 />
               </div>
             </div>

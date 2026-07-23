@@ -120,6 +120,14 @@ describe('ResistGate background integration', () => {
     expect(env.createdTabs.at(-1).url).toBe(response.url);
   });
 
+  it('opens the Chrome Web Store review page via message handler', async () => {
+    const response = await env.sendMessage({ action: 'openReviewPage' });
+
+    expect(response.success).toBe(true);
+    expect(response.url).toBe(`https://chromewebstore.google.com/detail/${env.chrome.runtime.id}/reviews`);
+    expect(env.createdTabs.at(-1).url).toBe(response.url);
+  });
+
   it('activates Pro after the server verifies the activation token', async () => {
     const { activation } = await purchaseProInTest(env, api, 'lifetime');
 

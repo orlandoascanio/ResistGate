@@ -860,6 +860,78 @@ describe('Feature Matrix Coverage', () => {
       expect(saved.proFeatures.behavioralFriction.customChallengePrompt).toBe('Why this task?');
     });
 
+    it('pro users can save a custom challenge phrase', async () => {
+      await activateProForTest();
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.proFeatures.customChallengePhrase = {
+        enabled: true,
+        text: 'I promised myself deep work until noon.'
+      };
+
+      const res = await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      expect(res.success).toBe(true);
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.proFeatures.customChallengePhrase).toEqual({
+        enabled: true,
+        text: 'I promised myself deep work until noon.'
+      });
+    });
+
+    it('free users cannot save a custom challenge phrase', async () => {
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.proFeatures.customChallengePhrase = { enabled: true, text: 'let me in' };
+
+      const res = await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
+      expect(res.success).toBe(true);
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.proFeatures.customChallengePhrase).toEqual({ enabled: false, text: '' });
+    });
+
+    it('keeps the custom challenge phrase locked while Strict Mode holds the window', async () => {
+      await activateProForTest();
+      const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
+      settingsObj.proFeatures.customChallengePhrase = {
+        enabled: true,
+        text: 'I promised myself deep work until noon.'
+      };
+      settingsObj.proFeatures.strictModeEnabled = true;
+      settingsObj.freeExperience.schedule = {
+        enabled: true,
+        days: [new Date().getDay()],
+        startTime: '00:00',
+        endTime: '23:59'
+      };
+      expect((await env.sendMessage({ action: 'updateSettings', settings: settingsObj })).success).toBe(true);
+
+      // Weakening the phrase mid-window would be a free pass through the gate.
+      const locked = (await env.sendMessage({ action: 'getSettings' })).settings;
+      locked.proFeatures.customChallengePhrase = { enabled: true, text: 'a' };
+      const res = await env.sendMessage({ action: 'updateSettings', settings: locked });
+      expect(res.success).toBe(false);
+
+      const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+      expect(saved.proFeatures.customChallengePhrase.text).toBe('I promised myself deep work until noon.');
+    });
+
+    it('sanitizes the custom challenge phrase into a single typable line', () => {
+      const result = hooks.sanitizeCustomChallengePhrase({
+        enabled: true,
+        text: '  I will\n\nfocus   now.  '
+      });
+      expect(result).toEqual({ enabled: true, text: 'I will focus now.' });
+
+      expect(hooks.sanitizeCustomChallengePhrase({ enabled: true, text: 'x'.repeat(500) }).text)
+        .toHaveLength(200);
+
+      // "Enabled" with nothing to type would silently fall back to the built-in banks.
+      expect(hooks.sanitizeCustomChallengePhrase({ enabled: true, text: '   ' }))
+        .toEqual({ enabled: false, text: '' });
+      expect(hooks.sanitizeCustomChallengePhrase(undefined))
+        .toEqual({ enabled: false, text: '' });
+    });
+
     it('migrates global personalGoal to blocklist entries', () => {
       const result = hooks.sanitizeSettings({
         blocklist: [

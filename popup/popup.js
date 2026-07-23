@@ -30,6 +30,11 @@ document.addEventListener('DOMContentLoaded', function () {
         openFeedbackBtn.addEventListener('click', openFeedbackPage);
     }
 
+    const openReviewBtn = document.getElementById('open-review-btn');
+    if (openReviewBtn) {
+        openReviewBtn.addEventListener('click', openReviewPage);
+    }
+
     newBlockedSiteInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             addBlockedSite();
@@ -66,6 +71,16 @@ function openFeedbackPage() {
     }, function (response) {
         if (!(response && response.success)) {
             showMessage(response?.error || 'Unable to open feedback page.', 'error');
+        }
+    });
+}
+
+function openReviewPage() {
+    chrome.runtime.sendMessage({
+        action: 'openReviewPage'
+    }, function (response) {
+        if (!(response && response.success)) {
+            showMessage(response?.error || 'Unable to open review page.', 'error');
         }
     });
 }

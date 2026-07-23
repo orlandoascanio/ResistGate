@@ -95,6 +95,7 @@ This serializes DNR mutations and prevents overlapping rule refreshes.
 | `getCommitmentModeStatus` | No | Return lockout status/countdown |
 | `openPricingPage` | No | Validate plan, create a server checkout session, open pricing with only the opaque checkout ID |
 | `openFeedbackPage` | No | Open website feedback page |
+| `openReviewPage` | No | Open the Chrome Web Store review page for this extension |
 | `trackPosthogEvent` | No | Track an allowlisted PostHog event once per installation |
 | `getBillingState` | No | Return verified tier, plan, and last-checked time for the options page |
 | `refreshEntitlement` | No | Force a server entitlement sync (manual "Recheck access") |
@@ -155,7 +156,11 @@ Pro:
 - accountability presets;
 - analytics dashboard;
 - weekly report and Focus Score;
-- custom challenge prompt.
+- custom challenge prompt;
+- custom challenge phrase (`proFeatures.customChallengePhrase`) — replaces the built-in challenge text
+  banks with the user's own line, typed once regardless of challenge level, on both the friction page and
+  the Intention Page. Read through `getCustomChallengePhrase()` in each page, which re-checks the tier:
+  storage can still hold a phrase from a lapsed subscription.
 
 Note: current code and tests treat per-site access condition setup as free.
 

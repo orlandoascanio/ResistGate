@@ -164,6 +164,10 @@ document.addEventListener('DOMContentLoaded', function () {
     openFeedbackPage();
   });
 
+  document.getElementById('open-review-btn').addEventListener('click', function () {
+    openReviewPage();
+  });
+
   document.getElementById('view-pricing-btn').addEventListener('click', function () {
     startCheckout(getSelectedPlan());
   });
@@ -530,6 +534,10 @@ function renderProFeatureInputs() {
   document.getElementById('earn-access-enabled').checked = behavior.earnAccessEnabled !== false;
   document.getElementById('earn-access-min-seconds').value = behavior.earnAccessMinChallengeSeconds || 90;
   document.getElementById('custom-challenge-prompt').value = behavior.customChallengePrompt || '';
+
+  const customPhrase = proFeatures.customChallengePhrase || {};
+  document.getElementById('custom-challenge-phrase-enabled').checked = customPhrase.enabled === true;
+  document.getElementById('custom-challenge-phrase-text').value = customPhrase.text || '';
   setActivePresetButton(preset);
 
   // Intention Page
@@ -1282,6 +1290,13 @@ function saveSettings() {
       settings.proFeatures.behavioralFriction.earnAccessEnabled = document.getElementById('earn-access-enabled').checked;
       settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
       settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
+
+      const customPhrase = getCustomChallengePhraseInput();
+      if (customPhrase.enabled && !customPhrase.text) {
+        showMessage('Write your challenge phrase before turning it on.', 'error');
+        return;
+      }
+      settings.proFeatures.customChallengePhrase = customPhrase;
     }
 
     chrome.runtime.sendMessage({
@@ -1775,6 +1790,19 @@ function openFeedbackPage() {
   });
 }
 
+function openReviewPage() {
+  chrome.runtime.sendMessage({
+    action: 'openReviewPage'
+  }, function (response) {
+    if (!(response && response.success)) {
+      showMessage(response?.error || 'Unable to open review page.', 'error');
+      return;
+    }
+
+    showMessage('Review page opened in a new tab.', 'success');
+  });
+}
+
 function getSelectedScheduleDays() {
   const selected = [];
   document.querySelectorAll('#schedule-days input[type="checkbox"]').forEach((checkbox) => {
@@ -1827,6 +1855,17 @@ function getEarnAccessMinChallengeSeconds() {
   }
 
   return Math.max(30, Math.min(900, parsed));
+}
+
+function getCustomChallengePhraseInput() {
+  const enabled = document.getElementById('custom-challenge-phrase-enabled').checked === true;
+  // Mirrors the background sanitizer: the phrase is typed back exactly, so it stays one line.
+  const text = document.getElementById('custom-challenge-phrase-text').value
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+
+  return { enabled, text };
 }
 
 function sanitizeChallengeLevel(level) {
@@ -1913,6 +1952,7 @@ if (typeof globalThis !== 'undefined') {
     formatScheduleDays,
     formatTimeLabel,
     getEarnAccessMinChallengeSeconds,
+    getCustomChallengePhraseInput,
     isProGatedTab
   };
 }
