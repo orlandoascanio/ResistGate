@@ -8,7 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-Entitlement hardening, and the server finally implements the activation contract.
+---
+
+## [1.4.2] - 2026-07-18
+
+### Fixed
+- **The brand typeface silently fell back on every page.** Popup, the friction page, and Commitment Mode fetched Plus Jakarta Sans from `fonts.googleapis.com`; if that request failed (offline, a blocked host, a corporate network) the page rendered in the OS default font with no error and no indication anything was wrong. Options, the Intention Page, and What's New never fetched it at all — `--font-family-base` named the font, but nothing ever loaded it, so those pages were silently on the system stack from the start. The welcome page had the same problem with a second, off-brand font (`Inter`) that was never loaded anywhere. All extension pages now self-host Plus Jakarta Sans (`shared/fonts.css`, ~64KB total) and load nothing from Google at page render — one consistent typeface, no network dependency, no undocumented external call.
+
+---
+
+## [1.4.1] - 2026-07-18
+
+Entitlement hardening, the server finally implements the activation contract, and Pro users can write their own challenge phrase.
 
 ### Fixed
 - **Checkout could never succeed.** The extension called `/api/checkout/session` and `/api/entitlement/install-status`; the website implemented neither, and was still running PayPal. Clicking Upgrade returned a 404 and never opened the pricing page. The website now implements the contract in `docs/paddle-activation-api-contract.md`, and PayPal is gone.
@@ -16,9 +27,10 @@ Entitlement hardening, and the server finally implements the activation contract
 - **A rejected install could never recover.** A `401`/`403` from the server deleted `installCredential`, which is the only handle a browser has back to its own purchase. One bad response permanently unenrolled the customer, with no self-serve way back — worst of all for Lifetime buyers. The credential now survives rejection: access is withdrawn, the ability to recover is not, and a later successful sync restores Pro with no user action and no second payment.
 
 ### Added
+- **Write your own challenge phrase (Pro).** Replaces the built-in challenge text with a line the user wrote — a promise in their own words, typed out before a blocked site opens. Enabled from the Pro tab. The phrase is typed once regardless of challenge level, on both the friction page and the Intention Page. It is normalized to a single line, capped at 200 characters, and cannot be enabled without a phrase to type. The tier is checked where the phrase is read, not only where it is saved, so a lapsed subscription falls back to the built-in banks rather than honouring a stale phrase — and Strict Mode blocks edits to it mid-window, since weakening the phrase to `a` would otherwise be an open gate.
 - **Bounded grace period.** A verified grant is trusted for 72 hours without server confirmation. Transient failures still preserve the last verified state, but no longer indefinitely: past the ceiling, the next failed sync withdraws Pro and marks the entitlement stale, and the options page asks the user to reconnect. Previously a subscription that lapsed at Paddle kept Pro forever as long as the client never reached the server again.
 - **Lifetime is structurally protected from subscription events.** Enforced in SQL rather than in a branch that can be forgotten: lifetime rows are excluded from subscription-lifecycle updates, and cannot be set to `pro = false` without an explicit refund flag. A canceled or paused subscription cannot revoke a purchase made outright.
-- Regression tests for all four behaviours above (174 tests, up from 171).
+- Regression tests for all four entitlement behaviours above, plus the custom challenge phrase (182 tests, up from 171).
 
 ### Notes
 - `db/006_paddle_migration.sql` must be applied in the website repo before the new code runs.
