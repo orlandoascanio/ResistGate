@@ -22,9 +22,9 @@ and the server tells it the answer.
 
 ## Endpoints
 
-All three accept `POST` with `Content-Type: application/json` from `Origin: chrome-extension://<production ResistGate ID>`.
-Production CORS must allow that exact origin. Origin is defense in depth only — the random checkout ID, signed activation
-token, and install credential are the actual authentication.
+All three accept `POST` with `Content-Type: application/json` from an allowlisted production extension origin. Production
+CORS must include the exact ResistGate and Amethyst origins. Origin is defense in depth only — the random checkout ID,
+signed activation token, and install credential are the actual authentication.
 
 ### 1. `POST /api/checkout/session`
 
@@ -34,6 +34,7 @@ Creates the `approval_pending` session **before** Paddle opens.
 // request
 { "plan": "monthly" | "yearly" | "lifetime",
   "source": "extension",
+  "productSlug": "resistgate" | "amethyst",
   "extensionId": "abcdef…",
   "deviceId": "uuid",
   "installCredential": "<64 hex chars>" }
@@ -45,8 +46,11 @@ Creates the `approval_pending` session **before** Paddle opens.
 Must reject: unknown plans, a mismatch between `extensionId` and the request origin, and missing extension metadata.
 Rate-limit per device and per IP. Store only `hash(installCredential)`.
 
-The extension then opens `https://www.orlandoascanio.com/en/pricing?source=extension&plan=<plan>&checkout=<checkoutId>`
-and does nothing else. The page validates the pending session and opens the Paddle overlay for that plan immediately.
+The extension then opens
+`https://www.orlandoascanio.com/en/pricing?productSlug=<product>&source=extension&plan=<plan>&checkout=<checkoutId>`
+and does nothing else. `checkout` is the pending-session ID on the initial handoff. After Paddle succeeds, the success URL
+uses `checkout=success&checkoutId=<checkoutId>`. The page validates the pending session and opens the Paddle overlay for
+that plan immediately.
 
 ### 2. `POST /api/entitlement/activate-install`
 
@@ -125,11 +129,12 @@ time so duplicates and out-of-order deliveries converge. Processing failures mus
 
 ## What the pricing page does
 
-1. Read `checkout` and `plan` from the URL; validate the pending session; open the Paddle overlay.
+1. Read the pending session from `checkout` on the initial handoff (or `checkoutId` after the Paddle success redirect),
+   plus `plan`; validate the pending session; open the Paddle overlay.
 2. Poll session status. When the webhook marks it active, request a five-minute activation token.
 3. `chrome.runtime.sendMessage(<extension id from the session>, { action: 'activateProFromWebsite', activationToken })`.
-4. If that message fails, keep the checkout active and show an **Activate ResistGate** button that retries step 3. Never
-   ask for a second payment.
+4. If that message fails, keep the checkout active and show an **Activate Product** button for the selected extension that
+   retries step 3. Never ask for a second payment.
 
 The page may also send `{ action: 'getActivationState' }` to check the extension is reachable before promising instant
 activation. It returns `{ success: true, installed: true, pro }` and no secrets.
