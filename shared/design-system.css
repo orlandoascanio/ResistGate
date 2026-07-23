@@ -1,12 +1,18 @@
 /**
  * ResistGate Design System
- * 
+ *
  * Centralized design tokens and utilities for all UI surfaces.
  * Import this file in all extension pages for consistency.
- * 
+ *
  * Usage:
+ *   <link rel="stylesheet" href="../shared/fonts.css">
  *   <link rel="stylesheet" href="../shared/design-system.css">
  *   <link rel="stylesheet" href="page-specific.css">
+ *
+ * fonts.css must be linked directly (not @imported here) — every
+ * extension page that sets font-family to 'Plus Jakarta Sans' needs it,
+ * including popup/friction/commitment pages that don't pull in the rest
+ * of this design system's resets and utility classes.
  */
 
 /* ───────────────────────────────────────────────────────────────────
