@@ -2,6 +2,8 @@
 const POPUP_PREVIEW_LIMIT = 5;
 let popupCommitmentTimer = null;
 let workTimerPollInterval = null;
+let activeAccessCountdownTimer = null;
+let activeAccessCountdowns = new Map();
 
 document.addEventListener('DOMContentLoaded', function () {
     const newBlockedSiteInput = document.getElementById('new-blocked-site');
@@ -9,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadBlockedSites();
     loadWorkTimerUI();
+    loadActiveTemporaryAccess();
 
     const blockCurrentTabBtn = document.getElementById('block-current-tab-btn');
     if (blockCurrentTabBtn) {
@@ -63,6 +66,10 @@ document.addEventListener('DOMContentLoaded', function () {
         showOutcomeTap(domain);
     });
 });
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', clearActiveAccessCountdown);
+}
 
 function openFeedbackPage() {
     chrome.runtime.sendMessage({
@@ -436,6 +443,153 @@ function formatPopupCountdown(remainingMs) {
     return `${s}s`;
 }
 
+function formatActiveAccessCountdown(remainingMs) {
+    const totalSeconds = Math.max(0, Math.ceil(Number(remainingMs) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} remaining`;
+    }
+
+    return `${minutes}:${String(seconds).padStart(2, '0')} remaining`;
+}
+
+function normalizeActiveAccessGrants(access, now = Date.now()) {
+    return (Array.isArray(access) ? access : [])
+        .filter((entry) => (
+            entry
+            && typeof entry.domain === 'string'
+            && entry.domain.trim().length > 0
+            && Number.isFinite(Number(entry.expiresAt))
+            && Number(entry.expiresAt) > now
+        ))
+        .map((entry) => ({
+            domain: entry.domain.trim().toLowerCase(),
+            expiresAt: Number(entry.expiresAt)
+        }))
+        .sort((first, second) => first.expiresAt - second.expiresAt);
+}
+
+function loadActiveTemporaryAccess() {
+    chrome.runtime.sendMessage({ action: 'getActiveTemporaryAccess' }, function (response) {
+        if (response && response.success) {
+            renderActiveTemporaryAccess(response.access);
+            return;
+        }
+
+        renderActiveTemporaryAccess([]);
+        showMessage(response?.error || 'Unable to load active access.', 'error');
+    });
+}
+
+function renderActiveTemporaryAccess(access) {
+    const section = document.getElementById('active-access-section');
+    const list = document.getElementById('active-access-list');
+    if (!section || !list) return;
+
+    clearActiveAccessCountdown();
+    list.innerHTML = '';
+
+    const activeGrants = normalizeActiveAccessGrants(access);
+    if (activeGrants.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+
+    activeGrants.forEach(function (grant) {
+        const displayDomain = getDisplayDomain(grant.domain);
+        const item = document.createElement('li');
+        item.className = 'active-access-item';
+
+        const accessMeta = document.createElement('div');
+        accessMeta.className = 'active-access-meta';
+
+        const domain = document.createElement('span');
+        domain.className = 'active-access-domain';
+        domain.textContent = displayDomain;
+        domain.title = grant.domain;
+
+        const countdown = document.createElement('span');
+        countdown.className = 'active-access-countdown';
+        countdown.textContent = formatActiveAccessCountdown(grant.expiresAt - Date.now());
+
+        const reblockButton = document.createElement('button');
+        reblockButton.className = 'reblock-now-btn';
+        reblockButton.type = 'button';
+        reblockButton.textContent = 'Re-block now';
+        reblockButton.setAttribute('aria-label', `Re-block ${displayDomain} now`);
+        reblockButton.addEventListener('click', function () {
+            reblockTemporaryAccess(grant.domain, reblockButton);
+        });
+
+        accessMeta.appendChild(domain);
+        accessMeta.appendChild(countdown);
+        item.appendChild(accessMeta);
+        item.appendChild(reblockButton);
+        list.appendChild(item);
+
+        activeAccessCountdowns.set(grant.domain, {
+            element: countdown,
+            expiresAt: grant.expiresAt
+        });
+    });
+
+    activeAccessCountdownTimer = setInterval(tickActiveAccessCountdowns, 1000);
+}
+
+function tickActiveAccessCountdowns(now = Date.now()) {
+    let hasExpiredGrant = false;
+
+    activeAccessCountdowns.forEach(function (countdown) {
+        const remainingMs = countdown.expiresAt - now;
+        countdown.element.textContent = formatActiveAccessCountdown(remainingMs);
+        if (remainingMs <= 0) {
+            hasExpiredGrant = true;
+        }
+    });
+
+    if (hasExpiredGrant) {
+        clearActiveAccessCountdown();
+        loadActiveTemporaryAccess();
+    }
+}
+
+function clearActiveAccessCountdown() {
+    if (activeAccessCountdownTimer !== null) {
+        clearInterval(activeAccessCountdownTimer);
+        activeAccessCountdownTimer = null;
+    }
+    activeAccessCountdowns = new Map();
+}
+
+function reblockTemporaryAccess(domain, button) {
+    if (!button || button.disabled) return;
+
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Re-blocking…';
+
+    chrome.runtime.sendMessage({
+        action: 'revokeTemporaryAccess',
+        domain
+    }, function (response) {
+        if (response && response.success) {
+            loadActiveTemporaryAccess();
+            showMessage(`${getDisplayDomain(domain)} is blocked again.`, 'success');
+            return;
+        }
+
+        button.disabled = false;
+        button.textContent = originalLabel;
+        loadActiveTemporaryAccess();
+        showMessage(response?.error || 'Unable to re-block this site.', 'error');
+    });
+}
+
 function renderCommitmentPopupStatus(settings) {
     const statusEl = document.getElementById('commitment-mode-popup-status');
     const textEl = document.getElementById('commitment-popup-text');
@@ -610,6 +764,12 @@ if (typeof globalThis !== 'undefined') {
         normalizeDomainInput,
         getDisplayDomain,
         getBlockedCountMeta,
-        showOutcomeTap
+        showOutcomeTap,
+        formatActiveAccessCountdown,
+        normalizeActiveAccessGrants,
+        renderActiveTemporaryAccess,
+        tickActiveAccessCountdowns,
+        clearActiveAccessCountdown,
+        reblockTemporaryAccess
     };
 }

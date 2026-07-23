@@ -286,6 +286,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        case 'getActiveTemporaryAccess': {
+          try {
+            const access = await getActiveTemporaryAccess();
+            sendResponse({ success: true, access });
+          } catch (err) {
+            sendResponse({ success: false, error: err.message });
+          }
+          return;
+        }
+
+        case 'revokeTemporaryAccess': {
+          try {
+            const result = await revokeTemporaryAccess(request.domain);
+            sendResponse({ success: true, access: result });
+          } catch (err) {
+            sendResponse({ success: false, error: err.message });
+          }
+          return;
+        }
+
         case 'recordBlockedVisit': {
           const resistanceCount = await recordBlockedVisit(request.urlPattern || request.domain);
           sendResponse({ success: true, resistanceCount });
@@ -1070,14 +1090,16 @@ async function enableIntentionPageForNewInstall() {
   await saveSettings(settings);
 }
 
-async function queueRulesUpdate(reason) {
-  updateQueue = updateQueue
-    .then(() => updateBlockingRules(reason))
+function queueRulesUpdate(reason, options = {}) {
+  const pendingUpdate = updateQueue
+    .then(() => updateBlockingRules(reason));
+
+  updateQueue = pendingUpdate
     .catch((error) => {
       console.error('Rule update failed:', error);
     });
 
-  return updateQueue;
+  return options.propagateError === true ? pendingUpdate : updateQueue;
 }
 
 async function updateBlockingRules(reason) {
@@ -1280,6 +1302,81 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
   }
 
   return { domain, duration, expiresAt };
+}
+
+async function getActiveTemporaryAccess() {
+  const now = Date.now();
+  const [settings, temporaryAccess] = await Promise.all([
+    getSettings(),
+    getTemporaryAccess()
+  ]);
+  const cleanedAccess = removeExpiredTemporaryAccess(temporaryAccess, now);
+
+  if (cleanedAccess.changed) {
+    await saveTemporaryAccess(cleanedAccess.value);
+  }
+
+  const blockedDomains = new Set(
+    settings.blocklist
+      .map((entry) => normalizeDomain(entry.urlPattern))
+      .filter(Boolean)
+  );
+
+  return Object.entries(cleanedAccess.value)
+    .filter(([domain]) => blockedDomains.has(domain))
+    .map(([domain, entry]) => ({
+      domain,
+      grantedAt: entry.grantedAt,
+      expiresAt: entry.expiresAt,
+      duration: entry.duration
+    }))
+    .sort((first, second) => first.expiresAt - second.expiresAt);
+}
+
+async function revokeTemporaryAccess(urlPattern) {
+  const domain = normalizeDomain(urlPattern);
+  if (!domain) {
+    throw new Error('Invalid domain for temporary access');
+  }
+
+  const [settings, temporaryAccess] = await Promise.all([
+    getSettings(),
+    getTemporaryAccess()
+  ]);
+  const isBlocked = settings.blocklist.some(
+    (entry) => normalizeDomain(entry.urlPattern) === domain
+  );
+
+  if (!isBlocked) {
+    throw new Error('Site is no longer in the blocklist');
+  }
+
+  const activeGrant = temporaryAccess[domain];
+  if (!isDomainTemporarilyAccessible(domain, temporaryAccess, Date.now())) {
+    throw new Error('Temporary access is no longer active');
+  }
+
+  const nextTemporaryAccess = { ...temporaryAccess };
+  delete nextTemporaryAccess[domain];
+  await saveTemporaryAccess(nextTemporaryAccess);
+
+  try {
+    await queueRulesUpdate(`revoke:${domain}`, { propagateError: true });
+  } catch (error) {
+    try {
+      await saveTemporaryAccess({
+        ...nextTemporaryAccess,
+        [domain]: activeGrant
+      });
+      await queueRulesUpdate(`revoke-rollback:${domain}`, { propagateError: true });
+    } catch (rollbackError) {
+      console.error('Temporary access rollback failed:', rollbackError);
+    }
+
+    throw new Error('Unable to re-block this site right now. Try again.');
+  }
+
+  return { domain };
 }
 
 async function recordBlockedVisit(urlPattern) {

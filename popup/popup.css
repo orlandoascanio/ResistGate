@@ -303,6 +303,74 @@ input:focus {
   border-radius: 6px;
 }
 
+/* ── Active temporary access ────────────────────────────────────── */
+.active-access-list {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.active-access-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  background: var(--bg-subtle);
+}
+
+.active-access-meta {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.active-access-domain {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-access-countdown {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.reblock-now-btn {
+  flex-shrink: 0;
+  min-height: 32px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: var(--card);
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.reblock-now-btn:hover {
+  border-color: var(--primary);
+  background: var(--lavender);
+}
+
+.reblock-now-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.reblock-now-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /* ── Blocked sites list ─────────────────────────────────────────── */
 #blocked-sites-list {
   list-style: none;

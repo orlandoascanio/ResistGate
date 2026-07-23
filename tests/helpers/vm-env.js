@@ -60,6 +60,8 @@ export function createChromeMock() {
   let onMessageExternalHandler = null;
   const alarms = new Map();
   const createdTabs = [];
+  let sessionRules = [];
+  let nextRulesUpdateError = null;
 
   const chrome = {
     runtime: {
@@ -141,8 +143,19 @@ export function createChromeMock() {
       }
     },
     declarativeNetRequest: {
-      getSessionRules: async () => [],
-      updateSessionRules: async () => {}
+      getSessionRules: async () => [...sessionRules],
+      updateSessionRules: async ({ removeRuleIds = [], addRules = [] } = {}) => {
+        if (nextRulesUpdateError) {
+          const error = nextRulesUpdateError;
+          nextRulesUpdateError = null;
+          throw error;
+        }
+
+        const removeIds = new Set(removeRuleIds);
+        sessionRules = sessionRules
+          .filter((rule) => !removeIds.has(rule.id))
+          .concat(addRules);
+      }
     },
     action: {
       setBadgeText: () => {},
@@ -219,7 +232,11 @@ export function createChromeMock() {
     triggerInstalled,
     triggerStartup,
     triggerAlarm,
-    triggerStorageChanged
+    triggerStorageChanged,
+    getSessionRules: () => [...sessionRules],
+    failNextRulesUpdate(message = 'Rules update failed') {
+      nextRulesUpdateError = new Error(message);
+    }
   };
 }
 

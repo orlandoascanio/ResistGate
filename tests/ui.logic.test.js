@@ -8,6 +8,84 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
+function createPopupDomHarness() {
+  function makeElement() {
+    const classes = new Set();
+    const listeners = new Map();
+    const element = {
+      attributes: {},
+      children: [],
+      className: '',
+      disabled: false,
+      hidden: false,
+      parentNode: null,
+      style: {},
+      textContent: '',
+      title: '',
+      type: '',
+      classList: {
+        add: (...names) => names.forEach((name) => classes.add(name)),
+        remove: (...names) => names.forEach((name) => classes.delete(name)),
+        contains: (name) => classes.has(name),
+        toggle: (name, force) => {
+          const enabled = force === undefined ? !classes.has(name) : force;
+          if (enabled) classes.add(name);
+          else classes.delete(name);
+          return enabled;
+        }
+      },
+      addEventListener: (type, handler) => {
+        listeners.set(type, handler);
+      },
+      appendChild: (child) => {
+        child.parentNode = element;
+        element.children.push(child);
+        return child;
+      },
+      remove: () => {
+        if (!element.parentNode) return;
+        element.parentNode.children = element.parentNode.children.filter(
+          (child) => child !== element
+        );
+        element.parentNode = null;
+      },
+      setAttribute: (name, value) => {
+        element.attributes[name] = String(value);
+      },
+      trigger: (type) => listeners.get(type)?.()
+    };
+
+    Object.defineProperty(element, 'innerHTML', {
+      get: () => '',
+      set: () => {
+        element.children = [];
+      }
+    });
+
+    return element;
+  }
+
+  const elements = {
+    'active-access-section': makeElement(),
+    'active-access-list': makeElement(),
+    'status-announcement': makeElement()
+  };
+  elements['active-access-section'].classList.add('hidden');
+  const container = makeElement();
+
+  return {
+    elements,
+    makeElement,
+    document: {
+      addEventListener: () => {},
+      createElement: makeElement,
+      getElementById: (id) => elements[id] || makeElement(),
+      querySelector: (selector) => selector === '.container' ? container : null,
+      querySelectorAll: () => []
+    }
+  };
+}
+
 describe('UI copy and state logic', () => {
   it('keeps key product copy aligned with discipline positioning', () => {
     const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
@@ -192,6 +270,144 @@ describe('UI copy and state logic', () => {
     expect(hooks.normalizeDomainInput('HTTPS://WWW.YOUTUBE.COM/')).toBe('www.youtube.com');
     expect(hooks.getDisplayDomain('www.reddit.com')).toBe('reddit.com');
     expect(hooks.getDisplayDomain('m.reddit.com')).toBe('m.reddit.com');
+  });
+
+  it('renders, expires, and re-blocks active temporary access from the popup', async () => {
+    const popupHtml = fs.readFileSync(path.resolve(repoRoot, 'popup/popup.html'), 'utf8');
+    expect(popupHtml).toContain('id="active-access-section"');
+    expect(popupHtml).toContain('id="active-access-list"');
+    expect(popupHtml).toContain('Active access');
+
+    const dom = createPopupDomHarness();
+    const requests = [];
+    const pendingCallbacks = [];
+    const clearedIntervals = [];
+    let intervalId = 0;
+    const context = await loadScriptInVm('popup/popup.js', {
+      chrome: {
+        runtime: {
+          sendMessage: (request, callback) => {
+            requests.push(request);
+            pendingCallbacks.push(callback);
+          }
+        },
+        storage: {
+          local: {
+            get: () => {},
+            remove: () => {}
+          }
+        },
+        tabs: {
+          query: () => {}
+        }
+      },
+      document: dom.document,
+      window: {
+        addEventListener: () => {},
+        open: () => {}
+      },
+      setInterval: () => {
+        intervalId += 1;
+        return intervalId;
+      },
+      clearInterval: (id) => {
+        clearedIntervals.push(id);
+      }
+    });
+
+    const hooks = context.__RESISTGATE_POPUP_TEST_HOOKS__;
+    const now = Date.now();
+    expect(hooks.formatActiveAccessCountdown(522_000)).toBe('8:42 remaining');
+    expect(hooks.formatActiveAccessCountdown(3_661_000)).toBe('1:01:01 remaining');
+    expect(hooks.normalizeActiveAccessGrants([
+      { domain: 'reddit.com', expiresAt: now + 60_000 },
+      { domain: 'expired.com', expiresAt: now - 1 },
+      { domain: 'youtube.com', expiresAt: now + 30_000 }
+    ], now).map((entry) => entry.domain)).toEqual([
+      'youtube.com',
+      'reddit.com'
+    ]);
+
+    hooks.renderActiveTemporaryAccess([
+      { domain: 'www.reddit.com', expiresAt: now + 522_000 }
+    ]);
+
+    const section = dom.elements['active-access-section'];
+    const list = dom.elements['active-access-list'];
+    expect(section.classList.contains('hidden')).toBe(false);
+    expect(list.children).toHaveLength(1);
+    const row = list.children[0];
+    const button = row.children[1];
+    expect(button.textContent).toBe('Re-block now');
+    expect(button.attributes['aria-label']).toBe('Re-block reddit.com now');
+    expect(row.children[0].children[1].textContent).toMatch(/remaining$/);
+
+    hooks.reblockTemporaryAccess('www.reddit.com', button);
+    expect(requests.at(-1)).toEqual({
+      action: 'revokeTemporaryAccess',
+      domain: 'www.reddit.com'
+    });
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Re-blocking…');
+
+    pendingCallbacks.shift()({ success: true });
+    expect(requests.at(-1)).toEqual({ action: 'getActiveTemporaryAccess' });
+    pendingCallbacks.shift()({ success: true, access: [] });
+    expect(section.classList.contains('hidden')).toBe(true);
+    expect(clearedIntervals.length).toBeGreaterThan(0);
+  });
+
+  it('retains active access after a failed re-block and refreshes expired rows', async () => {
+    const dom = createPopupDomHarness();
+    const requests = [];
+    const pendingCallbacks = [];
+    const context = await loadScriptInVm('popup/popup.js', {
+      chrome: {
+        runtime: {
+          sendMessage: (request, callback) => {
+            requests.push(request);
+            pendingCallbacks.push(callback);
+          }
+        },
+        storage: {
+          local: {
+            get: () => {},
+            remove: () => {}
+          }
+        },
+        tabs: {
+          query: () => {}
+        }
+      },
+      document: dom.document,
+      window: {
+        addEventListener: () => {},
+        open: () => {}
+      },
+      setInterval: () => 7,
+      clearInterval: () => {}
+    });
+
+    const hooks = context.__RESISTGATE_POPUP_TEST_HOOKS__;
+    const expiresAt = Date.now() + 60_000;
+    hooks.renderActiveTemporaryAccess([{ domain: 'reddit.com', expiresAt }]);
+
+    const button = dom.elements['active-access-list'].children[0].children[1];
+    hooks.reblockTemporaryAccess('reddit.com', button);
+    pendingCallbacks.shift()({ success: false, error: 'Unable to re-block this site right now.' });
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toBe('Re-block now');
+    expect(requests.at(-1)).toEqual({ action: 'getActiveTemporaryAccess' });
+
+    pendingCallbacks.shift()({
+      success: true,
+      access: [{ domain: 'reddit.com', expiresAt }]
+    });
+    expect(dom.elements['active-access-section'].classList.contains('hidden')).toBe(false);
+
+    hooks.tickActiveAccessCountdowns(expiresAt + 1);
+    expect(requests.at(-1)).toEqual({ action: 'getActiveTemporaryAccess' });
+    hooks.clearActiveAccessCountdown();
   });
 
   it('wires the whats-new buttons through an external script', async () => {

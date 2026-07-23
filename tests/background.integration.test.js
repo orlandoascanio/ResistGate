@@ -486,6 +486,131 @@ describe('ResistGate background integration', () => {
     expect(validChallenge.success).toBe(true);
   });
 
+  it('lists active Free-tier access and re-blocks one domain immediately', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [
+      { id: 'active-1', urlPattern: 'reddit.com', createdAt: Date.now() },
+      { id: 'active-2', urlPattern: 'youtube.com', createdAt: Date.now() }
+    ];
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+
+    expect((await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 10
+    })).success).toBe(true);
+    expect((await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'youtube.com',
+      duration: 5
+    })).success).toBe(true);
+
+    const active = await env.sendMessage({ action: 'getActiveTemporaryAccess' });
+    expect(active.success).toBe(true);
+    expect(active.access.map((entry) => entry.domain)).toEqual([
+      'youtube.com',
+      'reddit.com'
+    ]);
+
+    const revoked = await env.sendMessage({
+      action: 'revokeTemporaryAccess',
+      domain: 'reddit.com'
+    });
+    expect(revoked).toEqual({
+      success: true,
+      access: { domain: 'reddit.com' }
+    });
+    expect(env.storageData.temporaryAccess['reddit.com']).toBeUndefined();
+    expect(env.storageData.temporaryAccess['youtube.com']).toBeDefined();
+
+    const alarms = await env.chrome.alarms.getAll();
+    expect(alarms.some((alarm) => alarm.name === 'resistgate-access-expire-reddit.com')).toBe(false);
+    expect(alarms.some((alarm) => alarm.name === 'resistgate-access-expire-youtube.com')).toBe(true);
+
+    const rules = env.getSessionRules();
+    expect(rules.some((rule) => rule.condition.urlFilter === '||reddit.com^')).toBe(true);
+    expect(rules.some((rule) => rule.condition.urlFilter === '||youtube.com^')).toBe(false);
+  });
+
+  it('rejects invalid, missing, and removed active-access grants without touching other domains', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [
+      { id: 'active-3', urlPattern: 'reddit.com', createdAt: Date.now() },
+      { id: 'active-4', urlPattern: 'youtube.com', createdAt: Date.now() }
+    ];
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+    expect((await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'youtube.com',
+      duration: 5
+    })).success).toBe(true);
+
+    const invalid = await env.sendMessage({
+      action: 'revokeTemporaryAccess',
+      domain: 'not a domain'
+    });
+    expect(invalid.success).toBe(false);
+    expect(invalid.error).toContain('Invalid domain');
+
+    const missing = await env.sendMessage({
+      action: 'revokeTemporaryAccess',
+      domain: 'reddit.com'
+    });
+    expect(missing.success).toBe(false);
+    expect(missing.error).toContain('no longer active');
+    expect(env.storageData.temporaryAccess['youtube.com']).toBeDefined();
+
+    const nextSettings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    nextSettings.blocklist = nextSettings.blocklist.filter(
+      (entry) => entry.urlPattern !== 'youtube.com'
+    );
+    expect((await env.sendMessage({
+      action: 'updateSettings',
+      settings: nextSettings
+    })).success).toBe(true);
+
+    const active = await env.sendMessage({ action: 'getActiveTemporaryAccess' });
+    expect(active.access).toEqual([]);
+
+    const removed = await env.sendMessage({
+      action: 'revokeTemporaryAccess',
+      domain: 'youtube.com'
+    });
+    expect(removed.success).toBe(false);
+    expect(removed.error).toContain('no longer in the blocklist');
+  });
+
+  it('restores temporary access when the immediate re-block rule update fails', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [
+      { id: 'active-5', urlPattern: 'reddit.com', createdAt: Date.now() }
+    ];
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+    expect((await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 10
+    })).success).toBe(true);
+
+    const originalGrant = { ...env.storageData.temporaryAccess['reddit.com'] };
+    env.failNextRulesUpdate('DNR unavailable');
+
+    const response = await env.sendMessage({
+      action: 'revokeTemporaryAccess',
+      domain: 'reddit.com'
+    });
+
+    expect(response.success).toBe(false);
+    expect(response.error).toContain('Unable to re-block');
+    expect(env.storageData.temporaryAccess['reddit.com']).toEqual(originalGrant);
+    expect(env.getSessionRules().some(
+      (rule) => rule.condition.urlFilter === '||reddit.com^'
+    )).toBe(false);
+    expect((await env.chrome.alarms.getAll()).some(
+      (alarm) => alarm.name === 'resistgate-access-expire-reddit.com'
+    )).toBe(true);
+  });
+
   it('generates weekly report with correct score formula and trend', async () => {
     await activateProForTest();
 
