@@ -10,7 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [1.4.2] - 2026-07-18
+## [1.4.3] - 2026-07-23
+
+This release gives you more control after opening a blocked site, makes it easier to support ResistGate, and keeps the extension’s intended look consistent everywhere.
+
+### Added (Free)
+- **End a distracting visit early.** The popup now shows every blocked site that currently has temporary access, along with a live countdown. Select **Re-block now** to close that access window immediately instead of waiting for it to expire.
+- **Leave a review without hunting for the store page.** The popup and Options now include a **Rate ResistGate ⭐** button that opens the Chrome Web Store review screen directly. If ResistGate has helped you, you can leave a review just like the amazing Omar did. Thank you, Omar.
 
 ### Fixed
 - **The brand typeface silently fell back on every page.** Popup, the friction page, and Commitment Mode fetched Plus Jakarta Sans from `fonts.googleapis.com`; if that request failed (offline, a blocked host, a corporate network) the page rendered in the OS default font with no error and no indication anything was wrong. Options, the Intention Page, and What's New never fetched it at all — `--font-family-base` named the font, but nothing ever loaded it, so those pages were silently on the system stack from the start. The welcome page had the same problem with a second, off-brand font (`Inter`) that was never loaded anywhere. All extension pages now self-host Plus Jakarta Sans (`shared/fonts.css`, ~64KB total) and load nothing from Google at page render — one consistent typeface, no network dependency, no undocumented external call.
