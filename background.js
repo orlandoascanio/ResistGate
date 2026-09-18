@@ -148,14 +148,54 @@ function getLifecyclePageUrl(details, urls) {
   }
 
   if (details.reason === 'update') {
+    const currentVersion = getCurrentExtensionVersion();
+    if (!isMeaningfulUpdate(details.previousVersion, currentVersion)) {
+      return null;
+    }
+
     const url = new URL(urls.update);
     if (typeof details.previousVersion === 'string' && details.previousVersion.length > 0) {
       url.searchParams.set('from', details.previousVersion);
+    }
+    if (currentVersion) {
+      url.searchParams.set('to', currentVersion);
     }
     return url.toString();
   }
 
   return null;
+}
+
+function getCurrentExtensionVersion() {
+  try {
+    const version = chrome.runtime?.getManifest ? chrome.runtime.getManifest()?.version : null;
+    return typeof version === 'string' && version ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseExtensionVersion(value) {
+  const match = /^(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(String(value || '').trim());
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3] || 0)] : null;
+}
+
+// Only a new minor or major version opens the "what's new" tab. Reloading an unpacked
+// build (Chrome reports it as an update to the same version), a downgrade, and patch
+// releases stay quiet: a tab on every release teaches people to close it unread.
+// When either version can't be read, err on the side of showing the page.
+function isMeaningfulUpdate(previousVersion, currentVersion) {
+  const previous = parseExtensionVersion(previousVersion);
+  const current = parseExtensionVersion(currentVersion);
+  if (!previous || !current) {
+    return true;
+  }
+
+  if (current[0] !== previous[0]) {
+    return current[0] > previous[0];
+  }
+
+  return current[1] > previous[1];
 }
 
 function openLifecyclePage(details, urls) {

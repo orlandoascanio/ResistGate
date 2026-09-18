@@ -235,7 +235,10 @@ For bug fixes, add a regression test that reproduces the failing condition befor
 ## Release Checklist
 
 1. Bump `manifest.json` and `package.json`.
-2. Update `changelog.md`.
+2. Update `changelog.md`, and add the release to `client/app/lib/resistgate-releases.ts` in the website repo
+   (`Profesional-Portfolio`): it feeds both the website changelog and the post-update page. Only a new minor or
+   major version opens that page after an update (`isMeaningfulUpdate()` in `background.js`); same-version reloads,
+   downgrades, and patch releases do not.
 3. Run `npm run test:coverage`.
 4. Manually smoke-test popup, options, Intention Page, friction page, Commitment Mode, schedule, temporary access, and work-timer access conditions.
 5. Tag with `vX.Y.Z` to trigger the release workflow.

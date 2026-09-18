@@ -580,6 +580,30 @@ describe('Feature Matrix Coverage', () => {
       expect(env.createdTabs[env.createdTabs.length - 1].url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.0.0');
     });
 
+    it('onInstalled passes the new version so the update page can check the jump', async () => {
+      env.chrome.runtime.getManifest = () => ({ version: '1.5.0' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.4.3' });
+      expect(env.createdTabs.at(-1).url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.4.3&to=1.5.0');
+    });
+
+    it('onInstalled stays quiet for same-version reloads, downgrades, and patch releases', async () => {
+      env.chrome.runtime.getManifest = () => ({ version: '1.5.1' });
+      const tabsBefore = env.createdTabs.length;
+
+      // Reloading an unpacked build reports an "update" to the same version.
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.5.1' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.5.0' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.6.0' });
+
+      expect(env.createdTabs.length).toBe(tabsBefore);
+    });
+
+    it('onInstalled opens the update page for a new major version', async () => {
+      env.chrome.runtime.getManifest = () => ({ version: '2.0.0' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '1.9.4' });
+      expect(env.createdTabs.at(-1).url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.9.4&to=2.0.0');
+    });
+
     it('onInstalled does not open lifecycle pages for browser or shared module updates', async () => {
       await env.triggerInstalled({ reason: 'chrome_update' });
       await env.triggerInstalled({ reason: 'shared_module_update' });

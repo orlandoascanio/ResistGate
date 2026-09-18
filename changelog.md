@@ -26,6 +26,7 @@ A settings page that saves itself, tells you what's wrong before it matters, and
 - **The destination and your reason stay in view** while you type (*→ reddit.com · "Reply to the mod message"*).
 - **Moderate mode is always two sentences**, instead of randomly one or two.
 - **Screen readers no longer announce the character count on every keystroke**; they hear when each paragraph is done.
+- **The "what's new" tab opens less often.** It now opens only for a new minor or major version, not for patch releases, and never when an extension is reloaded at the same version. It also tells the website which version you moved to, so the page can list every release you skipped.
 
 ### Added (Free)
 - **Paste a list of sites.** The site box accepts several domains at once, separated by commas, spaces, or new lines (paste a column straight from a note). ResistGate says what it blocked, what was already blocked, and what it couldn't read, and leaves anything unreadable in the box so you can fix it.
