@@ -59,7 +59,7 @@ ResistGate is a Chrome website blocker built around intentional friction: users 
 | P1 | Outcome tap prompt does not persist responses because popup sends the wrong message shape. | Captured in `docs/Implementation.md` and `TODOS.md`. |
 | P2 | Pro cancellation/refund downgrade is not handled by this repo. | Website/product decision needed before scale. |
 | P2 | UI files have low line coverage compared with `background.js`. | Add focused regression tests as UI behavior changes. |
-| P3 | `WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are declared but unused. | Remove or wire into lifecycle display logic. |
+| P3 | `WELCOME_SHOWN_KEY` is declared but unused. | Remove or wire into lifecycle display logic. |
 
 ## Chrome Web Store Keywords
 

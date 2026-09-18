@@ -28,8 +28,7 @@
       "resources": [
         "welcome/welcome.html",
         "commitment-page/index.html",
-        "intention-page/index.html",
-        "whats-new/whats-new.html"
+        "intention-page/index.html"
       ],
       "matches": [
         "<all_urls>"

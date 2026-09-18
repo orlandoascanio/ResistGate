@@ -13,7 +13,6 @@ ResistGate/
 ├── intention-page/        — standalone pause + short challenge page
 ├── commitment-page/       — Commitment Mode lockout page
 ├── welcome/               — first-install onboarding page (welcome.html, welcome.css, welcome.js)
-├── whats-new/             — update notes page
 ├── shared/                — shared CSS design-system tokens/utilities
 ├── vendor/                — vendored Sentry runtime + init
 ├── icons/                 — extension icon assets (16×16, 48×48, 128×128)
@@ -108,7 +107,6 @@ All persistence uses `chrome.storage.local` exclusively (never `chrome.storage.s
 | `WORK_TIMER_KEY`     | `'workTimer'`       | `sanitizeWorkTimer()`        |
 | `PENDING_OUTCOME_TAP_KEY` | `'pendingOutcomeTap'` | `sanitizePendingOutcomeTap()` exists; startup does not currently normalize this key |
 | `WELCOME_SHOWN_KEY`  | `'welcomeShown'`    | Declared but unused          |
-| `WHATS_NEW_SHOWN_KEY` | `'whatsNewShown'`  | Declared but unused          |
 
 All reads and writes go through promise-wrapping utilities `getFromStorage(key)` / `setInStorage(key, value)`. On initialization every domain is read, sanitized, and written back if the value changed.
 
@@ -260,7 +258,6 @@ Each script exposes internal functions for unit-level testing via a `globalThis`
 | `friction-page/script.js` | `__RESISTGATE_FRICTION_TEST_HOOKS__` |
 | `intention-page/script.js` | `__RESISTGATE_INTENTION_TEST_HOOKS__` |
 | `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
-| `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
 
 When adding new logic to any of these files, expose the relevant pure functions through the existing hook object.
 

@@ -209,7 +209,6 @@ intention-page/        — standalone pause + short challenge page
 friction-page/         — typing challenge + manual override (index.html/css/js)
 commitment-page/       — lockout page for Commitment Mode (index.html/css/js)
 welcome/               — onboarding page
-whats-new/             — update notes page
 shared/                — shared CSS design tokens/utilities
 vendor/                — Sentry bundle + init
 icons/                 — extension icons

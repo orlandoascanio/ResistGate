@@ -161,7 +161,7 @@ Recommended next tests:
 
 ### P3: Unused Storage Constants
 
-`WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are declared in `background.js` but are not read or written.
+`WELCOME_SHOWN_KEY` is declared in `background.js` but is not read or written.
 
 Recommended fix:
 

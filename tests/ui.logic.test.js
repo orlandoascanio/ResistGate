@@ -93,7 +93,6 @@ describe('UI copy and state logic', () => {
     const popupHtml = fs.readFileSync(path.resolve(repoRoot, 'popup/popup.html'), 'utf8');
     const frictionHtml = fs.readFileSync(path.resolve(repoRoot, 'friction-page/index.html'), 'utf8');
     const intentionHtml = fs.readFileSync(path.resolve(repoRoot, 'intention-page/index.html'), 'utf8');
-    const whatsNewHtml = fs.readFileSync(path.resolve(repoRoot, 'whats-new/whats-new.html'), 'utf8');
 
     expect(popupHtml).toContain('Block distractions before autopilot takes over.');
     expect(popupHtml).toContain('Block this tab\'s site');
@@ -140,9 +139,6 @@ describe('UI copy and state logic', () => {
     expect(intentionHtml).toContain('Optional intent check');
     expect(intentionHtml).toContain('Avoidance');
     expect(intentionHtml).not.toContain('Today’s budget');
-    expect(whatsNewHtml).toContain('Your intention, front and center.');
-    expect(whatsNewHtml).toContain('Release highlights');
-    expect(whatsNewHtml).toContain('Set your first intention');
   });
 
   it('lets the user pick a plan inside the extension before checkout opens', () => {
@@ -694,99 +690,5 @@ describe('Options settings helpers', () => {
     hooks.tickActiveAccessCountdowns(expiresAt + 1);
     expect(requests.at(-1)).toEqual({ action: 'getActiveTemporaryAccess' });
     hooks.clearActiveAccessCountdown();
-  });
-
-  it('wires the whats-new buttons through an external script', async () => {
-    const makeElement = () => {
-      const listeners = new Map();
-
-      return {
-        disabled: false,
-        hidden: false,
-        textContent: '',
-        dataset: {},
-        classList: {
-          add: () => {},
-          remove: () => {},
-          toggle: () => {}
-        },
-        addEventListener: (type, handler) => {
-          listeners.set(type, handler);
-        },
-        getHandler: (type) => listeners.get(type)
-      };
-    };
-
-    const elements = {
-      '#version-badge': makeElement(),
-      '#release-date': makeElement(),
-      '#open-options-btn': makeElement(),
-      '#close-btn': makeElement(),
-      '#close-icon-btn': makeElement(),
-      '#upgrade-link': makeElement(),
-      '#footer-cta': makeElement(),
-      '#status-message': makeElement()
-    };
-
-    let domContentLoadedHandler = null;
-    let windowClosed = false;
-    let openOptionsCalled = false;
-    const sentMessages = [];
-
-    const context = await loadScriptInVm('whats-new/whats-new.js', {
-      chrome: {
-        runtime: {
-          getManifest: () => ({ version: '9.9.9' }),
-          openOptionsPage: (callback) => {
-            openOptionsCalled = true;
-            callback?.();
-          },
-          sendMessage: (payload, callback) => {
-            sentMessages.push(payload);
-            callback({ settings: { subscription: { tier: 'free' } } });
-          },
-          lastError: null
-        }
-      },
-      document: {
-        addEventListener: (type, handler) => {
-          if (type === 'DOMContentLoaded') {
-            domContentLoadedHandler = handler;
-          }
-        },
-        querySelector: (selector) => elements[selector] || null
-      },
-      window: {
-        close: () => {
-          windowClosed = true;
-        },
-        setTimeout: (callback) => {
-          callback();
-          return 1;
-        }
-      }
-    });
-
-    expect(context.__RESISTGATE_WHATSNEW_TEST_HOOKS__).toBeTruthy();
-    expect(typeof domContentLoadedHandler).toBe('function');
-
-    domContentLoadedHandler();
-
-    expect(elements['#version-badge'].textContent).toBe('v9.9.9');
-
-    elements['#open-options-btn'].getHandler('click')({ currentTarget: elements['#open-options-btn'] });
-    expect(openOptionsCalled).toBe(true);
-    expect(windowClosed).toBe(true);
-
-    windowClosed = false;
-    elements['#upgrade-link'].getHandler('click')({ preventDefault: () => {}, currentTarget: elements['#upgrade-link'] });
-    await Promise.resolve();
-    expect(sentMessages).toContainEqual({ action: 'openPricingPage' });
-    expect(windowClosed).toBe(true);
-
-    windowClosed = false;
-    context.__RESISTGATE_WHATSNEW_TEST_HOOKS__.handleClose();
-    expect(windowClosed).toBe(true);
-    expect(elements['#status-message'].textContent).toBe('You can close this tab now.');
   });
 });

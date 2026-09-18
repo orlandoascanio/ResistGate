@@ -5,7 +5,6 @@ const TEMP_ACCESS_KEY = 'temporaryAccess';
 const ANALYTICS_KEY = 'analytics';
 const OVERRIDE_STATE_KEY = 'overrideState';
 const WELCOME_SHOWN_KEY = 'welcomeShown';
-const WHATS_NEW_SHOWN_KEY = 'whatsNewShown';
 const INSTALLATION_KEY = 'installation';
 
 const BLOCK_ALARM_PREFIX = 'resistgate-block-expire-';
@@ -29,7 +28,6 @@ const POSTHOG_HOST = 'https://us.i.posthog.com';
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   'install',
   'update',
-  'update_seen',
   'onboarding_start',
   'blocklist_created',
   'first_block_hit',
@@ -328,6 +326,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       await initializeExtension('message');
 
       switch (request.action) {
+        case 'getWelcomeState': {
+          try {
+            sendResponse({ success: true, ...await getWelcomeState() });
+          } catch (err) {
+            sendResponse({ success: false, error: err.message });
+          }
+          return;
+        }
+
+        case 'saveWelcomeSetup':
+        case 'saveWelcomeReminder': {
+          try {
+            const operation = welcomeWriteQueue.then(() => saveWelcomeChange(request));
+            welcomeWriteQueue = operation.catch((err) => console.warn('Welcome setup failed:', err.message));
+            sendResponse({ success: true, ...await operation });
+          } catch (err) {
+            sendResponse({ success: false, error: err.message });
+          }
+          return;
+        }
+
         case 'grantTemporaryAccess': {
           const result = await grantTemporaryAccess(
             request.urlPattern,
@@ -760,6 +779,35 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return true;
   }
 
+  if (request.action === 'getOnboardingState' || request.action === 'openOnboarding') {
+    void (async () => {
+      try {
+        await initializeExtension('external-onboarding');
+        if (request.action === 'openOnboarding') {
+          const section = request.section ?? 'setup';
+          if (!['setup', 'difficulty', 'preview'].includes(section)) {
+            throw new Error('Unknown setup section');
+          }
+          await chrome.tabs.create({ url: `${chrome.runtime.getURL('welcome/welcome.html')}#${section}` });
+          sendResponse({ success: true });
+          return;
+        }
+        const { settings, activeDomains } = await getWelcomeState();
+        sendResponse({ success: true, state: {
+          siteCount: settings.blocklist.length,
+          activeSiteCount: activeDomains.length,
+          enabled: settings.enabled,
+          level: settings.challengeTypes.typing.level,
+          accessMinutes: settings.defaultAccessDuration,
+          intentionEnabled: settings.proFeatures.intentionPage.enabled
+        } });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
   // Lets the pricing page confirm the extension is reachable before it promises instant activation.
   if (request.action === 'getActivationState') {
     void (async () => {
@@ -777,6 +825,64 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   sendResponse({ success: false, error: 'Unknown action' });
   return false;
 });
+
+// Welcome writes merge with current settings instead of sending an old full snapshot.
+let welcomeWriteQueue = Promise.resolve();
+
+async function getWelcomeState() {
+  await queueRulesUpdate('welcome-state');
+  const settings = await getSettings();
+  const rules = await chrome.declarativeNetRequest.getSessionRules();
+  const activeDomains = settings.blocklist
+    .filter((entry) => rules.some((rule) => rule.condition.urlFilter === `||${entry.urlPattern}^`))
+    .map((entry) => entry.urlPattern);
+  return { settings, activeDomains };
+}
+
+function validateWelcomeDomain(value) {
+  const domain = normalizeDomain(value);
+  if (!domain || domain.length > 253 || !domain.split('.').every((label) =>
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
+    throw new Error('Enter a website such as reddit.com or paste its https:// address.');
+  }
+  return domain.replace(/^www\./, '');
+}
+
+async function saveWelcomeChange(request) {
+  const settings = await getSettings();
+  let savedDomain;
+  if (isCommitmentModeActive(settings, Date.now())) {
+    throw new Error('Commitment Mode is active. Setup is locked until it expires.');
+  }
+  if (isConfigurationLocked(settings, Date.now())) {
+    throw new Error('Strict Mode is active. Change setup after your focus window ends.');
+  }
+  if (request.action === 'saveWelcomeReminder') {
+    const domain = validateWelcomeDomain(request.domain);
+    const entry = settings.blocklist.find((site) => site.urlPattern.replace(/^www\./, '') === domain);
+    if (!entry) throw new Error('This site is no longer in your blocklist. Add it again first.');
+    if (typeof request.personalGoal !== 'string' || request.personalGoal.length > 200) {
+      throw new Error('Keep your reminder to 200 characters or fewer.');
+    }
+    entry.personalGoal = request.personalGoal.trim();
+    savedDomain = entry.urlPattern;
+  } else {
+    const levels = { easy: 1, moderate: 2, hard: 3 };
+    if (!Object.hasOwn(levels, request.level)) throw new Error('Choose Easy, Moderate, or Hard.');
+    if (request.domain) {
+      const domain = validateWelcomeDomain(request.domain);
+      const exists = settings.blocklist.some((site) => site.urlPattern.replace(/^www\./, '') === domain);
+      if (!exists) settings.blocklist.push({ id: `${Date.now()}-${domain}`, urlPattern: domain, createdAt: Date.now() });
+      savedDomain = settings.blocklist.find((site) => site.urlPattern.replace(/^www\./, '') === domain).urlPattern;
+    } else if (!settings.blocklist.length) {
+      throw new Error('Choose or enter your first website.');
+    }
+    settings.challengeTypes.typing.level = request.level;
+    settings.challengeTypes.typing.difficulty = levels[request.level];
+  }
+  await saveSettings(settings);
+  return { ...await getWelcomeState(), savedDomain };
+}
 
 // ── Billing and entitlement ───────────────────────────────────────
 // The extension never decides who is Pro. It creates a server checkout session,
@@ -3200,6 +3306,9 @@ function setInStorage(value) {
 
 if (typeof globalThis !== 'undefined') {
   globalThis.__RESISTGATE_TEST_HOOKS__ = {
+    validateWelcomeDomain,
+    getWelcomeState,
+    saveWelcomeChange,
     sanitizeSettings,
     sanitizeTypingChallengeLevel,
     sanitizeCustomChallengePhrase,

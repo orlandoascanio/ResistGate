@@ -19,7 +19,7 @@ ResistGate has four runtime layers:
    - `intention-page/`: standalone pause layer and short challenge when the Intention Page is enabled.
    - `friction-page/`: fallback/full challenge page, manual override, Pro behavioral prechecks, temptation bundle progress.
    - `commitment-page/`: lockout page shown while Commitment Mode is active.
-   - `welcome/` and `whats-new/`: lifecycle/support pages.
+   - `welcome/`: lifecycle/support page.
 
 3. Local storage
    - All user and runtime data uses `chrome.storage.local`.
@@ -41,7 +41,7 @@ ResistGate has four runtime layers:
 | Options | `options/options.html` |
 | Permissions | `declarativeNetRequest`, `storage`, `alarms`, `tabs` |
 | Host permissions | `<all_urls>` |
-| Web resources | `welcome/`, `commitment-page/`, `intention-page/`, `whats-new/` |
+| Web resources | `welcome/`, `commitment-page/`, `intention-page/` |
 | External origins | localhost dev URL plus website matches in manifest; handler only trusts the website origins |
 | CSP connect-src | Sentry and PostHog ingest endpoints |
 
@@ -63,7 +63,6 @@ The broad host permission is what allows DNR rules to match user-configured doma
 | `WORK_TIMER_KEY` | `workTimer` | Current-day work timer state | `sanitizeWorkTimer()` |
 | `PENDING_OUTCOME_TAP_KEY` | `pendingOutcomeTap` | Recent expired access prompt for popup reflection | `sanitizePendingOutcomeTap()` exists, but startup does not currently normalize this key |
 | `WELCOME_SHOWN_KEY` | `welcomeShown` | Declared but currently unused | none |
-| `WHATS_NEW_SHOWN_KEY` | `whatsNewShown` | Declared but currently unused | none |
 
 All storage reads and writes go through `getFromStorage()` and `setInStorage()`, except a few UI-side reads for popup-only ephemeral prompts.
 
@@ -203,7 +202,7 @@ Sentry:
 ## Known Architecture Risks
 
 - `pendingOutcomeTap` is written by the access-expiry alarm and rendered by the popup, but the popup sends the wrong shape to `recordAnalyticsEvent`, so the response is not currently persisted.
-- `WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are declared but unused.
+- `WELCOME_SHOWN_KEY` is declared but unused.
 - Several UI scripts duplicate domain normalization instead of sharing a module. This is a tradeoff of the no-build-step architecture.
 - `options/options.js`, `popup/popup.js`, and `friction-page/script.js` have low line coverage even though background coverage meets the stricter threshold.
 - `<all_urls>` is broad and should be justified in Chrome Web Store copy.

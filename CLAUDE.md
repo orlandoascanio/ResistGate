@@ -62,7 +62,6 @@ All storage is local-only. Do not introduce `chrome.storage.sync` without a deli
 | `gateOutcomes` | Today's gate outcomes (`resisted` / `accessed`), capped at 100; drives the "gone back N of the last M times" streak line |
 | `gateReminders` | Pending "remind me in 10 min" destinations, keyed by blocked domain |
 | `welcomeShown` | Declared but currently unused |
-| `whatsNewShown` | Declared but currently unused |
 
 Storage reads/writes in the service worker go through `getFromStorage()` and `setInStorage()`.
 
@@ -183,7 +182,6 @@ Note: current code and tests treat per-site access condition setup as free.
 | `friction-page/script.js` | Full challenge with live mismatch highlighting, access-window picker (shorter window = lighter challenge), manual override with cancel, Pro precheck, access-condition progress, exits on every step |
 | `commitment-page/script.js` | Commitment Mode countdown page |
 | `welcome/welcome.js` | Onboarding lifecycle page |
-| `whats-new/whats-new.js` | Release notes page actions and update-seen telemetry |
 
 ## Testing
 
@@ -197,13 +195,12 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 | `friction-page/script.js` | `__RESISTGATE_FRICTION_TEST_HOOKS__` |
 | `intention-page/script.js` | `__RESISTGATE_INTENTION_TEST_HOOKS__` |
 | `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
-| `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
 
 Current verified state on 2026-09-18:
 
-- `npm test`: 5 files, 236 tests passing.
+- `npm test`: 5 files, 238 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 89.72% lines/statements, 78.82% branches, 97.5% functions.
+- `background.js`: 89.84% lines/statements, 79.64% branches, 97.56% functions.
 
 `tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
 run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.
@@ -264,7 +261,7 @@ lock state (active Commitment Mode, pending Strict Mode disable). `updateSetting
 ## Known Issues To Respect
 
 - `pendingOutcomeTap` is partially implemented, but popup responses are not currently persisted because the message payload shape is wrong. See `docs/Implementation.md`.
-- `WELCOME_SHOWN_KEY` and `WHATS_NEW_SHOWN_KEY` are unused.
+- `WELCOME_SHOWN_KEY` is unused.
 - UI line coverage is much lower than background coverage; add focused tests when touching UI behavior.
 
 ## Skill routing
