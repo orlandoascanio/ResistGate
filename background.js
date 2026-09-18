@@ -318,6 +318,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        case 'getTodaySummary': {
+          const summary = await getTodaySummary();
+          sendResponse({ success: true, summary });
+          return;
+        }
+
         case 'recordAnalyticsEvent': {
           await recordAnalyticsEvent(request.type, request.domain);
           sendResponse({ success: true });
@@ -1448,6 +1454,29 @@ async function getResistanceCount(domain) {
   const data = result[RESISTANCE_COUNTERS_KEY] || {};
   const todayData = data[today] || {};
   return todayData[domain] || 0;
+}
+
+// Free-tier progress: today's blocked attempts, from the same counters that drive the badge.
+// Deliberately not Pro-gated — the full dashboard is, but a free user should still see
+// that the gate is doing something.
+async function getTodaySummary() {
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([DAILY_COUNT_KEY, RESISTANCE_COUNTERS_KEY]);
+  const daily = result[DAILY_COUNT_KEY] || {};
+  const counters = result[RESISTANCE_COUNTERS_KEY] || {};
+  const todayCounters = (counters[today] && typeof counters[today] === 'object') ? counters[today] : {};
+
+  const topDomains = Object.entries(todayCounters)
+    .map(([domain, count]) => ({ domain, count: Number(count) || 0 }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain))
+    .slice(0, 3);
+
+  return {
+    date: today,
+    blockedToday: daily.date === today ? (Number(daily.count) || 0) : 0,
+    topDomains
+  };
 }
 
 async function recordAnalyticsEvent(type, domain) {
@@ -2616,7 +2645,7 @@ async function getAnalyticsDashboard() {
 
   return {
     generatedAt: now,
-    periodLabel: `${last7Days[0].dateKey} to ${last7Days[last7Days.length - 1].dateKey}`,
+    periodLabel: formatPeriodLabel(last7Days[0].startMs, last7Days[last7Days.length - 1].startMs),
     totals: {
       blockedAttempts: blockedEvents.length,
       overrides: overrideEvents.length,
@@ -2652,12 +2681,15 @@ async function getWeeklyReport() {
     previousOverrides: previous.overrides
   });
 
-  const highlights = [
-    `Discipline score: ${focusScore}/100.`,
-    `Overrides this week: ${current.overrides}.`,
-    `Top distraction domains: ${current.topDistractionDomains.map((entry) => entry.domain).join(', ') || 'None'}.`,
-    `Trend vs last week: ${formatSignedNumber(trendVsLastWeek)} points.`
-  ];
+  const settings = await getSettings();
+  const peakUrgeWindow = findPeakUrgeWindow(current.hourlyUrges, current.blockedAttempts);
+  const recommendation = buildWeeklyRecommendation({
+    settings,
+    peakUrgeWindow,
+    siteHoldRates: current.siteHoldRates,
+    overrides: current.overrides
+  });
+
   const risks = [];
   if (current.overrides > 8) {
     risks.push('Overrides went up. Add a longer wait before manual unlock.');
@@ -2670,14 +2702,18 @@ async function getWeeklyReport() {
   }
 
   return {
-    periodLabel: `${currentRange.startDate} to ${currentRange.endDate}`,
+    periodLabel: formatPeriodLabel(currentRange.startMs, currentRange.endMs),
     focusScore,
     overridesThisWeek: current.overrides,
     manualDisableCount: current.manualDisableCount,
     topDistractionDomains: current.topDistractionDomains,
     trendVsLastWeek,
     feedbackLine,
-    highlights,
+    hourlyUrges: current.hourlyUrges,
+    peakUrgeWindow,
+    siteHoldRates: current.siteHoldRates,
+    scheduleWindow: getScheduleWindowMeta(settings),
+    recommendation,
     risks,
     totals: {
       blockedAttempts: current.blockedAttempts,
@@ -2724,6 +2760,138 @@ function getRollingWeekRange(weeksBack) {
   };
 }
 
+function formatPeriodLabel(startMs, endMs) {
+  const start = new Date(startMs);
+  const end = new Date(endMs);
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startLabel = start.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' })
+  });
+  const endLabel = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startLabel} – ${endLabel}`;
+}
+
+// The hour-of-day histogram is what makes the weekly review actionable: it turns
+// "you had 34 urges" into "your urges cluster at 2pm", which maps to a setting.
+function findPeakUrgeWindow(hourlyUrges, totalAttempts) {
+  const hours = Array.isArray(hourlyUrges) ? hourlyUrges : [];
+  if (!hours.length || !totalAttempts) {
+    return null;
+  }
+
+  const WINDOW_HOURS = 3;
+  let best = null;
+  for (let startHour = 0; startHour <= 24 - WINDOW_HOURS; startHour++) {
+    const count = hours
+      .slice(startHour, startHour + WINDOW_HOURS)
+      .reduce((sum, entry) => sum + (Number(entry.count) || 0), 0);
+    if (!best || count > best.count) {
+      best = { startHour, endHour: startHour + WINDOW_HOURS, count };
+    }
+  }
+
+  if (!best || best.count < 3) {
+    return null;
+  }
+
+  return {
+    ...best,
+    share: Math.round((best.count / totalAttempts) * 100)
+  };
+}
+
+function getScheduleWindowMeta(settings) {
+  const schedule = settings?.freeExperience?.schedule;
+  if (!schedule || schedule.enabled !== true) {
+    return { enabled: false };
+  }
+  return {
+    enabled: true,
+    startTime: schedule.startTime,
+    endTime: schedule.endTime,
+    startHour: parseHourFromTimeString(schedule.startTime, 9),
+    endHour: parseHourFromTimeString(schedule.endTime, 17),
+    days: Array.isArray(schedule.days) ? [...schedule.days] : []
+  };
+}
+
+function parseHourFromTimeString(value, fallback) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ''));
+  if (!match) {
+    return fallback;
+  }
+  return clamp(parseInt(match[1], 10), 0, 23);
+}
+
+function formatHourLabel(hour) {
+  const normalized = ((Math.round(hour) % 24) + 24) % 24;
+  const suffix = normalized < 12 ? 'am' : 'pm';
+  const display = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${display}${suffix}`;
+}
+
+/**
+ * One concrete change the user can apply from the weekly review.
+ *
+ * A schedule *narrows* blocking to its window, so an off schedule already means
+ * round-the-clock protection — recommending "turn on a schedule" would quietly
+ * reduce it. The schedule branch therefore only ever widens a window the user
+ * already turned on.
+ */
+function buildWeeklyRecommendation({ settings, peakUrgeWindow, siteHoldRates, overrides }) {
+  const schedule = getScheduleWindowMeta(settings);
+
+  if (peakUrgeWindow && schedule.enabled) {
+    const uncovered = peakUrgeWindow.startHour < schedule.startHour
+      || peakUrgeWindow.endHour > schedule.endHour;
+    if (uncovered) {
+      const startHour = Math.min(schedule.startHour, peakUrgeWindow.startHour);
+      const endHour = Math.max(schedule.endHour, peakUrgeWindow.endHour);
+      return {
+        id: 'extend-schedule',
+        title: `Your urges peak at ${formatHourLabel(peakUrgeWindow.startHour)}–${formatHourLabel(peakUrgeWindow.endHour)}, outside your blocking hours.`,
+        detail: `${peakUrgeWindow.count} of this week's attempts landed there, while your schedule only blocks ${formatHourLabel(schedule.startHour)}–${formatHourLabel(schedule.endHour)}.`,
+        actionLabel: `Extend schedule to ${formatHourLabel(startHour)}–${formatHourLabel(endHour)}`,
+        action: {
+          type: 'extend-schedule',
+          startTime: `${String(startHour).padStart(2, '0')}:00`,
+          endTime: endHour >= 24 ? '23:59' : `${String(endHour).padStart(2, '0')}:00`
+        }
+      };
+    }
+  }
+
+  const level = settings?.challengeTypes?.typing?.level;
+  const leakiest = (siteHoldRates || [])
+    .filter((entry) => entry.attempts >= 3)
+    .sort((a, b) => a.holdRate - b.holdRate)[0];
+  if (leakiest && leakiest.holdRate < 0.6 && level !== 'hard') {
+    const nextLevel = level === 'easy' ? 'moderate' : 'hard';
+    return {
+      id: 'raise-challenge',
+      title: `${leakiest.domain} gets through ${Math.round((1 - leakiest.holdRate) * 100)}% of the time.`,
+      detail: `You opened it ${leakiest.attempts} times and the gate only held ${leakiest.held}. A longer challenge costs more to skip.`,
+      actionLabel: `Raise entry difficulty to ${nextLevel}`,
+      action: { type: 'challenge-level', level: nextLevel }
+    };
+  }
+
+  const overrideDelay = Number(settings?.freeExperience?.manualOverrideDelaySeconds) || 0;
+  if (overrides >= 5 && overrideDelay < 15) {
+    return {
+      id: 'raise-override-delay',
+      title: `You skipped the challenge ${overrides} times this week.`,
+      detail: `The override pause is ${overrideDelay} seconds. A longer wait gives the impulse time to pass.`,
+      actionLabel: 'Raise override pause to 15 seconds',
+      action: { type: 'override-delay', seconds: 15 }
+    };
+  }
+
+  return null;
+}
+
 function buildWeekSummary(events, startMs, endMs) {
   const windowEvents = (Array.isArray(events) ? events : [])
     .filter((event) => event.timestamp >= startMs && event.timestamp <= endMs);
@@ -2740,8 +2908,35 @@ function buildWeekSummary(events, startMs, endMs) {
     byDomain.set(domain, (byDomain.get(domain) || 0) + 1);
   }
 
+  const hourlyUrges = Array.from({ length: 24 }, (unused, hour) => ({ hour, count: 0 }));
+  for (const event of blockedEvents) {
+    hourlyUrges[new Date(event.timestamp).getHours()].count += 1;
+  }
+
+  // "Got through" is every gate crossing, however it was earned — an override
+  // and a completed challenge both end with the site open.
+  const throughByDomain = new Map();
+  for (const event of windowEvents) {
+    if (event.type !== 'override_triggered' && event.type !== 'access_granted') {
+      continue;
+    }
+    const domain = normalizeDomain(event.domain) || 'unknown.com';
+    throughByDomain.set(domain, (throughByDomain.get(domain) || 0) + 1);
+  }
+
+  const siteHoldRates = [...byDomain.entries()]
+    .map(([domain, attempts]) => {
+      const gotThrough = Math.min(attempts, throughByDomain.get(domain) || 0);
+      const held = attempts - gotThrough;
+      return { domain, attempts, gotThrough, held, holdRate: attempts > 0 ? held / attempts : 0 };
+    })
+    .sort((a, b) => b.attempts - a.attempts)
+    .slice(0, 5);
+
   return {
     blockedAttempts: blockedEvents.length,
+    hourlyUrges,
+    siteHoldRates,
     overrides: overrideEvents.length,
     manualDisableCount: manualDisableEvents.length,
     strictSessionMinutes: strictAccessEvents.reduce(
@@ -2753,11 +2948,6 @@ function buildWeekSummary(events, startMs, endMs) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
   };
-}
-
-function formatSignedNumber(value) {
-  const num = Number(value) || 0;
-  return num > 0 ? `+${num}` : `${num}`;
 }
 
 function getWeeklyFeedbackLine({ trendVsLastWeek, currentOverrides, previousOverrides }) {
@@ -2820,6 +3010,10 @@ if (typeof globalThis !== 'undefined') {
     getLast7DaysMeta,
     getRollingWeekRange,
     buildWeekSummary,
+    formatPeriodLabel,
+    findPeakUrgeWindow,
+    buildWeeklyRecommendation,
+    formatHourLabel,
     getWeeklyFeedbackLine,
     hasProAccess,
     canUseIntentionPage,

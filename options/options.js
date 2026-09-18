@@ -56,25 +56,75 @@ let cachedSettings = null;
 let _paywallReturnFocus = null;
 let _comparisonReturnFocus = null;
 let _siteEditorReturnFocus = null;
+let _weeklyRecommendation = null;
 let commitmentCountdownTimer = null;
+let autosaveTimer = null;
+let saveInFlight = false;
+let saveQueued = false;
+let invalidLocalEdits = false;
+let saveStatusTimer = null;
+let _confirmReturnFocus = null;
+let _confirmOnAccept = null;
+
+const AUTOSAVE_DELAY_MS = 600;
+const SITE_FILTER_THRESHOLD = 8;
+const MAX_SITE_SUGGESTIONS = 5;
+const SUGGESTED_SITES = [
+  'youtube.com',
+  'reddit.com',
+  'x.com',
+  'instagram.com',
+  'tiktok.com',
+  'facebook.com',
+  'netflix.com',
+  'twitch.tv'
+];
+const SETTINGS_EXPORT_FORMAT = 'resistgate-settings';
+const SETTINGS_EXPORT_VERSION = 1;
+// Inputs that never feed the saved settings object, so they must not trigger autosave.
+const NON_SETTINGS_INPUT_IDS = new Set([
+  'new-blocked-site',
+  'site-filter',
+  'import-settings-file',
+  'commitment-duration-hours',
+  'confirm-type-input'
+]);
 
 document.addEventListener('DOMContentLoaded', function () {
   const newBlockedSiteInput = document.getElementById('new-blocked-site');
   const addSiteBtn = document.getElementById('add-site-btn');
-  const schedulePanel = document.getElementById('schedule-panel');
 
-  addSiteBtn.addEventListener('click', addBlockedSite);
-  newBlockedSiteInput.addEventListener('keypress', function (e) {
+  addSiteBtn.addEventListener('click', function () {
+    addBlockedSite();
+  });
+  newBlockedSiteInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
+      e.preventDefault();
       addBlockedSite();
     }
   });
-
-  document.querySelectorAll('[data-action="save-settings"]').forEach(function (btn) {
-    btn.addEventListener('click', saveSettings);
+  // A single-line input silently drops newlines, so a pasted column of domains would
+  // arrive as one unparseable string. Re-join the lines with commas before they land.
+  newBlockedSiteInput.addEventListener('paste', function (e) {
+    const text = e.clipboardData?.getData('text') || '';
+    if (!/[\r\n]/.test(text)) {
+      return;
+    }
+    e.preventDefault();
+    const joined = text.split(/[\r\n]+/).map((line) => line.trim()).filter(Boolean).join(', ');
+    newBlockedSiteInput.setRangeText(
+      joined,
+      newBlockedSiteInput.selectionStart,
+      newBlockedSiteInput.selectionEnd,
+      'end'
+    );
   });
-  schedulePanel.addEventListener('toggle', function () {
-    updateSchedulePanelState(schedulePanel.open);
+  document.getElementById('site-filter').addEventListener('input', applySiteFilter);
+
+  initAutosave();
+
+  document.getElementById('schedule-enabled').addEventListener('change', function (e) {
+    updateSchedulePanelState(e.target.checked);
   });
   document.getElementById('schedule-start-time').addEventListener('input', updateScheduleSummary);
   document.getElementById('schedule-end-time').addEventListener('input', updateScheduleSummary);
@@ -115,14 +165,53 @@ document.addEventListener('DOMContentLoaded', function () {
       const preset = sanitizePreset(button.getAttribute('data-pro-preset'));
       setActivePresetButton(preset);
       applyPresetToInputs(preset);
+      scheduleAutosave();
     });
   });
 
   document.querySelectorAll('[data-challenge-level]').forEach((button) => {
     button.addEventListener('click', function () {
       setActiveChallengeLevel(button.getAttribute('data-challenge-level'));
+      scheduleAutosave();
     });
   });
+
+  document.querySelectorAll('[data-access-minutes]').forEach((button) => {
+    button.addEventListener('click', function () {
+      const input = document.getElementById('access-window-minutes');
+      input.value = button.getAttribute('data-access-minutes');
+      validateNumberInput(input);
+      scheduleAutosave();
+    });
+  });
+
+  document.querySelectorAll('[data-commitment-hours]').forEach((button) => {
+    button.addEventListener('click', function () {
+      const input = document.getElementById('commitment-duration-hours');
+      input.value = button.getAttribute('data-commitment-hours');
+      validateNumberInput(input);
+    });
+  });
+
+  document.getElementById('commitment-duration-hours').addEventListener('input', function (e) {
+    validateNumberInput(e.target);
+  });
+
+  document.getElementById('export-settings-btn').addEventListener('click', exportSettings);
+  document.getElementById('import-settings-btn').addEventListener('click', function () {
+    document.getElementById('import-settings-file').click();
+  });
+  document.getElementById('import-settings-file').addEventListener('change', function (e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (file) {
+      importSettingsFile(file);
+    }
+  });
+
+  document.getElementById('confirm-accept-btn').addEventListener('click', acceptConfirmDialog);
+  document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirmDialog);
+  document.getElementById('confirm-type-input').addEventListener('input', updateConfirmAcceptState);
 
   const proControls = document.querySelectorAll('[data-pro-feature]');
   proControls.forEach((control) => {
@@ -157,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('whats-new-btn').addEventListener('click', function () {
-    chrome.tabs.create({ url: 'https://www.orlandoascanio.com/resistgate/updated?from=1.3.3' });
+    chrome.tabs.create({ url: getWhatsNewUrl() });
   });
 
   document.getElementById('open-feedback-btn').addEventListener('click', function () {
@@ -181,6 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('close-comparison-btn').addEventListener('click', hidePlanComparison);
   document.getElementById('close-site-editor-btn').addEventListener('click', hideBlockedSiteEditor);
+  document.getElementById('weekly-recommendation-apply').addEventListener('click', applyWeeklyRecommendation);
   // refresh-entitlement-btn removed
 
   document.getElementById('activate-commitment-btn').addEventListener('click', function () {
@@ -189,32 +279,54 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    const hours = parseInt(document.getElementById('commitment-duration-hours').value, 10) || 2;
-    const confirmed = confirm(
-      `Activate Commitment Mode for ${hours} hour${hours === 1 ? '' : 's'}?\n\n` +
-      'This will lock ALL access to blocked sites. There is NO way to disable it early. ' +
-      'Settings changes will also be blocked.\n\nAre you sure?'
-    );
-    if (!confirmed) {
+    const hoursInput = document.getElementById('commitment-duration-hours');
+    if (!validateNumberInput(hoursInput)) {
+      hoursInput.focus();
       return;
     }
 
-    chrome.runtime.sendMessage({
-      action: 'activateCommitmentMode',
-      durationHours: hours
-    }, function (response) {
-      if (response && response.success) {
-        loadSettings();
-        showMessage(`Commitment Mode activated for ${hours} hour${hours === 1 ? '' : 's'}.`, 'success');
-      } else {
-        showMessage(response?.error || 'Unable to activate Commitment Mode.', 'error');
+    const hours = parseInt(hoursInput.value, 10);
+    const hoursLabel = `${hours} hour${hours === 1 ? '' : 's'}`;
+    showConfirmDialog({
+      title: `Lock everything for ${hoursLabel}?`,
+      body: `Every blocked site stays shut ${formatCommitmentEnd(hours, new Date())}. ` +
+        'There is no override, no challenge, and no way to end it early. Settings are locked too.',
+      confirmLabel: 'Start Commitment Mode',
+      requireText: 'LOCK',
+      onConfirm: function () {
+        chrome.runtime.sendMessage({
+          action: 'activateCommitmentMode',
+          durationHours: hours
+        }, function (response) {
+          if (response && response.success) {
+            loadSettings();
+            showMessage(`Commitment Mode activated for ${hoursLabel}.`, 'success');
+          } else {
+            showMessage(response?.error || 'Unable to activate Commitment Mode.', 'error');
+          }
+        });
       }
     });
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (autosaveTimer !== null) {
+      flushAutosave();
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      flushAutosave();
+    }
   });
 
   if (chrome.storage?.onChanged?.addListener) {
     chrome.storage.onChanged.addListener(handleSettingsStorageChange);
   }
+
+  loadTodaySummary();
 
   loadSettings(function (loaded) {
     if (!loaded) {
@@ -256,13 +368,28 @@ function loadSettings(callback) {
 }
 
 function handleSettingsStorageChange(changes, namespace) {
-  if (namespace !== 'local' || !changes?.settings?.newValue) {
+  if (namespace !== 'local') {
+    return;
+  }
+
+  if (changes?.dailyBlockCount || changes?.resistanceCounters) {
+    loadTodaySummary();
+  }
+
+  if (!changes?.settings?.newValue) {
     return;
   }
 
   const previousTier = cachedSettings?.subscription?.tier;
   cachedSettings = changes.settings.newValue;
-  renderSettings();
+  // Any settings write (adding a site, a sync, another tab) fires this. Re-rendering the
+  // form while an edit is still waiting to save would overwrite it with the stored value,
+  // so only the parts the pending save doesn't own are refreshed until it lands.
+  if (hasPendingLocalEdits()) {
+    renderSettingsExceptForm();
+  } else {
+    renderSettings();
+  }
 
   if (previousTier !== 'pro' && isProUser()) {
     showMessage('Stronger locks are active. This browser synced automatically.', 'success');
@@ -288,11 +415,13 @@ function renderSettings() {
     || settings.challengeTypes?.typing?.duration
     || DEFAULT_ACCESS_WINDOW_MINUTES;
 
-  accessWindowInput.value = minutes;
+  setInputValue(accessWindowInput, minutes);
   setActiveChallengeLevel(getTypingChallengeLevel(settings));
 
-  document.getElementById('manual-override-delay').value =
-    settings.freeExperience?.manualOverrideDelaySeconds || DEFAULT_OVERRIDE_DELAY_SECONDS;
+  setInputValue(
+    document.getElementById('manual-override-delay'),
+    settings.freeExperience?.manualOverrideDelaySeconds || DEFAULT_OVERRIDE_DELAY_SECONDS
+  );
 
   renderScheduleInputs(settings.freeExperience?.schedule || {});
   renderPlanPill();
@@ -300,6 +429,8 @@ function renderSettings() {
   loadBlockedSites(blocklist);
   renderProFeatureInputs();
   renderProAccessState();
+  invalidLocalEdits = false;
+  clearFieldErrors();
 
   if (isProGatedTab(activeTab) && !isProUser()) {
     setActiveTab('general');
@@ -314,6 +445,26 @@ function renderSettings() {
   }
 }
 
+function renderSettingsExceptForm() {
+  if (!cachedSettings) {
+    return;
+  }
+
+  renderPlanPill();
+  renderSubscriptionStatus();
+  loadBlockedSites(cachedSettings.blocklist || []);
+  renderProAccessState();
+}
+
+// Never overwrite the field the user is typing in; a stored value arriving mid-edit
+// would otherwise yank their cursor and undo keystrokes.
+function setInputValue(input, value) {
+  if (!input || input === document.activeElement) {
+    return;
+  }
+  input.value = value;
+}
+
 function renderPlanPill() {
   const planPill = document.getElementById('plan-pill');
   const openPricingBtn = document.getElementById('open-pricing-btn');
@@ -324,6 +475,11 @@ function renderPlanPill() {
   const comparePlansBtn = document.getElementById('compare-plans-btn');
   if (!planPill || !openPricingBtn) {
     return;
+  }
+
+  const todayLink = document.getElementById('today-strip-link');
+  if (todayLink) {
+    todayLink.textContent = isProUser() ? 'Open Progress' : 'See your trends with Pro';
   }
 
   if (isProUser()) {
@@ -426,9 +582,9 @@ function renderScheduleInputs(schedule) {
 }
 
 function toggleScheduleConfig(enabled) {
-  const panel = document.getElementById('schedule-panel');
-  if (panel && panel.open !== (enabled === true)) {
-    panel.open = enabled === true;
+  const toggle = document.getElementById('schedule-enabled');
+  if (toggle) {
+    toggle.checked = enabled === true;
   }
 
   updateSchedulePanelState(enabled === true);
@@ -437,7 +593,6 @@ function toggleScheduleConfig(enabled) {
 function updateSchedulePanelState(enabled) {
   const config = document.getElementById('schedule-config');
   const panel = document.getElementById('schedule-panel');
-  const summaryState = document.getElementById('schedule-summary-state');
   const summaryCopy = document.getElementById('schedule-summary-copy');
   if (!config) {
     return;
@@ -448,13 +603,10 @@ function updateSchedulePanelState(enabled) {
   if (panel) {
     panel.classList.toggle('is-enabled', enabled === true);
   }
-  if (summaryState) {
-    summaryState.textContent = enabled ? 'On' : 'Off';
-    summaryState.classList.toggle('is-active', enabled === true);
-  }
   if (summaryCopy) {
     summaryCopy.textContent = formatScheduleSummary(enabled);
   }
+  setFieldError('schedule-error', enabled === true ? getScheduleError(getSelectedScheduleDays()) : null);
 }
 
 function updateScheduleSummary() {
@@ -462,7 +614,24 @@ function updateScheduleSummary() {
 }
 
 function isScheduleEnabled() {
-  return document.getElementById('schedule-panel')?.open === true;
+  return document.getElementById('schedule-enabled')?.checked === true;
+}
+
+// The background quietly falls back to Mon-Fri when no days are saved, so an empty
+// selection would look like "blocking never runs" but actually block on weekdays.
+function getScheduleError(days) {
+  return Array.isArray(days) && days.length > 0
+    ? null
+    : 'Pick at least one day. With none selected, the schedule falls back to Mon-Fri.';
+}
+
+function describeScheduleWindow(startTime, endTime) {
+  const start = formatTimeLabel(startTime);
+  const end = formatTimeLabel(endTime);
+  if (startTime === endTime) {
+    return 'all day';
+  }
+  return endTime < startTime ? `${start}-${end} (overnight)` : `${start}-${end}`;
 }
 
 function formatScheduleSummary(enabled) {
@@ -470,9 +639,11 @@ function formatScheduleSummary(enabled) {
     return 'Off - turn on to block only during chosen hours.';
   }
 
-  const start = formatTimeLabel(getInputValue('schedule-start-time', '09:00'));
-  const end = formatTimeLabel(getInputValue('schedule-end-time', '17:00'));
-  return `${formatScheduleDays(getSelectedScheduleDays())}, ${start}-${end}`;
+  const timeWindow = describeScheduleWindow(
+    getInputValue('schedule-start-time', '09:00'),
+    getInputValue('schedule-end-time', '17:00')
+  );
+  return `${formatScheduleDays(getSelectedScheduleDays())}, ${timeWindow}`;
 }
 
 function getInputValue(id, fallback) {
@@ -501,7 +672,7 @@ function formatScheduleDays(days) {
   const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   return normalized.length
     ? normalized.map((day) => labels[day]).join(', ')
-    : 'Mon-Fri';
+    : 'No days';
 }
 
 function formatTimeLabel(value) {
@@ -525,19 +696,21 @@ function renderProFeatureInputs() {
   const commitmentMode = proFeatures.commitmentMode || {};
 
   document.getElementById('strict-mode-toggle').checked = proFeatures.strictModeEnabled === true;
-  document.getElementById('strict-disable-delay-seconds').value =
-    proFeatures.strictModeDisableDelaySeconds || DEFAULT_STRICT_DISABLE_DELAY_SECONDS;
+  setInputValue(
+    document.getElementById('strict-disable-delay-seconds'),
+    proFeatures.strictModeDisableDelaySeconds || DEFAULT_STRICT_DISABLE_DELAY_SECONDS
+  );
   document.getElementById('behavioral-friction-enabled').checked = behavior.enabled === true;
   document.getElementById('require-task-intent').checked = behavior.requireTaskIntent !== false;
   document.getElementById('timed-wait-enabled').checked = behavior.timedWaitEnabled === true;
-  document.getElementById('timed-wait-seconds').value = behavior.timedWaitSeconds || 20;
+  setInputValue(document.getElementById('timed-wait-seconds'), behavior.timedWaitSeconds || 20);
   document.getElementById('earn-access-enabled').checked = behavior.earnAccessEnabled !== false;
-  document.getElementById('earn-access-min-seconds').value = behavior.earnAccessMinChallengeSeconds || 90;
-  document.getElementById('custom-challenge-prompt').value = behavior.customChallengePrompt || '';
+  setInputValue(document.getElementById('earn-access-min-seconds'), behavior.earnAccessMinChallengeSeconds || 90);
+  setInputValue(document.getElementById('custom-challenge-prompt'), behavior.customChallengePrompt || '');
 
   const customPhrase = proFeatures.customChallengePhrase || {};
   document.getElementById('custom-challenge-phrase-enabled').checked = customPhrase.enabled === true;
-  document.getElementById('custom-challenge-phrase-text').value = customPhrase.text || '';
+  setInputValue(document.getElementById('custom-challenge-phrase-text'), customPhrase.text || '');
   setActivePresetButton(preset);
 
   // Intention Page
@@ -546,22 +719,16 @@ function renderProFeatureInputs() {
   updateIntentionPanelState(intentionPage.enabled === true);
 
   // Commitment Mode
-  document.getElementById('commitment-duration-hours').value = commitmentMode.durationHours || 2;
+  setInputValue(document.getElementById('commitment-duration-hours'), commitmentMode.durationHours || 2);
   renderCommitmentStatus();
 }
 
 function updateIntentionPanelState(enabled) {
   const panel = document.getElementById('intention-panel');
-  const state = document.getElementById('intention-summary-state');
   const breathingToggle = document.getElementById('breathing-exercise-enabled');
 
-  if (panel && panel.open !== (enabled === true)) {
-    panel.open = enabled === true;
-  }
-
-  if (state) {
-    state.textContent = enabled ? 'On' : 'Off';
-    state.classList.toggle('is-active', enabled === true);
+  if (panel) {
+    panel.classList.toggle('is-enabled', enabled === true);
   }
 
   if (breathingToggle) {
@@ -690,44 +857,90 @@ function isProGatedTab(tabName) {
   return tabName === 'analytics' || tabName === 'report' || tabName === 'pro';
 }
 
-function addBlockedSite() {
-  const input = document.getElementById('new-blocked-site');
-  const domain = normalizeDomainInput(input.value);
+// Accepts one domain or a pasted list ("reddit.com, x.com" or one per line) and reports
+// what was added, what was already blocked, and what couldn't be read as a domain.
+function planSiteAdditions(blocklist, rawInput) {
+  const existing = new Set((blocklist || []).map((site) => normalizeDomainInput(site.urlPattern)));
+  const plan = { domains: [], duplicates: [], invalid: [] };
 
-  if (!domain) {
-    showMessage('Please enter a valid domain.', 'error');
+  String(rawInput || '')
+    .split(/[\s,;]+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .forEach((token) => {
+      const domain = normalizeDomainInput(token);
+      if (!domain) {
+        plan.invalid.push(token);
+      } else if (existing.has(domain)) {
+        if (!plan.duplicates.includes(domain)) plan.duplicates.push(domain);
+      } else {
+        existing.add(domain);
+        plan.domains.push(domain);
+      }
+    });
+
+  return plan;
+}
+
+function formatSiteAddResult(plan) {
+  const parts = [];
+  if (plan.domains.length === 1) {
+    parts.push(`${plan.domains[0]} blocked.`);
+  } else if (plan.domains.length > 1) {
+    parts.push(`${plan.domains.length} sites blocked.`);
+  }
+  if (plan.duplicates.length) {
+    parts.push(`Already blocked: ${plan.duplicates.join(', ')}.`);
+  }
+  if (plan.invalid.length) {
+    parts.push(`Not a valid domain: ${plan.invalid.join(', ')}.`);
+  }
+  return parts.join(' ') || 'Enter a domain like reddit.com.';
+}
+
+function addBlockedSite(rawOverride) {
+  const input = document.getElementById('new-blocked-site');
+  const rawInput = typeof rawOverride === 'string' ? rawOverride : input.value;
+
+  if (!rawInput.trim()) {
+    showMessage('Enter a domain like reddit.com.', 'error');
     return;
   }
 
   withLatestSettings(function (settings) {
     settings.blocklist = settings.blocklist || [];
+    const plan = planSiteAdditions(settings.blocklist, rawInput);
 
-    if (settings.blocklist.some((site) => normalizeDomainInput(site.urlPattern) === domain)) {
-      showMessage('Site already exists in ResistGate.', 'error');
+    if (plan.domains.length === 0) {
+      showMessage(formatSiteAddResult(plan), 'error');
       return;
     }
 
     const accessMinutes = getAccessWindowMinutes(settings);
-    const newEntry = {
-      id: Date.now().toString(),
-      urlPattern: domain,
-      createdAt: Date.now(),
-      temporaryAccessOptions: [
-        { duration: accessMinutes, challengeType: 'typing' }
-      ]
-    };
-
-    settings.blocklist.push(newEntry);
+    const now = Date.now();
+    plan.domains.forEach((domain, index) => {
+      settings.blocklist.push({
+        id: `${now}${index ? `-${index}` : ''}`,
+        urlPattern: domain,
+        createdAt: now,
+        temporaryAccessOptions: [
+          { duration: accessMinutes, challengeType: 'typing' }
+        ]
+      });
+    });
 
     chrome.runtime.sendMessage({
       action: 'updateSettings',
       settings: settings
     }, function (updateResponse) {
       if (updateResponse && updateResponse.success) {
-        input.value = '';
+        // Leave anything unreadable in the box so it can be fixed instead of retyped.
+        if (typeof rawOverride !== 'string') {
+          input.value = plan.invalid.join(', ');
+        }
         cachedSettings = settings;
         loadBlockedSites(settings.blocklist);
-        showMessage('Site added to ResistGate.', 'success');
+        showMessage(formatSiteAddResult(plan), plan.invalid.length ? 'info' : 'success');
       } else {
         showMessage(updateResponse?.error || 'Unable to add site. Try again.', 'error');
       }
@@ -735,21 +948,105 @@ function addBlockedSite() {
   });
 }
 
+function getSiteSuggestions(blocklist) {
+  const blocked = new Set((blocklist || []).map((site) => normalizeDomainInput(site.urlPattern)));
+  return SUGGESTED_SITES.filter((domain) => !blocked.has(domain)).slice(0, MAX_SITE_SUGGESTIONS);
+}
+
+function renderSiteSuggestions(blocklist) {
+  const wrapper = document.getElementById('site-suggestions');
+  const chips = document.getElementById('site-suggestion-chips');
+  if (!wrapper || !chips) {
+    return;
+  }
+
+  // Suggestions help someone getting started; past a handful of sites they are noise.
+  const suggestions = blocklist.length < SITE_FILTER_THRESHOLD ? getSiteSuggestions(blocklist) : [];
+  chips.innerHTML = '';
+  wrapper.hidden = suggestions.length === 0;
+
+  suggestions.forEach((domain) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = `+ ${domain}`;
+    chip.setAttribute('aria-label', `Block ${domain}`);
+    chip.addEventListener('click', function () {
+      addBlockedSite(domain);
+    });
+    chips.appendChild(chip);
+  });
+}
+
+function filterBlocklist(blocklist, query) {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) {
+    return blocklist;
+  }
+  return blocklist.filter((entry) => String(entry.urlPattern || '').toLowerCase().includes(needle));
+}
+
+function applySiteFilter() {
+  const listElement = document.getElementById('blocked-sites-list');
+  const query = document.getElementById('site-filter')?.value || '';
+  if (!listElement) {
+    return;
+  }
+
+  const needle = query.trim().toLowerCase();
+  let visible = 0;
+  listElement.querySelectorAll('.blocked-site-item').forEach((item) => {
+    const matches = !needle || (item.dataset.domain || '').includes(needle);
+    item.hidden = !matches;
+    if (matches) visible += 1;
+  });
+
+  let noMatch = listElement.querySelector('.site-filter-empty');
+  if (needle && visible === 0) {
+    if (!noMatch) {
+      noMatch = document.createElement('li');
+      noMatch.className = 'site-filter-empty';
+      listElement.appendChild(noMatch);
+    }
+    noMatch.textContent = `No blocked site matches "${query.trim()}".`;
+  } else if (noMatch) {
+    noMatch.remove();
+  }
+}
+
 function loadBlockedSites(blocklist = []) {
   const listElement = document.getElementById('blocked-sites-list');
   listElement.innerHTML = '';
+  renderSiteSuggestions(blocklist);
+
+  const filterRow = document.getElementById('site-filter-row');
+  const filterInput = document.getElementById('site-filter');
+  const showFilter = blocklist.length > SITE_FILTER_THRESHOLD;
+  if (filterRow) {
+    filterRow.hidden = !showFilter;
+  }
+  if (filterInput) {
+    filterInput.placeholder = `Filter ${blocklist.length} blocked sites`;
+    if (!showFilter) filterInput.value = '';
+  }
 
   if (blocklist.length === 0) {
-    const noSitesItem = document.createElement('li');
-    noSitesItem.className = 'message';
-    noSitesItem.textContent = 'Add a site above to start blocking.';
-    listElement.appendChild(noSitesItem);
+    const emptyItem = document.createElement('li');
+    emptyItem.className = 'empty-state';
+    const title = document.createElement('p');
+    title.textContent = 'No sites blocked yet';
+    const hint = document.createElement('span');
+    hint.textContent = 'Add a site above, or pick one from Quick add, to start building your focus zone.';
+    emptyItem.appendChild(title);
+    emptyItem.appendChild(hint);
+    listElement.appendChild(emptyItem);
     return;
   }
 
   blocklist.forEach((entry) => {
     const li = document.createElement('li');
     li.className = 'blocked-site-item';
+    li.dataset.domain = String(entry.urlPattern || '').toLowerCase();
 
     const toggleButton = document.createElement('button');
     toggleButton.type = 'button';
@@ -784,6 +1081,8 @@ function loadBlockedSites(blocklist = []) {
     li.appendChild(toggleButton);
     listElement.appendChild(li);
   });
+
+  applySiteFilter();
 }
 
 function showBlockedSiteEditor(entry, returnFocus) {
@@ -849,17 +1148,24 @@ function hideBlockedSiteEditor() {
   _siteEditorReturnFocus = null;
 }
 
+// Only states that are actually true get listed. Naming every absent option
+// ("No access condition · No reminder") made every fresh site read like a
+// list of things the user had failed to do.
 function formatBlockedSiteSummary(entry) {
-  return `${formatBundleSummary(entry?.temptationBundle)} · ${formatReminderSummary(entry)}`;
-}
-
-function formatReminderSummary(entry) {
-  return entry?.personalGoal?.trim() ? 'Reminder set' : 'No reminder';
+  const parts = [];
+  const condition = formatBundleSummary(entry?.temptationBundle);
+  if (condition) {
+    parts.push(condition);
+  }
+  if (entry?.personalGoal?.trim()) {
+    parts.push('Reminder set');
+  }
+  return parts.length ? parts.join(' · ') : 'Always blocked';
 }
 
 function formatBundleSummary(bundle) {
   if (!bundle || bundle.enabled !== true) {
-    return 'No access condition';
+    return '';
   }
 
   if (bundle.conditionType === 'work_timer') {
@@ -898,7 +1204,7 @@ function buildBundleConfig(entry) {
   titleStrong.textContent = 'Access condition';
 
   const titleSmall = document.createElement('small');
-  titleSmall.textContent = formatBundleSummary(bundle);
+  titleSmall.textContent = formatBundleSummary(bundle) || 'Off — this site is always blocked';
 
   sectionTitle.appendChild(titleStrong);
   sectionTitle.appendChild(titleSmall);
@@ -1250,7 +1556,189 @@ function showUndoToast(text, onUndo) {
   }, 5000);
 }
 
+// ── Autosave ─────────────────────────────────────────────────────
+// Every setting on the page saves itself shortly after it changes. A debounce keeps
+// typing from turning into a write per keystroke, and saves never overlap: a change
+// that lands mid-save is picked up by one follow-up save.
+function initAutosave() {
+  document.querySelectorAll('#panel-general input, #panel-pro input').forEach((input) => {
+    if (NON_SETTINGS_INPUT_IDS.has(input.id) || input.type === 'file' || input.type === 'search') {
+      return;
+    }
+
+    const eventName = (input.type === 'checkbox' || input.type === 'time') ? 'change' : 'input';
+    input.addEventListener(eventName, function () {
+      if (input.type === 'number') {
+        validateNumberInput(input);
+      }
+      scheduleAutosave();
+    });
+  });
+}
+
+function scheduleAutosave() {
+  if (autosaveTimer !== null) {
+    clearTimeout(autosaveTimer);
+  }
+  setSaveStatus('saving');
+  autosaveTimer = setTimeout(function () {
+    autosaveTimer = null;
+    saveSettings();
+  }, AUTOSAVE_DELAY_MS);
+}
+
+function flushAutosave() {
+  if (autosaveTimer === null) {
+    return;
+  }
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  saveSettings();
+}
+
+function hasPendingLocalEdits() {
+  return autosaveTimer !== null || saveInFlight || invalidLocalEdits;
+}
+
+function setSaveStatus(state, text) {
+  const node = document.getElementById('save-status');
+  if (!node) {
+    return;
+  }
+
+  if (saveStatusTimer !== null) {
+    clearTimeout(saveStatusTimer);
+    saveStatusTimer = null;
+  }
+
+  const labels = {
+    saving: 'Saving…',
+    saved: 'Saved',
+    invalid: 'Not saved: fix the highlighted field',
+    error: 'Not saved'
+  };
+  node.textContent = text || labels[state] || '';
+  node.className = `save-status${state ? ` is-${state}` : ''}`;
+
+  if (state === 'saved') {
+    saveStatusTimer = setTimeout(function () {
+      node.textContent = '';
+      node.className = 'save-status';
+      saveStatusTimer = null;
+    }, 2500);
+  }
+}
+
+// ── Field validation ─────────────────────────────────────────────
+function getNumberFieldError(rawValue, min, max, label, unit) {
+  const text = String(rawValue ?? '').trim();
+  const name = label || 'This field';
+  const unitLabel = unit ? ` ${unit}` : '';
+
+  if (!text) {
+    return `${name} can't be empty.`;
+  }
+  if (!/^\d+$/.test(text)) {
+    return `${name} must be a whole number.`;
+  }
+
+  const value = Number(text);
+  if ((Number.isFinite(min) && value < min) || (Number.isFinite(max) && value > max)) {
+    return `${name} must be between ${min} and ${max}${unitLabel}.`;
+  }
+  return null;
+}
+
+function getFieldErrorId(input) {
+  return (input.getAttribute('aria-describedby') || '')
+    .split(/\s+/)
+    .find((id) => id.endsWith('-error')) || null;
+}
+
+function setFieldError(errorId, message) {
+  const node = errorId ? document.getElementById(errorId) : null;
+  if (!node) {
+    return;
+  }
+  node.textContent = message || '';
+  node.hidden = !message;
+}
+
+function validateNumberInput(input) {
+  if (!input || input.disabled) {
+    return true;
+  }
+
+  const unit = input.closest('.unit-input')?.querySelector('.unit-suffix')?.textContent
+    || input.getAttribute('data-unit')
+    || '';
+  const error = getNumberFieldError(
+    input.value,
+    input.min === '' ? NaN : Number(input.min),
+    input.max === '' ? NaN : Number(input.max),
+    input.getAttribute('data-field-label'),
+    unit
+  );
+
+  input.setAttribute('aria-invalid', error ? 'true' : 'false');
+  setFieldError(getFieldErrorId(input), error);
+  return !error;
+}
+
+function clearFieldErrors() {
+  document.querySelectorAll('#panel-general input[type="number"], #panel-pro input[type="number"]').forEach((input) => {
+    input.setAttribute('aria-invalid', 'false');
+    setFieldError(getFieldErrorId(input), null);
+  });
+  setFieldError('custom-phrase-error', null);
+}
+
+// Returns the first invalid field, or null when everything can be saved.
+function findInvalidSettingsField() {
+  const numberInputs = Array.from(document.querySelectorAll(
+    '#panel-general input[type="number"], #panel-pro input[type="number"]'
+  )).filter((input) => !NON_SETTINGS_INPUT_IDS.has(input.id));
+
+  let firstInvalid = null;
+  numberInputs.forEach((input) => {
+    if (!validateNumberInput(input) && !firstInvalid) {
+      firstInvalid = input;
+    }
+  });
+
+  if (!firstInvalid && isScheduleEnabled() && getScheduleError(getSelectedScheduleDays())) {
+    firstInvalid = document.querySelector('#schedule-days input');
+  }
+
+  // A phrase switched on with nothing to type would be an open gate.
+  if (isProUser()) {
+    const customPhrase = getCustomChallengePhraseInput();
+    const phraseMissing = customPhrase.enabled && !customPhrase.text;
+    setFieldError('custom-phrase-error', phraseMissing ? 'Write your challenge phrase to turn this on.' : null);
+    if (phraseMissing && !firstInvalid) {
+      firstInvalid = document.getElementById('custom-challenge-phrase-text');
+    }
+  }
+
+  return firstInvalid;
+}
+
 function saveSettings() {
+  if (saveInFlight) {
+    saveQueued = true;
+    return;
+  }
+
+  if (findInvalidSettingsField()) {
+    invalidLocalEdits = true;
+    setSaveStatus('invalid');
+    return;
+  }
+  invalidLocalEdits = false;
+
+  saveInFlight = true;
+  setSaveStatus('saving');
+
   withLatestSettings(function (settings) {
     const accessMinutes = getAccessWindowMinutes(settings);
     const manualDelay = getManualOverrideDelay();
@@ -1291,30 +1779,280 @@ function saveSettings() {
       settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
       settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
 
-      const customPhrase = getCustomChallengePhraseInput();
-      if (customPhrase.enabled && !customPhrase.text) {
-        showMessage('Write your challenge phrase before turning it on.', 'error');
-        return;
-      }
-      settings.proFeatures.customChallengePhrase = customPhrase;
+      settings.proFeatures.customChallengePhrase = getCustomChallengePhraseInput();
     }
 
     chrome.runtime.sendMessage({
       action: 'updateSettings',
       settings: settings
     }, function (saveResponse) {
+      saveInFlight = false;
+
       if (saveResponse && saveResponse.success) {
         cachedSettings = settings;
-        renderSettings();
-        showMessage('ResistGate settings saved.', 'success');
+        if (!hasPendingLocalEdits() && !saveQueued) {
+          renderSettingsExceptForm();
+          setSaveStatus('saved');
+        }
       } else if (saveResponse?.cooldownPending) {
+        saveQueued = false;
         loadSettings();
-        showMessage(saveResponse.error || 'Strict Mode is still counting down — try again in a moment.', 'info');
+        setSaveStatus('error', 'Waiting on Strict Mode');
+        showMessage(saveResponse.error || 'Strict Mode is still counting down. Try again in a moment.', 'info');
+        return;
       } else {
+        // The background refused (Strict Mode or Commitment Mode lock, or a failure).
+        // Put the form back to what is actually stored so it never shows unsaved values.
+        saveQueued = false;
+        if (autosaveTimer !== null) {
+          clearTimeout(autosaveTimer);
+          autosaveTimer = null;
+        }
+        loadSettings();
+        setSaveStatus('error');
         showMessage(saveResponse?.error || 'Unable to save settings. Try again.', 'error');
+        return;
+      }
+
+      if (saveQueued) {
+        saveQueued = false;
+        saveSettings();
       }
     });
+  }, function () {
+    saveInFlight = false;
+    saveQueued = false;
+    setSaveStatus('error');
   });
+}
+
+// ── Today strip (free progress) ──────────────────────────────────
+function formatTodaySummary(summary) {
+  const count = Number(summary?.blockedToday) || 0;
+  if (count === 0) {
+    return 'No blocked attempts yet. The gate is quiet.';
+  }
+
+  const attempts = `${count} blocked attempt${count === 1 ? '' : 's'}`;
+  const top = Array.isArray(summary.topDomains) ? summary.topDomains[0] : null;
+  return top && top.domain
+    ? `${attempts} · most on ${top.domain} (${top.count})`
+    : attempts;
+}
+
+function loadTodaySummary() {
+  const strip = document.getElementById('today-strip');
+  const text = document.getElementById('today-strip-text');
+  if (!strip || !text) {
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'getTodaySummary' }, function (response) {
+    if (!(response && response.success && response.summary)) {
+      strip.hidden = true;
+      return;
+    }
+
+    text.textContent = formatTodaySummary(response.summary);
+    strip.hidden = false;
+  });
+}
+
+// ── Backup: export / import ──────────────────────────────────────
+// Live lock state (an active Commitment Mode, a pending Strict Mode disable) is never
+// part of a backup: restoring a file must not be able to start or extend a lockout.
+function stripLockState(proFeatures, keepFrom) {
+  const next = { ...(proFeatures || {}) };
+  const keep = keepFrom || {};
+  next.commitmentMode = keep.commitmentMode
+    ? keep.commitmentMode
+    : { active: false, durationHours: Number(next.commitmentMode?.durationHours) || 2, activatedAt: null, expiresAt: null };
+  next.strictModeDisableRequestedAt = keep.strictModeDisableRequestedAt ?? null;
+  return next;
+}
+
+function buildSettingsExport(settings, extensionVersion, exportedAt) {
+  const copy = JSON.parse(JSON.stringify(settings || {}));
+  delete copy.subscription;
+  copy.proFeatures = stripLockState(copy.proFeatures);
+
+  return {
+    format: SETTINGS_EXPORT_FORMAT,
+    formatVersion: SETTINGS_EXPORT_VERSION,
+    extensionVersion: extensionVersion || null,
+    exportedAt: new Date(exportedAt).toISOString(),
+    settings: copy
+  };
+}
+
+function parseSettingsImport(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "That file isn't valid JSON. Choose a ResistGate backup file." };
+  }
+
+  if (!data || data.format !== SETTINGS_EXPORT_FORMAT || typeof data.settings !== 'object' || !data.settings) {
+    return { ok: false, error: "That file isn't a ResistGate backup." };
+  }
+  if (Number(data.formatVersion) > SETTINGS_EXPORT_VERSION) {
+    return { ok: false, error: 'That backup was made by a newer version of ResistGate. Update the extension first.' };
+  }
+  if (data.settings.blocklist !== undefined && !Array.isArray(data.settings.blocklist)) {
+    return { ok: false, error: 'That backup is damaged: its blocked-site list is unreadable.' };
+  }
+
+  const exportedAt = Date.parse(data.exportedAt);
+  return {
+    ok: true,
+    settings: data.settings,
+    exportedAt: Number.isFinite(exportedAt) ? exportedAt : null,
+    siteCount: Array.isArray(data.settings.blocklist) ? data.settings.blocklist.length : 0
+  };
+}
+
+function mergeImportedSettings(current, imported) {
+  const next = JSON.parse(JSON.stringify(imported || {}));
+  // The tier always comes from this browser's verified entitlement, never from a file.
+  next.subscription = current?.subscription;
+  next.proFeatures = stripLockState(next.proFeatures, current?.proFeatures || {});
+  return next;
+}
+
+function formatBackupDate(timestamp) {
+  if (!Number.isFinite(timestamp)) {
+    return 'an unknown date';
+  }
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function exportSettings() {
+  withLatestSettings(function (settings) {
+    const version = chrome.runtime.getManifest?.().version;
+    const payload = buildSettingsExport(settings, version, Date.now());
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `resistgate-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+
+    const count = (settings.blocklist || []).length;
+    showMessage(`Exported ${count} blocked site${count === 1 ? '' : 's'} and your settings.`, 'success');
+  });
+}
+
+function importSettingsFile(file) {
+  file.text().then(function (text) {
+    const parsed = parseSettingsImport(text);
+    if (!parsed.ok) {
+      showMessage(parsed.error, 'error');
+      return;
+    }
+
+    const currentCount = (cachedSettings?.blocklist || []).length;
+    showConfirmDialog({
+      title: 'Replace your settings with this backup?',
+      body: `Backup from ${formatBackupDate(parsed.exportedAt)} with ${parsed.siteCount} blocked ` +
+        `site${parsed.siteCount === 1 ? '' : 's'}. Your current ${currentCount} ` +
+        `site${currentCount === 1 ? '' : 's'} and settings will be replaced. ` +
+        'Pro settings only apply on a browser with Pro.',
+      confirmLabel: 'Replace settings',
+      onConfirm: function () {
+        withLatestSettings(function (current) {
+          chrome.runtime.sendMessage({
+            action: 'updateSettings',
+            settings: mergeImportedSettings(current, parsed.settings)
+          }, function (response) {
+            if (response && response.success) {
+              loadSettings();
+              showMessage(`Settings imported. ${parsed.siteCount} site${parsed.siteCount === 1 ? '' : 's'} blocked.`, 'success');
+            } else {
+              showMessage(response?.error || 'Unable to import settings. Try again.', 'error');
+            }
+          });
+        });
+      }
+    });
+  }).catch(function () {
+    showMessage("Couldn't read that file. Try exporting it again.", 'error');
+  });
+}
+
+// ── Confirm dialog ───────────────────────────────────────────────
+function showConfirmDialog(options) {
+  const modal = document.getElementById('confirm-modal');
+  const typeRow = document.getElementById('confirm-type-row');
+  const typeInput = document.getElementById('confirm-type-input');
+  const requireText = options.requireText || '';
+
+  _confirmReturnFocus = document.activeElement;
+  _confirmOnAccept = options.onConfirm || null;
+
+  document.getElementById('confirm-title').textContent = options.title || 'Are you sure?';
+  document.getElementById('confirm-body').textContent = options.body || '';
+  document.getElementById('confirm-accept-btn').textContent = options.confirmLabel || 'Confirm';
+  modal.dataset.requireText = requireText;
+  typeRow.hidden = !requireText;
+  typeInput.value = '';
+  document.getElementById('confirm-type-label').textContent = requireText ? `Type ${requireText} to confirm` : '';
+  updateConfirmAcceptState();
+
+  modal.classList.remove('hidden');
+  (requireText ? typeInput : document.getElementById('confirm-cancel-btn')).focus();
+  _attachModalFocusTrap(modal, hideConfirmDialog);
+}
+
+function updateConfirmAcceptState() {
+  const modal = document.getElementById('confirm-modal');
+  const requireText = modal?.dataset.requireText || '';
+  const typed = document.getElementById('confirm-type-input')?.value || '';
+  document.getElementById('confirm-accept-btn').disabled =
+    Boolean(requireText) && typed.trim().toUpperCase() !== requireText;
+}
+
+function hideConfirmDialog() {
+  const modal = document.getElementById('confirm-modal');
+  _detachModalFocusTrap(modal);
+  modal.classList.add('hidden');
+  _confirmOnAccept = null;
+  if (_confirmReturnFocus && typeof _confirmReturnFocus.focus === 'function') {
+    _confirmReturnFocus.focus();
+  }
+  _confirmReturnFocus = null;
+}
+
+function acceptConfirmDialog() {
+  if (document.getElementById('confirm-accept-btn').disabled) {
+    return;
+  }
+  const onAccept = _confirmOnAccept;
+  hideConfirmDialog();
+  if (typeof onAccept === 'function') {
+    onAccept();
+  }
+}
+
+function formatCommitmentEnd(hours, now) {
+  const end = new Date(now.getTime() + hours * 3600 * 1000);
+  const time = end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const dayDiff = Math.round(
+    (new Date(end.getFullYear(), end.getMonth(), end.getDate()) -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000
+  );
+  if (dayDiff === 0) return `until ${time} today`;
+  if (dayDiff === 1) return `until ${time} tomorrow`;
+  return `until ${end.toLocaleDateString(undefined, { weekday: 'short' })} at ${time}`;
+}
+
+// The update page reads ?from= as the version the user moved *from*. Opening it from
+// Options isn't an update, so pass nothing rather than a version that reads as wrong.
+function getWhatsNewUrl() {
+  return 'https://www.orlandoascanio.com/resistgate/updated';
 }
 
 function loadAnalytics() {
@@ -1563,26 +2301,23 @@ function renderWeeklyReport(report) {
 
   const trendCard = document.getElementById('metric-card-weekly-trend');
   if (trendCard && Number.isFinite(trendNum)) {
+    // The trend is a change in discipline score: up is good, down is not.
     trendCard.classList.remove('state-warn', 'state-ok');
-    if (trendNum < 0) trendCard.classList.add('state-ok');
-    else if (trendNum > 3) trendCard.classList.add('state-warn');
+    if (trendNum > 0) trendCard.classList.add('state-ok');
+    else if (trendNum < 0) trendCard.classList.add('state-warn');
   }
 
-  renderDomainBars(
-    document.getElementById('weekly-top-domains'),
-    report.topDistractionDomains || []
+  renderUrgeChart(
+    document.getElementById('weekly-urge-chart'),
+    report.hourlyUrges || [],
+    report.peakUrgeWindow,
+    report.scheduleWindow
   );
+  renderHoldRates(document.getElementById('weekly-hold-rates'), report.siteHoldRates || []);
+  renderRecommendation(report.recommendation);
 
-  const highlightsList = document.getElementById('weekly-report-highlights');
   const riskList = document.getElementById('weekly-report-risks');
-  highlightsList.innerHTML = '';
   riskList.innerHTML = '';
-
-  (report.highlights || []).forEach((item) => {
-    const li = document.createElement('li');
-    li.textContent = item;
-    highlightsList.appendChild(li);
-  });
 
   if (!report.risks || !report.risks.length) {
     const li = document.createElement('li');
@@ -1595,6 +2330,194 @@ function renderWeeklyReport(report) {
     const li = document.createElement('li');
     li.textContent = item;
     riskList.appendChild(li);
+  });
+}
+
+function formatHourLabel(hour) {
+  const normalized = ((Math.round(hour) % 24) + 24) % 24;
+  const suffix = normalized < 12 ? 'am' : 'pm';
+  return `${normalized % 12 === 0 ? 12 : normalized % 12}${suffix}`;
+}
+
+function renderUrgeChart(container, hours, peak, scheduleWindow) {
+  container.innerHTML = '';
+  const total = hours.reduce((sum, entry) => sum + (Number(entry.count) || 0), 0);
+  if (!total) {
+    const p = document.createElement('p');
+    p.className = 'empty-hint';
+    p.textContent = 'No blocked attempts recorded this week.';
+    container.appendChild(p);
+    return;
+  }
+
+  if (peak) {
+    const lede = document.createElement('p');
+    lede.className = 'urge-peak-line';
+    lede.textContent = `Peak window ${formatHourLabel(peak.startHour)}–${formatHourLabel(peak.endHour)} · ${peak.share}% of the week's attempts.`;
+    container.appendChild(lede);
+  }
+
+  const maxCount = Math.max(...hours.map((entry) => Number(entry.count) || 0), 1);
+  const plot = document.createElement('div');
+  plot.className = 'urge-plot';
+  plot.setAttribute('role', 'img');
+  plot.setAttribute('aria-label', `Blocked attempts by hour of day. ${
+    peak ? `Peak between ${formatHourLabel(peak.startHour)} and ${formatHourLabel(peak.endHour)}.` : ''
+  }`);
+
+  hours.forEach((entry) => {
+    const count = Number(entry.count) || 0;
+    const col = document.createElement('div');
+    col.className = 'urge-col';
+    if (peak && entry.hour >= peak.startHour && entry.hour < peak.endHour) {
+      col.classList.add('is-peak');
+    }
+    if (scheduleWindow?.enabled
+      && entry.hour >= scheduleWindow.startHour
+      && entry.hour < scheduleWindow.endHour) {
+      col.classList.add('is-scheduled');
+    }
+
+    const bar = document.createElement('div');
+    bar.className = 'urge-bar';
+    bar.style.height = count === 0 ? '2px' : `${Math.max(6, (count / maxCount) * 100)}%`;
+    bar.title = `${formatHourLabel(entry.hour)}: ${pluralize(count, 'attempt', 'attempts')}`;
+    col.appendChild(bar);
+    plot.appendChild(col);
+  });
+
+  const axis = document.createElement('div');
+  axis.className = 'urge-axis';
+  [0, 6, 12, 18].forEach((hour) => {
+    const tick = document.createElement('span');
+    tick.textContent = formatHourLabel(hour);
+    axis.appendChild(tick);
+  });
+
+  container.appendChild(plot);
+  container.appendChild(axis);
+
+  if (scheduleWindow?.enabled) {
+    const legend = document.createElement('p');
+    legend.className = 'urge-legend';
+    legend.textContent = `Shaded hours are covered by your schedule (${formatHourLabel(scheduleWindow.startHour)}–${formatHourLabel(scheduleWindow.endHour)}).`;
+    container.appendChild(legend);
+  }
+}
+
+function renderHoldRates(container, entries) {
+  container.innerHTML = '';
+  if (!entries.length) {
+    const p = document.createElement('p');
+    p.className = 'empty-hint';
+    p.textContent = 'No blocked-site visits yet. Add sites to your blocklist to start seeing data here.';
+    container.appendChild(p);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const pct = Math.round((Number(entry.holdRate) || 0) * 100);
+
+    const row = document.createElement('div');
+    row.className = 'hold-row';
+    if (pct < 60) {
+      row.classList.add('is-leaky');
+    }
+
+    const name = document.createElement('span');
+    name.className = 'hold-domain';
+    name.textContent = entry.domain;
+    name.title = entry.domain;
+
+    const rate = document.createElement('span');
+    rate.className = 'hold-rate';
+    rate.textContent = `${pct}% held`;
+
+    const track = document.createElement('div');
+    track.className = 'hold-track';
+    const fill = document.createElement('div');
+    fill.className = 'hold-fill';
+    fill.style.width = `${pct}%`;
+    track.appendChild(fill);
+
+    const detail = document.createElement('span');
+    detail.className = 'hold-detail';
+    detail.textContent = `${pluralize(entry.attempts, 'attempt', 'attempts')} · ${entry.gotThrough} got through`;
+
+    row.appendChild(name);
+    row.appendChild(rate);
+    row.appendChild(track);
+    row.appendChild(detail);
+    container.appendChild(row);
+  });
+}
+
+function renderRecommendation(recommendation) {
+  const panel = document.getElementById('weekly-recommendation-panel');
+  if (!panel) {
+    return;
+  }
+
+  setRecommendationStatus('');
+  if (!recommendation) {
+    panel.classList.add('hidden');
+    _weeklyRecommendation = null;
+    return;
+  }
+
+  _weeklyRecommendation = recommendation;
+  panel.classList.remove('hidden');
+  document.getElementById('weekly-recommendation-title').textContent = recommendation.title;
+  document.getElementById('weekly-recommendation-detail').textContent = recommendation.detail;
+  const applyBtn = document.getElementById('weekly-recommendation-apply');
+  applyBtn.textContent = recommendation.actionLabel;
+  applyBtn.disabled = false;
+}
+
+function setRecommendationStatus(message, tone) {
+  const el = document.getElementById('weekly-recommendation-status');
+  if (!el) {
+    return;
+  }
+  el.textContent = message || '';
+  el.classList.toggle('is-error', tone === 'error');
+}
+
+function applyWeeklyRecommendation() {
+  const recommendation = _weeklyRecommendation;
+  if (!recommendation || !cachedSettings) {
+    return;
+  }
+
+  const settings = JSON.parse(JSON.stringify(cachedSettings));
+  const action = recommendation.action || {};
+
+  if (action.type === 'extend-schedule') {
+    settings.freeExperience.schedule.startTime = action.startTime;
+    settings.freeExperience.schedule.endTime = action.endTime;
+  } else if (action.type === 'challenge-level') {
+    settings.challengeTypes.typing.level = action.level;
+  } else if (action.type === 'override-delay') {
+    settings.freeExperience.manualOverrideDelaySeconds = action.seconds;
+  } else {
+    return;
+  }
+
+  const applyBtn = document.getElementById('weekly-recommendation-apply');
+  applyBtn.disabled = true;
+  setRecommendationStatus('Saving...');
+
+  chrome.runtime.sendMessage({ action: 'updateSettings', settings }, function (response) {
+    if (response && response.success) {
+      cachedSettings = settings;
+      renderSettings();
+      setRecommendationStatus('Applied.');
+      applyBtn.disabled = true;
+      loadWeeklyReport();
+      return;
+    }
+    applyBtn.disabled = false;
+    setRecommendationStatus(response?.error || 'Could not apply this change.', 'error');
   });
 }
 
@@ -1811,7 +2734,9 @@ function getSelectedScheduleDays() {
     }
   });
 
-  return selected.length ? selected : [1, 2, 3, 4, 5];
+  // No silent Mon-Fri fallback here: an empty selection has to reach getScheduleError()
+  // so the user sees it, instead of weekday blocking they never chose.
+  return selected;
 }
 
 function getAccessWindowMinutes(settings) {
@@ -1953,7 +2878,23 @@ if (typeof globalThis !== 'undefined') {
     formatTimeLabel,
     getEarnAccessMinChallengeSeconds,
     getCustomChallengePhraseInput,
-    isProGatedTab
+    isProGatedTab,
+    planSiteAdditions,
+    formatSiteAddResult,
+    getSiteSuggestions,
+    filterBlocklist,
+    getNumberFieldError,
+    getScheduleError,
+    describeScheduleWindow,
+    formatTodaySummary,
+    buildSettingsExport,
+    parseSettingsImport,
+    mergeImportedSettings,
+    formatCommitmentEnd,
+    getWhatsNewUrl,
+    handleSettingsStorageChange,
+    scheduleAutosave,
+    hasPendingLocalEdits
   };
 }
 
@@ -1981,10 +2922,13 @@ function isProUser() {
   return cachedSettings?.subscription?.tier === 'pro';
 }
 
-function withLatestSettings(onSuccess) {
+function withLatestSettings(onSuccess, onFailure) {
   chrome.runtime.sendMessage({ action: 'getSettings' }, function (response) {
     if (!(response && response.settings)) {
       showMessage('Unable to load ResistGate settings.', 'error');
+      if (typeof onFailure === 'function') {
+        onFailure();
+      }
       return;
     }
 

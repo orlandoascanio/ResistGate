@@ -81,12 +81,13 @@ This serializes DNR mutations and prevents overlapping rule refreshes.
 | `grantTemporaryAccess` | No | Grant timed bypass for a domain |
 | `recordBlockedVisit` | No | Increment badge/resistance counters and optionally local analytics |
 | `getResistanceCount` | No | Return today's count for a domain |
+| `getTodaySummary` | No | Return today's blocked-attempt total and top three domains for the options page Today strip |
 | `recordAnalyticsEvent` | Partially | Track allowlisted PostHog events and selected Pro local events |
 | `getSettings` | No | Return sanitized settings |
 | `getManualOverrideStatus` | No | Return manual override delay/lock state |
 | `updateSettings` | No | Sanitize, enforce locks/tier boundaries, save, refresh rules |
 | `getAnalyticsDashboard` | Yes | Return 7-day analytics dashboard |
-| `getWeeklyReport` | Yes | Return weekly Focus Score report |
+| `getWeeklyReport` | Yes | Return weekly Focus Score report, hour-of-day urge histogram, per-site hold rates, and one applyable recommendation |
 | `activateCommitmentMode` | Yes | Start 1-24h lockout |
 | `deactivateCommitmentMode` | Always refuses | Commitment cannot end early |
 | `getWorkTimerState` | No | Return work timer state |
@@ -155,7 +156,10 @@ Pro:
 - earn-access minimum challenge time and bonus minutes;
 - accountability presets;
 - analytics dashboard;
-- weekly report and Focus Score;
+- weekly report and Focus Score, including the urge-timing histogram, per-site hold rates, and the
+  "Do this next" recommendation. The recommendation only ever *widens* an existing schedule window —
+  a schedule narrows blocking to its hours, so recommending that a user enable one would quietly
+  reduce their protection. See `buildWeeklyRecommendation()` in `background.js`;
 - custom challenge prompt;
 - custom challenge phrase (`proFeatures.customChallengePhrase`) — replaces the built-in challenge text
   banks with the user's own line, typed once regardless of challenge level, on both the friction page and
@@ -169,7 +173,7 @@ Note: current code and tests treat per-site access condition setup as free.
 | Script | Role |
 |---|---|
 | `popup/popup.js` | Quick add/remove, block current tab, work timer, commitment status, feedback, outcome tap prompt |
-| `options/options.js` | Full settings UI, blocklist, per-site reminders/access conditions, Pro paywall, analytics/report tabs |
+| `options/options.js` | Full settings UI (autosaves; no Save button), blocklist with bulk add/filter, per-site reminders/access conditions, settings export/import, Pro paywall, analytics/report tabs |
 | `intention-page/script.js` | Standalone pause layer, optional reason/task intent, breathing pause, short challenge |
 | `friction-page/script.js` | Full challenge, manual override, Pro precheck, access-condition progress |
 | `commitment-page/script.js` | Commitment Mode countdown page |
@@ -190,11 +194,11 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 | `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
 | `whats-new/whats-new.js` | `__RESISTGATE_WHATSNEW_TEST_HOOKS__` |
 
-Current verified state on 2026-07-12:
+Current verified state on 2026-09-18:
 
-- `npm test`: 5 files, 174 tests passing.
+- `npm test`: 5 files, 205 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 88.77% lines/statements, 77.6% branches, 97.11% functions.
+- `background.js`: 89.45% lines/statements, 78.58% branches, 97.36% functions.
 
 `tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
 run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.
@@ -238,6 +242,16 @@ For bug fixes, add a regression test that reproduces the failing condition befor
 - All blocking decisions stay local.
 - Document any new network call. Current telemetry surfaces are bundled Sentry diagnostics and allowlisted PostHog lifecycle/funnel events.
 - Never log tokens, emails, checkout identifiers, or other sensitive fields.
+
+## Options Page Autosave
+
+Settings save ~600ms after a change (`scheduleAutosave()` → `saveSettings()`); saves never overlap. While an edit is
+pending or invalid, `handleSettingsStorageChange()` refreshes only non-form parts (`renderSettingsExceptForm()`),
+and `setInputValue()` never writes to the focused field. New inputs in `#panel-general` / `#panel-pro` are wired
+automatically by `initAutosave()`; add an id to `NON_SETTINGS_INPUT_IDS` if an input must not trigger a save.
+
+Settings export/import (`buildSettingsExport()` / `mergeImportedSettings()`) never carries `subscription` or live
+lock state (active Commitment Mode, pending Strict Mode disable). `updateSettings` also pins the tier server-side.
 
 ## Known Issues To Respect
 

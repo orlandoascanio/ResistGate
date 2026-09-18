@@ -6,7 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [Unreleased]
+## [1.5.0] - 2026-09-18
+
+A settings page that saves itself, tells you what's wrong before it matters, and lets you take your setup with you. Plus a Weekly Review that tells you what to change, not just how you did.
+
+### Changed
+- **Settings save themselves.** The two full-width **Save Settings** buttons are gone. Every setting saves about half a second after you change it, and the header shows *Saving… / ✓ Saved*. Before, sites saved instantly while everything else waited for the button, with nothing to tell you which was which. Closing the tab with a change still pending flushes it first.
+- **Schedule has a real on/off switch.** The schedule used to be turned on by *expanding* its panel, so collapsing it to tidy the page quietly switched blocking hours off. It now has a switch in the panel header, like Intention pause. Intention pause's duplicate "On" pill and "Enable this pause" checkbox were folded into the same switch.
+- **Number fields show their units and limits.** Access window reads `min` and override pause reads `sec`, inside the field. A value outside the allowed range (say, a 30-second override pause on Free) is flagged under the field and not saved, instead of being silently changed to 15. Access window gets 5 / 10 / 15 / 30 presets, and Commitment Mode gets 1 / 2 / 4 / 8 h.
+- **Messages you can actually see.** Confirmations and errors used to be added as plain text at the very bottom of the page, under the Save button. They now appear as a toast at the bottom of the window.
+- **A quieter header.** *Help improve ResistGate* and *Rate ResistGate ⭐* moved to the sidebar, below your plan.
+- **Report dates are readable.** "2026-07-22 to 2026-07-28" is now "Jul 22 – Jul 28, 2026" across Progress and Weekly Review.
+- **Charts read as charts.** Top blocked domains lost the gradient fills and pill shapes for solid, rank-shaded bars; the override pattern chart gained a real baseline and narrower columns, with zero-override days shown as a flat tick.
+- **Settings cards line up.** The General tab's cards now share a baseline per row instead of relying on fixed heights that drifted as content changed, and the blocklist no longer clips mid-row.
+- **"Top distraction domains" was folded into "Where the gate holds".** The Weekly Review no longer shows the same domain ranking twice; the surviving section carries the attempt counts plus what happened at the gate.
+- **Dropped the decorative quote glyph** behind the weekly feedback line.
+- **The friction page, Intention Page, and welcome page were toned down.** Removed the decorative gradient washes, the graph-paper backdrop, the drenched hero panel with its numbered 01/02/03 ladder, the accent stripe on the challenge quote, and the uppercase letter-spaced labels; reduced display type to a size that suits an interruption. Read-only content is no longer boxed into cards nested inside cards.
+
+### Added (Free)
+- **Paste a list of sites.** The site box accepts several domains at once, separated by commas, spaces, or new lines (paste a column straight from a note). ResistGate says what it blocked, what was already blocked, and what it couldn't read, and leaves anything unreadable in the box so you can fix it.
+- **Quick add.** One-click chips for common distractions (YouTube, Reddit, X, Instagram, TikTok, and more) that you haven't blocked yet. They disappear once your list is established.
+- **Filter your blocklist.** Once you block more than eight sites, a filter box appears above the list.
+- **Today, at a glance.** A strip at the top of General shows today's blocked attempts and the site that tried hardest. Free users see it too: the full Progress dashboard stays Pro, but you can see the gate is working.
+- **Back up and restore your settings.** *Export settings* saves your blocklist, reminders, and settings to a JSON file. *Import settings* restores them after a reinstall or on another computer, after a confirmation that says what will be replaced. A backup never carries your plan or an active lock: importing can't grant Pro, and can't start or extend a Commitment Mode.
+
+### Added (Pro)
+- **Commitment Mode asks properly.** The browser's plain confirm box was replaced with ResistGate's own dialog. It shows exactly when the lock ends ("until 4:30 PM today") and asks you to type **LOCK** before it starts.
+- **The Weekly Review now tells you what to change, not just how you did.** Two new sections replace the old "Weekly summary", which only restated the numbers already on the page:
+  - **When the urges hit** — an hour-of-day histogram of your blocked attempts, naming your peak three-hour window and shading the hours your schedule already covers.
+  - **Where the gate holds** — per-site hold rate: how many times you hit the gate on each site and how often it actually kept you out.
+  - **Do this next** — one concrete setting change derived from the week (widen your schedule to cover the danger window, raise entry difficulty for a site that keeps getting through, or lengthen the override pause), applied with a single button.
+
+### Fixed
+- **An unsaved change could be wiped by an unrelated write.** Any settings write (adding a site, a background sync, another open tab) re-rendered the whole form from storage, so a challenge level you had just picked, but not yet saved, snapped back. The form now leaves a field alone while its change is still saving, and never rewrites the field you're typing in.
+- **Unchecking every schedule day blocked on weekdays.** The page quietly substituted Mon–Fri for an empty day selection. It now says "Pick at least one day" and doesn't save until you do.
+- **What's New told everyone they had just updated from 1.3.3.** The Options button hard-coded `?from=1.3.3`, which the update page reads as "you moved from version 1.3.3". It now opens the page without claiming an update.
+- **A rising discipline score was flagged as a warning.** The "Trend vs last week" figure turned amber when the score went *up* and stayed neutral when it fell. Up is now green, down is amber.
+- **The challenge progress bar showed 100% before you typed anything.** On single-segment challenges (Easy, Moderate, and custom phrases) the bar rendered full immediately; it is now shown only for multi-paragraph challenges, and tracks paragraphs actually completed.
+- **Blocked sites were described by what they lacked.** Each entry read "No access condition · No reminder"; entries now list only the rules they actually have, or "Always blocked" when they have none.
+- **The Progress Dashboard drew a divider under empty space.** The scoreboard's separator rule assumed content followed it inside the same card; it is now drawn only when something actually does.
+- **The blocklist clipped its last row.** The list had a fixed 240px cap that cut an entry in half; it now fills the space its card has and reserves room for its scrollbar.
 
 ---
 

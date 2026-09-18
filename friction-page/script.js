@@ -881,10 +881,11 @@ function showTypingChallenge(originalUrl) {
           <span class="step-badge">${escapeHtml(stepBadge)}</span>
           <p class="instruction-text">${escapeHtml(challengeCopy.instruction)}</p>
         </header>
+        ${totalSegments > 1 ? `
         <div class="segment-progress" aria-label="Challenge progress">
-          <span class="segment-progress-bar" style="width: ${Math.round(((currentSegmentIndex + 1) / totalSegments) * 100)}%"></span>
-        </div>
-        
+          <span class="segment-progress-bar" style="width: ${Math.round((completedSegments / totalSegments) * 100)}%"></span>
+        </div>` : ''}
+
         <div class="quote-box">
           <p class="${quoteClass}">${escapeHtml(currentText)}</p>
         </div>

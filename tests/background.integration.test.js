@@ -9,11 +9,13 @@ import {
 describe('ResistGate background integration', () => {
   let env;
   let api;
+  let hooks;
 
   beforeEach(async () => {
     env = createChromeMock();
     api = createBillingApiMock();
-    await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+    hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
 
   async function activateProForTest(targetEnv = env, targetApi = api) {
@@ -49,6 +51,42 @@ describe('ResistGate background integration', () => {
     ]);
     expect(saved.settings.freeExperience.schedule.enabled).toBe(true);
     expect(saved.settings.freeExperience.schedule.days).toEqual([1, 2, 6]);
+  });
+
+  it('summarizes today\'s blocked attempts for free users', async () => {
+    const empty = await env.sendMessage({ action: 'getTodaySummary' });
+    expect(empty.success).toBe(true);
+    expect(empty.summary.blockedToday).toBe(0);
+    expect(empty.summary.topDomains).toEqual([]);
+
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'reddit.com' });
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
+
+    const settings = await env.sendMessage({ action: 'getSettings' });
+    expect(settings.settings.subscription.tier).toBe('free');
+
+    const response = await env.sendMessage({ action: 'getTodaySummary' });
+    expect(response.success).toBe(true);
+    expect(response.summary.blockedToday).toBe(3);
+    expect(response.summary.topDomains[0]).toEqual({ domain: 'youtube.com', count: 2 });
+    expect(response.summary.topDomains[1]).toEqual({ domain: 'reddit.com', count: 1 });
+  });
+
+  it('never lets an imported settings object elevate the tier', async () => {
+    const current = await env.sendMessage({ action: 'getSettings' });
+    const imported = {
+      ...current.settings,
+      subscription: { tier: 'pro' },
+      blocklist: [{ id: 'a', urlPattern: 'x.com' }]
+    };
+
+    const response = await env.sendMessage({ action: 'updateSettings', settings: imported });
+    expect(response.success).toBe(true);
+
+    const saved = await env.sendMessage({ action: 'getSettings' });
+    expect(saved.settings.subscription.tier).toBe('free');
+    expect(saved.settings.blocklist.map((entry) => entry.urlPattern)).toEqual(['x.com']);
   });
 
   it('opens pricing with an opaque checkout id and no device identifiers', async () => {
@@ -634,6 +672,78 @@ describe('ResistGate background integration', () => {
     expect(reportRes.report.overridesThisWeek).toBe(2);
     expect(reportRes.report.topDistractionDomains[0].domain).toBe('youtube.com');
     expect(reportRes.report.feedbackLine.length).toBeGreaterThan(0);
+  });
+
+  it('reports per-site hold rates and urge timing in the weekly report', async () => {
+    await activateProForTest();
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const atHour = (daysBack, hour) => {
+      const date = new Date(now - (daysBack * dayMs));
+      date.setHours(hour, 0, 0, 0);
+      return date.getTime();
+    };
+
+    env.storageData.analytics = {
+      events: [
+        // Four attempts on youtube, two of which got through (one override,
+        // one completed challenge) — a 50% hold rate.
+        { type: 'blocked_visit', timestamp: atHour(1, 14), domain: 'youtube.com' },
+        { type: 'blocked_visit', timestamp: atHour(1, 15), domain: 'youtube.com' },
+        { type: 'blocked_visit', timestamp: atHour(2, 14), domain: 'youtube.com' },
+        { type: 'blocked_visit', timestamp: atHour(2, 15), domain: 'youtube.com' },
+        { type: 'override_triggered', timestamp: atHour(1, 14), domain: 'youtube.com' },
+        { type: 'access_granted', timestamp: atHour(2, 14), domain: 'youtube.com', method: 'challenge' },
+        // One attempt on reddit that never got through.
+        { type: 'blocked_visit', timestamp: atHour(3, 9), domain: 'reddit.com' }
+      ]
+    };
+
+    const { report } = await env.sendMessage({ action: 'getWeeklyReport' });
+
+    const youtube = report.siteHoldRates.find((entry) => entry.domain === 'youtube.com');
+    expect(youtube).toMatchObject({ attempts: 4, gotThrough: 2, held: 2 });
+    expect(youtube.holdRate).toBeCloseTo(0.5);
+
+    const reddit = report.siteHoldRates.find((entry) => entry.domain === 'reddit.com');
+    expect(reddit).toMatchObject({ attempts: 1, gotThrough: 0, held: 1 });
+
+    expect(report.hourlyUrges).toHaveLength(24);
+    expect(report.hourlyUrges[14].count).toBe(2);
+    expect(report.hourlyUrges[15].count).toBe(2);
+    expect(report.peakUrgeWindow.startHour).toBeLessThanOrEqual(14);
+    expect(report.peakUrgeWindow.endHour).toBeGreaterThanOrEqual(16);
+  });
+
+  it('never recommends turning a schedule on, which would narrow blocking to that window', () => {
+    const peakUrgeWindow = { startHour: 20, endHour: 23, count: 12, share: 60 };
+    const siteHoldRates = [{ domain: 'youtube.com', attempts: 12, gotThrough: 0, held: 12, holdRate: 1 }];
+
+    // Schedule off: blocking already runs around the clock, so the peak window
+    // is covered and there is nothing to widen.
+    const scheduleOff = hooks.buildWeeklyRecommendation({
+      settings: {
+        freeExperience: { schedule: { enabled: false, startTime: '09:00', endTime: '17:00' }, manualOverrideDelaySeconds: 15 },
+        challengeTypes: { typing: { level: 'hard' } }
+      },
+      peakUrgeWindow,
+      siteHoldRates,
+      overrides: 0
+    });
+    expect(scheduleOff).toBeNull();
+
+    // Schedule on and missing the peak: widen it to cover the danger window.
+    const scheduleOn = hooks.buildWeeklyRecommendation({
+      settings: {
+        freeExperience: { schedule: { enabled: true, startTime: '09:00', endTime: '17:00' }, manualOverrideDelaySeconds: 15 },
+        challengeTypes: { typing: { level: 'hard' } }
+      },
+      peakUrgeWindow,
+      siteHoldRates,
+      overrides: 0
+    });
+    expect(scheduleOn.action).toEqual({ type: 'extend-schedule', startTime: '09:00', endTime: '23:00' });
   });
 
   it('activates and enforces commitment mode lockout', async () => {

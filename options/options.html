@@ -48,6 +48,11 @@
         <p id="sidebar-plan-copy">Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.</p>
         <button id="compare-plans-btn" class="btn btn-secondary">Compare plans</button>
       </section>
+
+      <nav class="sidebar-links" aria-label="Support ResistGate">
+        <button id="open-feedback-btn" type="button" class="sidebar-link">Help improve ResistGate</button>
+        <button id="open-review-btn" type="button" class="sidebar-link">Rate ResistGate ⭐</button>
+      </nav>
     </aside>
 
     <main class="container">
@@ -55,13 +60,12 @@
       <div class="header-row">
         <h1>Settings</h1>
         <div class="header-meta">
-          <button id="open-feedback-btn" class="btn btn-secondary btn-sm">Help improve ResistGate</button>
-          <button id="open-review-btn" class="btn btn-secondary btn-sm">Rate ResistGate ⭐</button>
+          <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
           <button id="whats-new-btn" class="btn btn-secondary btn-sm">What's New</button>
           <span id="plan-pill" class="plan-pill">Free</span>
         </div>
       </div>
-      <p>Block the sites you want, and decide how hard it should be to get past them.</p>
+      <p>Block the sites you want, and decide how hard it should be to get past them. Changes save automatically.</p>
     </header>
 
     <section id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
@@ -72,16 +76,29 @@
         </div>
       </header>
 
+      <div id="today-strip" class="today-strip" hidden>
+        <span class="today-strip-label">Today</span>
+        <span id="today-strip-text" class="today-strip-text"></span>
+        <button id="today-strip-link" type="button" class="today-strip-link" data-pro-screen="analytics">See your trends</button>
+      </div>
+
       <div class="general-settings-grid">
       <section class="panel panel-block-sites">
         <h2>Block sites</h2>
-        <p class="helper">Add the domains that pull you off-task. Reminders are saved per blocked site.</p>
+        <p class="helper">Add the domains that pull you off-task, one at a time or as a pasted list. Reminders are saved per blocked site.</p>
         <div class="block-site-form">
-          <label for="new-blocked-site">Site</label>
+          <label for="new-blocked-site">Sites</label>
           <div class="input-group">
-            <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com" />
+            <input id="new-blocked-site" type="text" placeholder="e.g., reddit.com, x.com" autocomplete="off" spellcheck="false" />
             <button id="add-site-btn" class="btn btn-primary">Block site</button>
           </div>
+          <div id="site-suggestions" class="site-suggestions" hidden>
+            <span class="site-suggestions-label" id="site-suggestions-label">Quick add</span>
+            <div id="site-suggestion-chips" class="quick-chips" role="group" aria-labelledby="site-suggestions-label"></div>
+          </div>
+        </div>
+        <div id="site-filter-row" class="site-filter-row" hidden>
+          <input id="site-filter" type="search" placeholder="Filter blocked sites" aria-label="Filter blocked sites" autocomplete="off" spellcheck="false" />
         </div>
         <ul id="blocked-sites-list">
           <li class="empty-state">
@@ -100,7 +117,7 @@
           <div class="challenge-level-grid" role="radiogroup" aria-labelledby="challenge-level-label">
             <button type="button" class="challenge-level-btn" data-challenge-level="easy" role="radio" aria-checked="false">
               <strong>Easy</strong>
-              <small>Short random code</small>
+              <small>Random code</small>
             </button>
             <button type="button" class="challenge-level-btn" data-challenge-level="moderate" role="radio" aria-checked="false">
               <strong>Moderate</strong>
@@ -117,25 +134,42 @@
         <div class="settings-grid">
           <div>
             <label for="access-window-minutes">Access window</label>
-            <input id="access-window-minutes" type="number" min="1" step="1" aria-describedby="access-window-hint" />
+            <div class="unit-input">
+              <input id="access-window-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" data-field-label="Access window" aria-describedby="access-window-error access-window-hint" />
+              <span class="unit-suffix" aria-hidden="true">min</span>
+            </div>
+            <div class="quick-chips" role="group" aria-label="Access window presets">
+              <button type="button" class="chip" data-access-minutes="5">5</button>
+              <button type="button" class="chip" data-access-minutes="10">10</button>
+              <button type="button" class="chip" data-access-minutes="15">15</button>
+              <button type="button" class="chip" data-access-minutes="30">30</button>
+            </div>
+            <p class="field-error" id="access-window-error" hidden></p>
             <p class="helper" id="access-window-hint">After a challenge or override pause, the site opens for this many minutes, then blocks again.</p>
           </div>
           <div>
             <label for="manual-override-delay">Override pause</label>
-            <input id="manual-override-delay" type="number" min="10" max="15" step="1" aria-describedby="override-delay-hint" />
-            <p class="helper" id="override-delay-hint">Skip the challenge by waiting this many seconds.</p>
+            <div class="unit-input">
+              <input id="manual-override-delay" type="number" min="10" max="15" step="1" inputmode="numeric" data-field-label="Override pause" aria-describedby="override-delay-error override-delay-hint" />
+              <span class="unit-suffix" aria-hidden="true">sec</span>
+            </div>
+            <p class="field-error" id="override-delay-error" hidden></p>
+            <p class="helper" id="override-delay-hint">Skip the challenge by waiting this many seconds. Choose 10–15.</p>
           </div>
         </div>
       </section>
 
-      <details id="schedule-panel" class="panel disclosure-panel panel-schedule">
-        <summary class="disclosure-summary">
+      <section id="schedule-panel" class="panel disclosure-panel toggle-panel panel-schedule">
+        <div class="disclosure-summary toggle-panel-head">
           <span>
-            <strong>Schedule</strong>
+            <strong id="schedule-title">Schedule</strong>
             <small id="schedule-summary-copy">Off - turn on to block only during chosen hours.</small>
           </span>
-          <span id="schedule-summary-state" class="summary-state">Off</span>
-        </summary>
+          <label class="switch" for="schedule-enabled">
+            <input id="schedule-enabled" type="checkbox" role="switch" aria-labelledby="schedule-title" aria-describedby="schedule-summary-copy" />
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
 
         <div id="schedule-config" class="schedule-config" hidden>
           <div class="time-row">
@@ -149,8 +183,8 @@
             </div>
           </div>
 
-          <p class="helper">Select active days for blocking.</p>
-          <div class="day-grid" id="schedule-days">
+          <p class="helper" id="schedule-days-label">Select active days for blocking.</p>
+          <div class="day-grid" id="schedule-days" role="group" aria-labelledby="schedule-days-label">
             <label><input type="checkbox" value="0" />Sun</label>
             <label><input type="checkbox" value="1" />Mon</label>
             <label><input type="checkbox" value="2" />Tue</label>
@@ -159,28 +193,24 @@
             <label><input type="checkbox" value="5" />Fri</label>
             <label><input type="checkbox" value="6" />Sat</label>
           </div>
+          <p class="field-error" id="schedule-error" hidden></p>
         </div>
-      </details>
+      </section>
 
-      <details id="intention-panel" class="panel disclosure-panel panel-intention">
-        <summary class="disclosure-summary">
+      <section id="intention-panel" class="panel disclosure-panel toggle-panel panel-intention">
+        <div class="disclosure-summary toggle-panel-head">
           <span>
-            <strong>Intention pause</strong>
-            <small>Show your saved site reminder before the challenge.</small>
+            <strong id="intention-title">Intention pause</strong>
+            <small id="intention-summary-copy">Show your saved site reminder before the challenge.</small>
           </span>
-          <span id="intention-summary-state" class="summary-state">Off</span>
-        </summary>
+          <label class="switch" for="intention-page-enabled">
+            <input id="intention-page-enabled" type="checkbox" role="switch" aria-labelledby="intention-title" aria-describedby="intention-summary-copy" />
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
 
         <div class="disclosure-body">
           <label class="switch-row">
-            <input id="intention-page-enabled" type="checkbox" />
-            <span>
-              <strong>Enable this pause</strong>
-              <small>Shows your saved reminder before the typing challenge.</small>
-            </span>
-          </label>
-
-          <label class="switch-row sub-toggle">
             <input id="breathing-exercise-enabled" type="checkbox" />
             <span>
               <strong>Include breathing reset</strong>
@@ -209,10 +239,20 @@
             </div>
           </details>
         </div>
-      </details>
+      </section>
       </div>
 
-      <button id="save-settings-btn" data-action="save-settings" class="btn btn-primary full">Save Settings</button>
+      <section class="panel backup-panel" aria-labelledby="backup-title">
+        <div class="backup-copy">
+          <strong id="backup-title">Backup</strong>
+          <small>Settings live only in this browser. Export a copy before you reinstall or switch computers.</small>
+        </div>
+        <div class="backup-actions">
+          <button id="export-settings-btn" type="button" class="btn btn-secondary btn-sm">Export settings</button>
+          <button id="import-settings-btn" type="button" class="btn btn-secondary btn-sm">Import settings</button>
+          <input id="import-settings-file" type="file" accept="application/json,.json" hidden />
+        </div>
+      </section>
     </section>
 
     <section id="panel-analytics" class="tab-panel" role="tabpanel" aria-labelledby="tab-analytics">
@@ -279,14 +319,26 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Top distraction domains</h2>
-        <div id="weekly-top-domains" class="domain-bars"></div>
+      <section id="weekly-recommendation-panel" class="panel panel-recommendation hidden">
+        <h2>Do this next</h2>
+        <p id="weekly-recommendation-title" class="recommendation-title">--</p>
+        <p id="weekly-recommendation-detail" class="recommendation-detail">--</p>
+        <div class="recommendation-actions">
+          <button id="weekly-recommendation-apply" class="btn btn-primary" type="button">Apply</button>
+          <span id="weekly-recommendation-status" class="recommendation-status" role="status" aria-live="polite"></span>
+        </div>
       </section>
 
       <section class="panel">
-        <h2>Weekly summary</h2>
-        <ul id="weekly-report-highlights" class="metric-list"></ul>
+        <h2>When the urges hit</h2>
+        <p class="panel-note">Blocked attempts by hour, this week.</p>
+        <div id="weekly-urge-chart" class="urge-chart"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Where the gate holds</h2>
+        <p class="panel-note">How often each site stayed shut after you hit the gate.</p>
+        <div id="weekly-hold-rates" class="hold-rates"></div>
       </section>
 
       <section class="panel">
@@ -333,7 +385,8 @@
                 </label>
 
                 <label for="strict-disable-delay-seconds" class="sub-field">Wait time before you can turn this off (seconds)</label>
-                <input id="strict-disable-delay-seconds" class="sub-field" type="number" min="10" max="300" step="1" data-pro-feature="strictMode" />
+                <input id="strict-disable-delay-seconds" data-unit="seconds" class="sub-field" type="number" min="10" max="300" step="1" data-field-label="Wait time" aria-describedby="strict-delay-error" data-pro-feature="strictMode" />
+                <p class="field-error sub-field" id="strict-delay-error" hidden></p>
 
                 <label class="switch-row">
                   <input id="behavioral-friction-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
@@ -360,7 +413,8 @@
                 </label>
 
                 <label for="timed-wait-seconds" class="sub-field">Countdown length (seconds)</label>
-                <input id="timed-wait-seconds" class="sub-field" type="number" min="5" max="90" step="1" data-pro-feature="behavioralFriction" />
+                <input id="timed-wait-seconds" data-unit="seconds" class="sub-field" type="number" min="5" max="90" step="1" data-field-label="Countdown" aria-describedby="timed-wait-error" data-pro-feature="behavioralFriction" />
+                <p class="field-error sub-field" id="timed-wait-error" hidden></p>
 
                 <label class="switch-row sub-toggle">
                   <input id="earn-access-enabled" type="checkbox" data-pro-feature="behavioralFriction" />
@@ -371,7 +425,8 @@
                 </label>
 
                 <label for="earn-access-min-seconds" class="sub-field">Minimum time on the challenge before the site opens (seconds)</label>
-                <input id="earn-access-min-seconds" class="sub-field" type="number" min="30" max="900" step="5" data-pro-feature="behavioralFriction" />
+                <input id="earn-access-min-seconds" data-unit="seconds" class="sub-field" type="number" min="30" max="900" step="5" data-field-label="Minimum challenge time" aria-describedby="earn-access-error" data-pro-feature="behavioralFriction" />
+                <p class="field-error sub-field" id="earn-access-error" hidden></p>
 
                 <label for="custom-challenge-prompt" class="sub-field">Personal reminder before the challenge (optional)</label>
                 <p class="helper">Write a note to your future self — something that helps you pause and decide if this visit is worth it.</p>
@@ -400,8 +455,10 @@
                   type="text"
                   maxlength="200"
                   placeholder="Example: I promised myself deep work until noon, and this can wait."
+                  aria-describedby="custom-phrase-error"
                   data-pro-feature="customChallengePhrase"
                 />
+                <p class="field-error sub-field" id="custom-phrase-error" hidden></p>
               </div>
             </div>
           </div>
@@ -416,14 +473,21 @@
           <p id="commitment-active-text" class="commitment-active-text"></p>
         </div>
 
-        <label for="commitment-duration-hours">Lock duration (hours)</label>
-        <input id="commitment-duration-hours" type="number" min="1" max="24" step="1" value="2" data-pro-feature="commitmentMode" aria-describedby="commitment-warning" />
+        <label for="commitment-duration-hours">Lock duration</label>
+        <div class="unit-input unit-input-narrow">
+          <input id="commitment-duration-hours" type="number" min="1" max="24" step="1" value="2" inputmode="numeric" data-pro-feature="commitmentMode" data-field-label="Lock duration" aria-describedby="commitment-duration-error commitment-warning" />
+          <span class="unit-suffix" aria-hidden="true">hours</span>
+        </div>
+        <div class="quick-chips" role="group" aria-label="Lock duration presets">
+          <button type="button" class="chip" data-commitment-hours="1" data-pro-feature="commitmentMode">1 h</button>
+          <button type="button" class="chip" data-commitment-hours="2" data-pro-feature="commitmentMode">2 h</button>
+          <button type="button" class="chip" data-commitment-hours="4" data-pro-feature="commitmentMode">4 h</button>
+          <button type="button" class="chip" data-commitment-hours="8" data-pro-feature="commitmentMode">8 h</button>
+        </div>
+        <p class="field-error" id="commitment-duration-error" hidden></p>
         <p class="helper" id="commitment-warning">Choose 1–24 hours. Once activated, there is <strong>no way</strong> to disable it early.</p>
-
-        <button id="activate-commitment-btn" class="btn btn-primary" data-pro-feature="commitmentMode" style="margin-top: 12px;">Activate Commitment Mode</button>
+        <button id="activate-commitment-btn" class="btn btn-primary commitment-activate" data-pro-feature="commitmentMode">Activate Commitment Mode</button>
       </section>
-
-      <button data-action="save-settings" class="btn btn-primary full">Save Settings</button>
     </section>
     </main>
   </div>
@@ -573,6 +637,21 @@
       <div id="site-editor-content" class="site-editor-content"></div>
       <div class="modal-actions site-editor-actions">
         <button id="close-site-editor-btn" class="btn btn-secondary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <div class="modal-card confirm-card">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body" class="confirm-body"></p>
+      <div id="confirm-type-row" class="confirm-type-row" hidden>
+        <label for="confirm-type-input" id="confirm-type-label"></label>
+        <input id="confirm-type-input" type="text" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="modal-actions">
+        <button id="confirm-accept-btn" type="button" class="btn btn-primary"></button>
+        <button id="confirm-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </div>

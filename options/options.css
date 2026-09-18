@@ -1167,6 +1167,14 @@ label {
   margin-bottom: var(--space-xl);
 }
 
+/* The divider exists to separate the scoreboard from what follows it. When
+   nothing follows, it was drawing a rule under an empty gap. */
+.scoreboard:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
 .scoreboard-sm {
   grid-template-columns: 1fr auto 1fr;
   padding-bottom: 0;
@@ -1274,13 +1282,13 @@ label {
 .domain-bars {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: 2px;
   padding-top: var(--space-sm);
 }
 
 .domain-bar-row {
   display: grid;
-  grid-template-columns: minmax(100px, 140px) 1fr auto;
+  grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-sm) 0;
@@ -1295,38 +1303,38 @@ label {
   white-space: nowrap;
 }
 
+/* A chart, not a progress bar: squared-off ends and a flat fill read as a
+   measured quantity, where the pill-and-gradient version read as "loading". */
 .domain-bar-track {
-  height: 10px;
-  background: var(--lavender);
-  border-radius: 999px;
+  height: 22px;
+  background: var(--lavender-3);
+  border-radius: 4px;
   overflow: hidden;
-  position: relative;
-}
-
-.domain-bar-track::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
-  border-radius: inherit;
 }
 
 .domain-bar-fill {
   height: 100%;
   width: var(--fill-pct);
-  background: linear-gradient(90deg, var(--primary), var(--primary-subtle));
-  border-radius: 999px;
+  min-width: 3px;
+  background: var(--primary);
+  border-radius: 4px;
   transform-origin: left;
   animation: bar-expand 0.6s var(--ease-out) both;
 }
 
+/* Rank fade: the leader stays full strength, the tail recedes. */
+.domain-bar-row:nth-child(2) .domain-bar-fill { background: color-mix(in srgb, var(--primary) 88%, transparent); }
+.domain-bar-row:nth-child(3) .domain-bar-fill { background: color-mix(in srgb, var(--primary) 76%, transparent); }
+.domain-bar-row:nth-child(4) .domain-bar-fill { background: color-mix(in srgb, var(--primary) 64%, transparent); }
+.domain-bar-row:nth-child(n+5) .domain-bar-fill { background: color-mix(in srgb, var(--primary) 54%, transparent); }
+
 .domain-bar-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
   white-space: nowrap;
   text-align: right;
-  min-width: 64px;
+  min-width: 68px;
   font-feature-settings: 'tnum' 1;
 }
 
@@ -1336,62 +1344,238 @@ label {
   padding-top: var(--space-md);
 }
 
+/* The bars sit on a real baseline with a narrower column width. Floating
+   full-width blocks with no axis read as decoration rather than data. */
 .trend-bars {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-sm);
   align-items: end;
-  padding: var(--space-sm) var(--space-xs);
+  padding-top: var(--space-sm);
 }
 
 .trend-bar-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-xs);
+  gap: 6px;
 }
 
 .trend-count {
   font-size: 12px;
   font-weight: 700;
   color: var(--text);
-  min-height: 16px;
+  min-height: 14px;
   line-height: 1;
   font-feature-settings: 'tnum' 1;
 }
 
 .trend-bar-track {
   width: 100%;
-  height: 80px;
+  height: 88px;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
+  border-bottom: 1px solid var(--line-2);
 }
 
 .trend-bar {
-  width: 100%;
-  border-radius: 6px 6px 3px 3px;
-  background: var(--primary-subtle);
+  width: 46%;
+  max-width: 34px;
+  border-radius: 3px 3px 0 0;
+  background: var(--primary);
   transform-origin: bottom;
   animation: bar-grow 0.5s var(--ease-out) both;
   transition: opacity 0.15s ease;
 }
 
 .trend-bar:hover {
-  opacity: 0.8;
+  opacity: 0.82;
 }
 
-.trend-bar[data-intensity="0"] { background: var(--line); }
-.trend-bar[data-intensity="1"] { background: #d8c3f4; }
-.trend-bar[data-intensity="2"] { background: var(--primary-subtle); }
-.trend-bar[data-intensity="3"] { background: #8e64cd; }
-.trend-bar[data-intensity="4"] { background: #5f35aa; }
+/* A day with no overrides is a good day: show it as a flat tick on the
+   baseline rather than a colored block competing with real values. */
+.trend-bar[data-intensity="0"] {
+  background: var(--line-2);
+  border-radius: 0;
+}
 
 .trend-day {
+  padding-top: 8px;
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+/* ── Urge timing histogram (weekly review) ──────────────────────── */
+
+.urge-peak-line {
+  margin-bottom: var(--space-lg);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.urge-plot {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  align-items: end;
+  gap: 2px;
+  height: 104px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.urge-col {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Hours the schedule already covers are tinted, so uncovered spikes — the
+   ones worth acting on — are the ones that stand out. */
+.urge-col.is-scheduled::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--lavender-3);
+}
+
+.urge-bar {
+  position: relative;
+  width: 100%;
+  background: var(--primary-subtle);
+  border-radius: 2px 2px 0 0;
+}
+
+.urge-col.is-peak .urge-bar {
+  background: var(--primary);
+}
+
+.urge-axis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.urge-legend {
+  margin-top: var(--space-md);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Per-site hold rate (weekly review) ─────────────────────────── */
+
+.hold-rates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding-top: var(--space-sm);
+}
+
+.hold-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px var(--space-md);
+  align-items: baseline;
+}
+
+.hold-domain {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hold-rate {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ok);
+  font-feature-settings: 'tnum' 1;
+}
+
+.hold-row.is-leaky .hold-rate {
+  color: var(--warn);
+}
+
+.hold-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  background: var(--lavender-3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hold-fill {
+  height: 100%;
+  background: var(--ok);
+  border-radius: 4px;
+}
+
+.hold-row.is-leaky .hold-fill {
+  background: var(--warn);
+}
+
+.hold-detail {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── Weekly recommendation ──────────────────────────────────────── */
+
+.panel-recommendation {
+  border-color: var(--line-2);
+  background: var(--lavender-2);
+}
+
+.recommendation-title {
+  margin-top: var(--space-sm);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+  max-width: 62ch;
+}
+
+.recommendation-detail {
+  margin-top: var(--space-sm);
+  font-size: 14px;
+  color: var(--text-2);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+.recommendation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.recommendation-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.recommendation-status.is-error {
+  color: var(--err);
+}
+
+.panel-note {
+  margin-top: 2px;
+  margin-bottom: var(--space-sm);
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ── Weekly feedback block ──────────────────────────────────────── */
@@ -1403,18 +1587,6 @@ label {
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   position: relative;
-}
-
-.feedback-block::before {
-  content: '"';
-  position: absolute;
-  top: 8px;
-  left: 12px;
-  font-size: 48px;
-  color: var(--primary-subtle);
-  font-family: Georgia, serif;
-  opacity: 0.3;
-  line-height: 1;
 }
 
 .feedback-block p {
@@ -2567,11 +2739,14 @@ body {
   line-height: 1.45;
 }
 
+/* Cards in a row stretch to the tallest in that row, so the two columns always
+   share a baseline. Fixed min-heights used to fake this and drifted whenever
+   content changed length. */
 .general-settings-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(370px, 0.85fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .general-settings-grid > .panel {
@@ -2614,19 +2789,28 @@ body {
   font-size: 15px;
 }
 
+/* Both first-row cards push their last block to the bottom edge, so the two
+   columns end level even when one has more content than the other. */
 .panel-block-sites,
 .panel-entry-difficulty {
-  min-height: 380px;
+  display: flex;
+  flex-direction: column;
 }
 
+.panel-block-sites #blocked-sites-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel-entry-difficulty .settings-grid {
+  margin-top: auto;
+}
+
+/* Disclosure panels stretch with their row but keep content pinned to the top,
+   so a collapsed panel next to an open one still lines up at both edges. */
 .panel-schedule,
 .panel-intention {
-  min-height: 245px;
-}
-
-.panel-schedule:not([open]),
-.panel-intention:not([open]) {
-  min-height: 104px;
+  align-content: start;
 }
 
 .general-settings-grid .empty-state {
@@ -2662,10 +2846,10 @@ body {
 }
 
 .general-settings-grid #blocked-sites-list {
-  max-height: 240px;
   gap: 0;
   padding-right: 4px;
   border-top: 1px solid var(--line);
+  scrollbar-gutter: stable;
 }
 
 .general-settings-grid .blocked-site-item {
@@ -2974,4 +3158,438 @@ body {
   .general-settings-grid .day-grid {
     grid-template-columns: repeat(4, minmax(48px, 1fr));
   }
+}
+
+/* ── 1.5.0 settings UX ─────────────────────────────────────────── */
+
+/* Autosave status, in the header where the eye already goes after a change. */
+.save-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.save-status.is-saved {
+  color: var(--ok);
+}
+
+.save-status.is-saved::before {
+  content: '✓ ';
+}
+
+.save-status.is-invalid,
+.save-status.is-error {
+  color: var(--err);
+}
+
+/* Support links, moved out of the header. */
+.sidebar-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.sidebar-link {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-link:hover {
+  background: var(--bg-alt);
+  color: var(--text);
+}
+
+.sidebar-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* The sidebar collapses to a tab strip on narrow windows, like the plan card. */
+@media (max-width: 780px) {
+  .sidebar-links {
+    display: none;
+  }
+}
+
+/* Today strip: free progress, one line. */
+.today-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: var(--space-lg);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: 14px;
+}
+
+.today-strip[hidden] {
+  display: none;
+}
+
+.today-strip-label {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.today-strip-text {
+  flex: 1 1 auto;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-strip-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.today-strip-link:hover {
+  text-decoration: underline;
+}
+
+/* Chips: quick-add sites, access window and lock duration presets. */
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--line-2);
+  background: var(--bg-alt);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.site-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.site-suggestions[hidden] {
+  display: none;
+}
+
+.site-suggestions-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.site-suggestions .quick-chips {
+  margin-top: 0;
+}
+
+.site-filter-row {
+  margin-bottom: var(--space-sm);
+}
+
+.site-filter-row[hidden] {
+  display: none;
+}
+
+input[type="search"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-alt);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+input[type="search"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
+.blocked-site-item[hidden] {
+  display: none;
+}
+
+.site-filter-empty {
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Number fields carry their unit instead of hiding it in helper text. */
+.unit-input {
+  position: relative;
+}
+
+.unit-input input[type="number"] {
+  padding-right: 52px;
+}
+
+.unit-input-narrow {
+  max-width: 180px;
+}
+
+.unit-suffix {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+input[aria-invalid="true"],
+input[aria-invalid="true"]:hover {
+  border-color: var(--err);
+}
+
+.field-error {
+  margin-top: 6px;
+  color: var(--err);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+/* Schedule and Intention pause: a real switch, not the disclosure arrow. */
+.toggle-panel-head {
+  cursor: default;
+}
+
+.general-settings-grid .toggle-panel.is-enabled .toggle-panel-head,
+.general-settings-grid .panel-intention .toggle-panel-head {
+  padding-bottom: 14px;
+}
+
+.panel-intention .disclosure-body .switch-row:first-child {
+  margin-top: 0;
+}
+
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin: 2px 0 0;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--line-2);
+  transition: background-color 0.2s var(--ease-out);
+}
+
+.switch-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  content: '';
+  transition: transform 0.2s var(--ease-out);
+}
+
+.switch input:checked + .switch-track {
+  background: var(--primary);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(18px);
+}
+
+.switch input:focus-visible + .switch-track {
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
+.switch input:disabled + .switch-track {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-track::after {
+    transition: none;
+  }
+}
+
+/* Backup row, where the Save button used to sit. */
+.backup-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.backup-copy strong,
+.backup-copy small {
+  display: block;
+}
+
+.backup-copy strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.backup-copy small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.backup-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 620px) {
+  .backup-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Toasts: previously unstyled text appended below the Save button, easy to miss. */
+.message.banner {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  transform: translateX(-50%);
+  animation: fade-in-up 0.2s var(--ease-out) both;
+}
+
+.message.banner.success {
+  border-color: var(--ok-border);
+}
+
+.message.banner.error {
+  border-color: var(--err);
+  color: var(--err);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.banner {
+    animation: none;
+  }
+}
+
+/* Confirm dialog (Commitment Mode, import). */
+.confirm-card h2 {
+  margin: 0 0 var(--space-sm);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.confirm-body {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.confirm-type-row label {
+  margin-top: var(--space-lg);
+}
+
+.confirm-type-row[hidden] {
+  display: none;
+}
+
+.confirm-type-row input {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.commitment-activate {
+  margin-top: 12px;
+}
+
+/* Keep challenge descriptions to two lines in the narrow column. */
+.challenge-level-btn {
+  padding-inline: 12px;
+}
+
+.challenge-level-btn small {
+  text-wrap: balance;
 }

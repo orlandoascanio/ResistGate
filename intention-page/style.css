@@ -6,29 +6,13 @@
   --gate-surface: var(--card);
   --gate-line: var(--border);
   --gate-line-strong: var(--border-strong);
-  --gate-rule: color-mix(in srgb, var(--border) 82%, transparent);
-  --gate-hero: var(--color-purple-950);
-  --gate-hero-text: var(--color-gray-0);
-  --gate-hero-muted: #d9cef1;
   --gate-focus: 0 0 0 var(--focus-ring-width) var(--focus-ring);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --gate-rule: color-mix(in srgb, var(--border) 68%, transparent);
-    --gate-hero: #12091f;
-    --gate-hero-muted: #bcaadb;
-  }
 }
 
 body {
   min-height: 100vh;
   color: var(--gate-ink);
-  background:
-    linear-gradient(var(--gate-rule) 1px, transparent 1px),
-    linear-gradient(90deg, var(--gate-rule) 1px, transparent 1px),
-    linear-gradient(180deg, var(--bg-alt), var(--bg));
-  background-size: 34px 34px, 34px 34px, auto;
+  background: var(--bg);
   font-size: var(--text-body-lg);
 }
 
@@ -86,45 +70,20 @@ button {
   width: min(100%, 720px);
 }
 
+/* This screen interrupts someone mid-impulse. A drenched hero panel with a
+   stripe pattern and a numbered step ladder made the interruption itself the
+   loudest thing on the page; the reminder should be. */
 .gate-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 270px);
-  gap: var(--space-6);
-  align-items: stretch;
-  padding: var(--space-5);
-  border-radius: 16px;
-  color: var(--gate-hero-text);
-  background:
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05)),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.11) 0 1px, transparent 1px 14px),
-    var(--gate-hero);
+  gap: var(--space-3);
 }
 
-.gate-header.compact {
-  grid-template-columns: 1fr;
-}
-
-.intention-kicker,
 .target-label,
 .goal-label {
   width: fit-content;
-  color: var(--primary);
-  font-size: var(--text-small);
-  font-weight: var(--font-weight-extrabold);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.gate-header .intention-kicker {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  margin-bottom: var(--space-4);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  color: #c4b5fd;
-  background: rgba(255, 255, 255, 0.09);
+  color: var(--gate-muted);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 h1,
@@ -134,77 +93,40 @@ p {
 }
 
 h1 {
-  max-width: 10ch;
-  margin-bottom: var(--space-3);
-  color: inherit;
-  font-size: clamp(2.65rem, 7vw, 4.75rem);
+  max-width: 24ch;
+  margin: 0;
+  color: var(--gate-ink);
+  font-size: clamp(1.75rem, 3.2vw, 2.25rem);
   font-weight: var(--font-weight-extrabold);
-  line-height: 0.9;
-  letter-spacing: -0.075em;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
 .intention-lede {
   max-width: 58ch;
   margin: 0;
-  color: var(--gate-hero-muted);
-  font-size: clamp(var(--text-body-lg), 2vw, var(--text-subheading));
-  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  font-size: var(--text-body-lg);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-relaxed);
-}
-
-.gate-steps {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.gate-steps li {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: center;
-  min-height: 54px;
-  padding: var(--space-3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.gate-steps span {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  color: var(--gate-hero);
-  background: #c4b5fd;
-  font-size: var(--text-small);
-  font-weight: var(--font-weight-extrabold);
-  letter-spacing: 0.04em;
-}
-
-.gate-steps strong {
-  color: var(--gate-hero-text);
-  font-size: var(--text-body);
 }
 
 .decision-grid {
   display: grid;
-  grid-template-columns: minmax(250px, 0.92fr) minmax(0, 1.08fr);
-  gap: var(--space-4);
-  align-items: stretch;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--space-6);
+  align-items: start;
 }
 
+/* Boxing the destination and the reminder inside the panel made cards within a
+   card, each padded to a height it had no content for. They are read-only
+   text, so they are set as text; only the controls keep a box. */
 .ledger-stack {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
-.target-card,
-.goal-card,
-.reason-card,
 .pro-intent-card,
 .breathing-card,
 .quote-card,
@@ -218,8 +140,6 @@ h1 {
 .target-card {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-4);
-  border-color: var(--gate-line-strong);
 }
 
 .target-label,
@@ -230,11 +150,11 @@ h1 {
 #blocked-site {
   min-width: 0;
   overflow: hidden;
-  color: var(--primary);
-  font-size: clamp(var(--text-heading), 4vw, var(--text-display));
-  font-weight: var(--font-weight-extrabold);
+  color: var(--text);
+  font-size: var(--text-heading-lg);
+  font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -247,26 +167,31 @@ h1 {
 
 .goal-card {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-content: start;
-  min-height: 100%;
-  padding: var(--space-5);
+  padding: var(--space-5) 0 0;
   margin: 0;
-  background:
-    linear-gradient(180deg, var(--primary-bg-subtle), transparent 68%),
-    var(--gate-surface);
+  border-top: 1px solid var(--gate-line);
 }
 
 #personal-goal-display {
   margin: 0;
   color: var(--gate-ink);
-  font-size: clamp(var(--text-heading), 4vw, var(--text-heading-lg));
-  font-weight: var(--font-weight-extrabold);
+  font-size: var(--text-heading);
+  font-weight: var(--font-weight-bold);
   line-height: var(--line-height-snug);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
 }
 
-.reason-card,
+.reason-card {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--gate-line);
+}
+
 .pro-intent-card {
   display: grid;
   gap: var(--space-4);
@@ -277,10 +202,10 @@ h1 {
 .pro-intent-card label {
   margin: 0;
   color: var(--gate-ink);
-  font-size: clamp(var(--text-subheading), 3vw, var(--text-heading-lg));
-  font-weight: var(--font-weight-extrabold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-tight);
+  font-size: var(--text-subheading);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-normal);
 }
 
 .reason-grid {
@@ -477,15 +402,19 @@ h1 {
   justify-items: start;
 }
 
-.success-panel .intention-kicker {
+.success-badge {
+  width: fit-content;
   min-height: 28px;
   display: inline-flex;
   align-items: center;
+  margin: 0;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--success-border);
   border-radius: 999px;
   color: var(--success);
   background: var(--success-bg);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .success-panel .intention-lede {
@@ -554,19 +483,17 @@ h1 {
     border-radius: var(--radius-xl);
   }
 
-  .gate-header,
   .decision-grid,
   .challenge-stats {
     grid-template-columns: 1fr;
   }
 
-  .gate-steps {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .gate-steps li {
-    grid-template-columns: 1fr;
-    min-height: auto;
+  /* Stacked, the column divider becomes a rule above the intent check. */
+  .reason-card {
+    padding-left: 0;
+    padding-top: var(--space-5);
+    border-left: 0;
+    border-top: 1px solid var(--gate-line);
   }
 }
 
