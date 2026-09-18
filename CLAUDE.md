@@ -59,6 +59,8 @@ All storage is local-only. Do not introduce `chrome.storage.sync` without a deli
 | `resistanceCounters` | Per-domain daily counters |
 | `workTimer` | Current-day focus timer state |
 | `pendingOutcomeTap` | Expired-access reflection prompt for popup |
+| `gateOutcomes` | Today's gate outcomes (`resisted` / `accessed`), capped at 100; drives the "gone back N of the last M times" streak line |
+| `gateReminders` | Pending "remind me in 10 min" destinations, keyed by blocked domain |
 | `welcomeShown` | Declared but currently unused |
 | `whatsNewShown` | Declared but currently unused |
 
@@ -81,6 +83,9 @@ This serializes DNR mutations and prevents overlapping rule refreshes.
 | `grantTemporaryAccess` | No | Grant timed bypass for a domain |
 | `recordBlockedVisit` | No | Increment badge/resistance counters and optionally local analytics |
 | `getResistanceCount` | No | Return today's count for a domain |
+| `recordGateOutcome` | No | Record a resisted exit from a gate page; `reversesAccess` turns the last grant for that domain into a resisted visit ("Actually, never mind") |
+| `getGateOutcomeSummary` | No | Return `{ total, resisted }` over today's last five gate outcomes |
+| `scheduleGateReminder` | No | Validate a blocked http(s) destination, record a resisted exit, and reopen it in a new tab after 10 minutes |
 | `getTodaySummary` | No | Return today's blocked-attempt total and top three domains for the options page Today strip |
 | `recordAnalyticsEvent` | Partially | Track allowlisted PostHog events and selected Pro local events |
 | `getSettings` | No | Return sanitized settings |
@@ -175,7 +180,7 @@ Note: current code and tests treat per-site access condition setup as free.
 | `popup/popup.js` | Quick add/remove, block current tab, work timer, commitment status, feedback, outcome tap prompt |
 | `options/options.js` | Full settings UI (autosaves; no Save button), blocklist with bulk add/filter, per-site reminders/access conditions, settings export/import, Pro paywall, analytics/report tabs |
 | `intention-page/script.js` | Standalone pause layer, optional reason/task intent, breathing pause, short challenge |
-| `friction-page/script.js` | Full challenge, manual override, Pro precheck, access-condition progress |
+| `friction-page/script.js` | Full challenge with live mismatch highlighting, access-window picker (shorter window = lighter challenge), manual override with cancel, Pro precheck, access-condition progress, exits on every step |
 | `commitment-page/script.js` | Commitment Mode countdown page |
 | `welcome/welcome.js` | Onboarding lifecycle page |
 | `whats-new/whats-new.js` | Release notes page actions and update-seen telemetry |
@@ -196,9 +201,9 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 
 Current verified state on 2026-09-18:
 
-- `npm test`: 5 files, 205 tests passing.
+- `npm test`: 5 files, 236 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 89.45% lines/statements, 78.58% branches, 97.36% functions.
+- `background.js`: 89.72% lines/statements, 78.82% branches, 97.5% functions.
 
 `tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
 run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.

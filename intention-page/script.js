@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const typingInput = document.getElementById('typing-input');
 
   continueButton.addEventListener('click', handleContinueToChallenge);
-  closeButton.addEventListener('click', goBack);
+  closeButton.addEventListener('click', leavePage);
   backButton.addEventListener('click', function () {
     setActivePanel('pause');
   });
@@ -306,6 +306,30 @@ function getTaskIntent() {
   return input ? input.value.trim() : '';
 }
 
+// Leaving the pause is a resisted visit; it feeds the "gone back N of the last M times"
+// line on the friction page. Recording is best-effort and never holds the user up.
+function leavePage() {
+  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
+  if (!safeTargetUrl) {
+    goBack();
+    return;
+  }
+
+  let finished = false;
+  const finish = function () {
+    if (!finished) {
+      finished = true;
+      goBack();
+    }
+  };
+
+  setTimeout(finish, 400);
+  chrome.runtime.sendMessage({
+    action: 'recordGateOutcome',
+    domain: new URL(safeTargetUrl).hostname
+  }, finish);
+}
+
 function goBack() {
   if (window.history && window.history.length > 1) {
     window.history.back();
@@ -427,6 +451,7 @@ function stopBreathingCountdown() {
 
 if (typeof globalThis !== 'undefined') {
   globalThis.__RESISTGATE_INTENTION_TEST_HOOKS__ = {
+    leavePage,
     getSafeTargetUrl,
     isIntentionPageEnabled,
     isProBehavioralFrictionActive,

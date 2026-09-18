@@ -44,12 +44,19 @@
         <div class="intention-meta">
           <p class="site-info">Destination <span id="blocked-site">Loading...</span></p>
           <p id="resistance-count" class="helper-text"></p>
+          <p id="gate-streak" class="helper-text streak-text"></p>
         </div>
       </header>
-      
+
+      <p id="intention-error" class="error-text" role="alert"></p>
+
       <div class="phase-actions">
-        <button id="continue-to-challenge" class="btn btn-primary btn-large">Continue to Challenge</button>
-        <button id="go-back-btn" class="btn-text" type="button">Go back instead</button>
+        <button id="continue-to-challenge" class="btn btn-primary btn-large" type="button">Continue to Challenge</button>
+        <div class="exit-actions">
+          <button id="go-back-btn" class="btn-text" type="button">Go back instead</button>
+          <span class="exit-divider" aria-hidden="true">·</span>
+          <button id="remind-later-btn" class="btn-text" type="button">Not now, remind me in 10 min</button>
+        </div>
       </div>
     </section>
 
@@ -59,12 +66,20 @@
         <span class="phase-label">Prepare</span>
         <h2>Ready to earn access?</h2>
         <p id="precheck-subtitle" class="precheck-subtitle">Hard mode: complete 5 paragraphs with full accuracy.</p>
+        <p id="precheck-resistance-count" class="helper-text"></p>
+        <p id="precheck-gate-streak" class="helper-text streak-text"></p>
       </header>
+
+      <fieldset id="duration-picker" class="duration-picker hidden">
+        <legend class="duration-legend">How long do you need?</legend>
+        <div id="duration-options" class="duration-options"></div>
+        <p id="duration-hint" class="hint-text duration-hint"></p>
+      </fieldset>
       
       <!-- Bundle panel for temptation bundle -->
       <div id="bundle-panel" class="bundle-panel hidden">
         <p id="bundle-label" class="bundle-label"></p>
-        <div class="bundle-progress-wrap">
+        <div id="bundle-progress-wrap" class="bundle-progress-wrap">
           <div id="bundle-progress-bar" class="bundle-progress-bar" style="width:0%"></div>
         </div>
         <p id="bundle-progress-text" class="bundle-progress-text"></p>
@@ -92,11 +107,17 @@
       <p id="precheck-error" class="error-text precheck-error"></p>
       
       <div class="phase-actions">
-        <button id="start-unlock-challenge" class="btn btn-primary btn-large">Start Challenge</button>
-        
+        <button id="start-unlock-challenge" class="btn btn-primary btn-large" type="button">Start Challenge</button>
+
         <div class="secondary-actions">
-          <button id="manual-override-btn" class="btn-text" disabled>Manual Override</button>
+          <button id="manual-override-btn" class="btn-text" type="button" disabled>Manual Override</button>
           <span id="manual-override-hint" class="hint-text"></span>
+        </div>
+
+        <div class="exit-actions">
+          <button id="precheck-go-back-btn" class="btn-text" type="button">Go back instead</button>
+          <span class="exit-divider" aria-hidden="true">·</span>
+          <button id="precheck-remind-later-btn" class="btn-text" type="button">Not now, remind me in 10 min</button>
         </div>
       </div>
     </section>
@@ -116,8 +137,12 @@
         <p id="success-bonus" class="bonus-text"></p>
         <p id="access-timer" class="access-timer"></p>
         <p id="success-time-invested" class="time-invested"></p>
-        <p class="success-prompt">Open the site when you are ready.</p>
+        <p id="success-intent" class="success-intent hidden"></p>
+        <p id="success-prompt" class="success-prompt">Open the site when you are ready.</p>
+        <p id="success-error" class="error-text" role="alert"></p>
         <a id="continue-to-site" class="btn btn-primary btn-large" href="#">Continue to Site</a>
+        <button id="close-tab-btn" class="btn btn-secondary btn-large hidden" type="button">Close tab</button>
+        <button id="never-mind-btn" class="btn-text" type="button">Actually, never mind</button>
       </div>
     </section>
   </div>

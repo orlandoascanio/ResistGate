@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 function createDocumentWithValues(values = {}) {
@@ -702,5 +702,503 @@ describe('Friction page flow logic', () => {
 
     expect(mockElements['personal-goal-display'].textContent).toBe('You blocked this for a reason.');
     expect(mockElements['intention-label'].textContent).toBe('Pause before proceeding');
+  });
+
+  it('builds challenge sizes from the chosen access window', () => {
+    expect(hooks.getAccessDurationOptions(15)).toEqual([5, 15, 30]);
+    expect(hooks.getAccessDurationOptions(45)).toEqual([5, 15, 30, 45]);
+    expect(hooks.getAccessDurationOptions('nonsense')).toEqual([5, 15, 30]);
+
+    expect(hooks.getChallengeWeight(5, 15)).toBe('light');
+    expect(hooks.getChallengeWeight(15, 15)).toBe('standard');
+    expect(hooks.getChallengeWeight(30, 15)).toBe('heavy');
+
+    expect(hooks.buildTypingChallengeSegments('hard', 'light')).toHaveLength(3);
+    expect(hooks.buildTypingChallengeSegments('hard', 'heavy')).toHaveLength(8);
+    expect(hooks.buildTypingChallengeSegments('easy', 'light')[0].text).toMatch(/^[A-Z2-9]{8}$/);
+    expect(hooks.buildTypingChallengeSegments('easy', 'heavy')[0].text).toMatch(/^[A-Z2-9]{16}$/);
+    expect(hooks.getDurationHint('hard', 'light')).toBe('Shorter visit, lighter challenge.');
+    expect(hooks.getDurationHint('hard', 'heavy')).toBe('Longer visit, longer challenge.');
+  });
+
+  it('gives moderate mode the same two-sentence size on every standard visit', () => {
+    for (let i = 0; i < 20; i++) {
+      const [{ text }] = hooks.buildTypingChallengeSegments('moderate');
+      expect(text.split('.').filter(Boolean)).toHaveLength(2);
+    }
+    expect(hooks.buildTypingChallengeSegments('moderate', 'light')[0].text.split('.').filter(Boolean)).toHaveLength(1);
+  });
+
+  it('repeats a custom phrase for a longer visit', () => {
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      proFeatures: { customChallengePhrase: { enabled: true, text: 'Back to the draft.' } }
+    });
+    expect(hooks.buildTypingChallengeSegments('custom', 'light')).toHaveLength(1);
+    expect(hooks.buildTypingChallengeSegments('custom', 'heavy')).toEqual([
+      { text: 'Back to the draft.' },
+      { text: 'Back to the draft.' }
+    ]);
+    expect(hooks.getChallengeLevelCopy('custom').precheck(2)).toContain('2 times');
+  });
+
+  it('marks where typed text first goes wrong', () => {
+    expect(hooks.computeTypingDiff('focus', 'foc')).toMatchObject({ correctLength: 3, hasError: false, complete: false });
+    expect(hooks.computeTypingDiff('focus', 'focus')).toMatchObject({ correctLength: 5, hasError: false, complete: true });
+    expect(hooks.computeTypingDiff('focus', 'fxcus')).toMatchObject({ correctLength: 1, errorEnd: 5, hasError: true });
+    expect(hooks.computeTypingDiff('focus', 'focusss')).toMatchObject({ correctLength: 5, errorEnd: 5, hasError: true });
+
+    expect(hooks.getQuoteHighlightParts('focus', '')).toEqual([
+      { className: 'qc-current', text: 'f' },
+      { className: '', text: 'ocus' }
+    ]);
+    expect(hooks.getQuoteHighlightParts('focus', 'fo')).toEqual([
+      { className: 'qc-done', text: 'fo' },
+      { className: 'qc-current', text: 'c' },
+      { className: '', text: 'us' }
+    ]);
+    expect(hooks.getQuoteHighlightParts('focus', 'fx')).toEqual([
+      { className: 'qc-done', text: 'f' },
+      { className: 'qc-error', text: 'o' },
+      { className: '', text: 'cus' }
+    ]);
+  });
+
+  it('matches blocklist entries by host and subdomain, never by lookalike', () => {
+    const blocklist = [
+      { urlPattern: 'x.com', personalGoal: 'x' },
+      { urlPattern: 'google.com', personalGoal: 'google' },
+      { urlPattern: 'mail.google.com', personalGoal: 'mail' },
+      { urlPattern: 'https://www.Reddit.com/r/all', personalGoal: 'reddit' }
+    ];
+
+    expect(hooks.findBlocklistEntry('box.com', blocklist)).toBeNull();
+    expect(hooks.findBlocklistEntry('www.x.com', blocklist).personalGoal).toBe('x');
+    expect(hooks.findBlocklistEntry('m.x.com', blocklist).personalGoal).toBe('x');
+    expect(hooks.findBlocklistEntry('mail.google.com', blocklist).personalGoal).toBe('mail');
+    expect(hooks.findBlocklistEntry('docs.google.com', blocklist).personalGoal).toBe('google');
+    expect(hooks.findBlocklistEntry('old.reddit.com', blocklist).personalGoal).toBe('reddit');
+    // The old matcher's `pattern.endsWith(hostname)` let a short hostname match a longer pattern.
+    expect(hooks.findBlocklistEntry('e.com', [{ urlPattern: 'youtube.com' }])).toBeNull();
+  });
+
+  it('says an access condition makes the site free later, not that it is closed now', () => {
+    const at9am = new Date(2026, 8, 18, 9, 0);
+    const timeCopy = hooks.getBundlePanelCopy(
+      { enabled: true, conditionType: 'time_of_day', afterTime: '17:00' },
+      null,
+      at9am
+    );
+    expect(timeCopy.label).toBe('Free access after 5:00 PM — or earn it now.');
+    expect(timeCopy.progressText).toBe('8h 0m until free access.');
+    // No midnight-based bar for time-of-day conditions.
+    expect(timeCopy.progressPercent).toBeNull();
+
+    const workCopy = hooks.getBundlePanelCopy(
+      { enabled: true, conditionType: 'work_timer', requiredMinutes: 60 },
+      { effectiveMinutes: 15 },
+      at9am
+    );
+    expect(workCopy.label).toBe('Free access after 60 min of focused work — or earn it now.');
+    expect(workCopy.progressText).toBe('15 / 60 min logged — 45 min to go.');
+    expect(workCopy.progressPercent).toBe(25);
+
+    expect(hooks.getBundlePanelCopy({ enabled: false }, null, at9am)).toBeNull();
+  });
+
+  it('only shows the streak line once there is something to celebrate', () => {
+    expect(hooks.getGateStreakText(null)).toBe('');
+    expect(hooks.getGateStreakText({ total: 1, resisted: 1 })).toBe('');
+    expect(hooks.getGateStreakText({ total: 4, resisted: 0 })).toBe('');
+    expect(hooks.getGateStreakText({ total: 5, resisted: 3 })).toBe('You\'ve gone back 3 of the last 5 times today.');
+  });
+
+  it('formats the Earn-Access unlock countdown as m:ss', () => {
+    expect(hooks.formatCountdown(34)).toBe('0:34');
+    expect(hooks.formatCountdown(90)).toBe('1:30');
+    expect(hooks.formatCountdown(-3)).toBe('0:00');
+  });
+});
+
+function createPageHarness({ search = '?originalUrl=https%3A%2F%2Fwww.reddit.com%2Fr%2Fall', responders = {}, historyLength = 3 } = {}) {
+  const elements = {};
+  const listeners = {};
+  const messages = [];
+  const historyCalls = [];
+  const reloads = [];
+  const alerts = [];
+
+  function makeElement(id) {
+    const classes = new Set(id === 'close-tab-btn' ? ['hidden'] : []);
+    const handlers = {};
+    const element = {
+      id,
+      textContent: '',
+      innerHTML: '',
+      value: '',
+      className: id === 'main-container' ? 'container phase-intention' : '',
+      disabled: false,
+      href: '',
+      style: {},
+      children: [],
+      classList: {
+        add: (name) => {
+          classes.add(name);
+          if (id === 'main-container') element.className += ` ${name}`;
+        },
+        remove: (name) => classes.delete(name),
+        toggle: (name, force) => {
+          const on = force === undefined ? !classes.has(name) : force;
+          if (on) classes.add(name); else classes.delete(name);
+          return on;
+        },
+        contains: (name) => classes.has(name)
+      },
+      addEventListener: (type, handler) => {
+        (handlers[type] ||= []).push(handler);
+      },
+      appendChild: (child) => element.children.push(child),
+      focus: () => {},
+      click: () => (handlers.click || []).forEach((handler) => handler({ preventDefault: () => {} })),
+      dispatch: (type, event = {}) => (handlers[type] || []).forEach((handler) => handler({ preventDefault: () => {}, ...event }))
+    };
+    return element;
+  }
+
+  const document = {
+    addEventListener: (type, handler) => {
+      (listeners[type] ||= []).push(handler);
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    createElement: (tag) => makeElement(`created-${tag}`),
+    createTextNode: (text) => ({ text }),
+    getElementById: (id) => {
+      if (!elements[id]) elements[id] = makeElement(id);
+      return elements[id];
+    }
+  };
+
+  const chrome = {
+    runtime: {
+      sendMessage: (request, callback) => {
+        messages.push(request);
+        const responder = responders[request.action];
+        const response = typeof responder === 'function' ? responder(request) : responder;
+        if (callback && response !== undefined) callback(response);
+      }
+    },
+    tabs: {
+      getCurrent: (callback) => callback({ id: 7 }),
+      remove: (id) => historyCalls.push(['closeTab', id])
+    }
+  };
+
+  const window = {
+    location: { search },
+    history: {
+      length: historyLength,
+      go: (steps) => historyCalls.push(['go', steps]),
+      back: () => historyCalls.push(['back'])
+    },
+    close: () => historyCalls.push(['close'])
+  };
+
+  return {
+    elements,
+    messages,
+    historyCalls,
+    reloads,
+    alerts,
+    get: (id) => document.getElementById(id),
+    async load() {
+      const context = await loadScriptInVm('friction-page/script.js', {
+        chrome,
+        document,
+        window,
+        location: { reload: () => reloads.push(true) },
+        alert: (message) => alerts.push(message),
+        confirm: () => true,
+        requestAnimationFrame: (callback) => callback()
+      });
+      const hooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
+      hooks.__setOriginalUrlForTest(new URLSearchParams(search).get('originalUrl'));
+      return hooks;
+    },
+    fireDomReady: () => (listeners.DOMContentLoaded || []).forEach((handler) => handler()),
+    keydown: (event) => (listeners.keydown || []).forEach((handler) => handler({
+      preventDefault: () => {},
+      target: { tagName: 'BODY' },
+      ...event
+    }))
+  };
+}
+
+describe('Friction page interactions', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const freeSettings = {
+    subscription: { tier: 'free' },
+    defaultAccessDuration: 15,
+    proFeatures: { intentionPage: { enabled: false } },
+    blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+  };
+
+  it('Quit leaves the page and records a resisted visit instead of reloading', async () => {
+    const page = createPageHarness({ responders: { recordGateOutcome: { success: true } } });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+
+    hooks.transitionToPhase(hooks.PHASES.CHALLENGE);
+    hooks.leaveGate();
+
+    expect(page.reloads).toHaveLength(0);
+    expect(page.messages.filter((m) => m.action === 'recordBlockedVisit')).toHaveLength(0);
+    expect(page.messages).toContainEqual({ action: 'recordGateOutcome', domain: 'www.reddit.com', reversesAccess: false });
+    expect(page.historyCalls).toEqual([['go', -1]]);
+  });
+
+  it('records a resisted visit only once per page', async () => {
+    const page = createPageHarness({ responders: { recordGateOutcome: { success: true } } });
+    const hooks = await page.load();
+    hooks.leaveGate();
+    hooks.leaveGate();
+    expect(page.messages.filter((m) => m.action === 'recordGateOutcome')).toHaveLength(1);
+  });
+
+  it('steps past the Intention Page when going back from a hand-off', async () => {
+    const page = createPageHarness({
+      search: '?originalUrl=https%3A%2F%2Fwww.reddit.com&skipIntention=1&skipRecord=1',
+      responders: { recordGateOutcome: { success: true } }
+    });
+    const hooks = await page.load();
+    hooks.__setSkipIntentionForTest(true);
+    hooks.goBack();
+    expect(page.historyCalls).toEqual([['go', -2]]);
+  });
+
+  it('closes the tab when there is no history to go back to', async () => {
+    const page = createPageHarness({ historyLength: 1 });
+    const hooks = await page.load();
+    hooks.goBack();
+    expect(page.historyCalls).toEqual([['closeTab', 7]]);
+  });
+
+  it('reads the resistance count instead of re-recording when handed off from the Intention Page', async () => {
+    const page = createPageHarness({
+      search: '?originalUrl=https%3A%2F%2Fwww.reddit.com&skipIntention=1&skipRecord=1',
+      responders: {
+        getResistanceCount: { success: true, count: 4 },
+        getGateOutcomeSummary: { success: true, summary: { total: 5, resisted: 3 } }
+      }
+    });
+    await page.load();
+    page.fireDomReady();
+
+    expect(page.messages.filter((m) => m.action === 'recordBlockedVisit')).toHaveLength(0);
+    expect(page.get('precheck-resistance-count').textContent).toBe('You\'ve resisted www.reddit.com 4 times today.');
+    expect(page.get('resistance-count').textContent).toBe('You\'ve resisted www.reddit.com 4 times today.');
+    expect(page.get('precheck-gate-streak').textContent).toBe('You\'ve gone back 3 of the last 5 times today.');
+  });
+
+  it('shows challenge-phase errors inside the challenge, where they are visible', async () => {
+    const page = createPageHarness();
+    const hooks = await page.load();
+
+    hooks.transitionToPhase(hooks.PHASES.CHALLENGE);
+    hooks.showPageError('No shortcuts in ResistGate. Earn it.');
+
+    expect(page.get('typing-error').textContent).toBe('No shortcuts in ResistGate. Earn it.');
+    expect(page.get('precheck-error').textContent).toBe('');
+  });
+
+  it('keeps finished work when Earn-Access time has not passed yet', async () => {
+    const page = createPageHarness();
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest({
+      subscription: { tier: 'pro' },
+      proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true, earnAccessMinChallengeSeconds: 90 } },
+      blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
+    });
+    hooks.__setStartTimeForTest(Date.now() - 30 * 1000);
+    hooks.transitionToPhase(hooks.PHASES.CHALLENGE);
+
+    expect(hooks.getEarnAccessRemainingSeconds()).toBe(60);
+
+    let failed = false;
+    hooks.completeChallenge(15, 'https://www.reddit.com/', { onFailure: () => { failed = true; } });
+
+    expect(failed).toBe(true);
+    expect(page.reloads).toHaveLength(0);
+    expect(page.messages.filter((m) => m.action === 'grantTemporaryAccess')).toHaveLength(0);
+    expect(page.get('typing-error').textContent).toContain('Your typing is kept');
+  });
+
+  it('shows a failed grant inline and lets the user retry, with no alert or reload', async () => {
+    const page = createPageHarness({
+      responders: { grantTemporaryAccess: { success: false, error: 'Commitment Mode is active.' } }
+    });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+    hooks.transitionToPhase(hooks.PHASES.CHALLENGE);
+
+    let failed = false;
+    hooks.requestTemporaryAccess({
+      targetUrl: 'https://www.reddit.com/',
+      duration: 15,
+      meta: { method: 'challenge' },
+      onFailure: () => { failed = true; }
+    });
+
+    expect(failed).toBe(true);
+    expect(page.alerts).toHaveLength(0);
+    expect(page.reloads).toHaveLength(0);
+    expect(page.get('typing-error').textContent).toBe('Commitment Mode is active.');
+  });
+
+  it('shows the stated intent on success and a close-tab nudge once access runs out', async () => {
+    const page = createPageHarness({
+      responders: { grantTemporaryAccess: { success: true, access: { domain: 'reddit.com', expiresAt: Date.now() - 1 } } }
+    });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+    hooks.__setChallengeMetaForTest({ taskIntent: 'reply to Sam' });
+
+    hooks.requestTemporaryAccess({ targetUrl: 'https://www.reddit.com/', duration: 5, meta: { method: 'challenge' } });
+
+    expect(hooks.__getCurrentPhase()).toBe('success');
+    expect(page.get('success-intent').textContent).toBe('You said you\'re here to: reply to Sam');
+    expect(page.get('success-intent').classList.contains('hidden')).toBe(false);
+    expect(page.get('access-timer').textContent).toBe('Time\'s up — close the tab?');
+    expect(page.get('continue-to-site').classList.contains('hidden')).toBe(true);
+    expect(page.get('close-tab-btn').classList.contains('hidden')).toBe(false);
+  });
+
+  it('"Actually, never mind" closes access and turns the visit into a resisted one', async () => {
+    const page = createPageHarness({
+      responders: {
+        grantTemporaryAccess: { success: true, access: { domain: 'reddit.com', expiresAt: Date.now() + 60000 } },
+        revokeTemporaryAccess: { success: true },
+        recordGateOutcome: { success: true }
+      }
+    });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+    hooks.requestTemporaryAccess({ targetUrl: 'https://www.reddit.com/', duration: 5, meta: { method: 'challenge' } });
+
+    hooks.handleNeverMind();
+
+    expect(page.messages).toContainEqual({ action: 'revokeTemporaryAccess', domain: 'reddit.com' });
+    expect(page.messages).toContainEqual({ action: 'recordGateOutcome', domain: 'www.reddit.com', reversesAccess: true });
+    expect(page.historyCalls).toEqual([['go', -1]]);
+    hooks.startAccessCountdown(null, 0);
+  });
+
+  it('keeps the user on the page when "never mind" cannot close access', async () => {
+    const page = createPageHarness({
+      responders: { revokeTemporaryAccess: { success: false, error: 'Unable to re-block this site right now. Try again.' } }
+    });
+    const hooks = await page.load();
+    hooks.transitionToPhase(hooks.PHASES.SUCCESS);
+    hooks.handleNeverMind();
+
+    expect(page.historyCalls).toHaveLength(0);
+    expect(page.get('success-error').textContent).toContain('Unable to re-block');
+    expect(page.get('never-mind-btn').disabled).toBe(false);
+  });
+
+  it('sets a reminder and leaves without recording the exit twice', async () => {
+    const page = createPageHarness({ responders: { scheduleGateReminder: { success: true, reminder: {} } } });
+    const hooks = await page.load();
+
+    hooks.handleRemindLater();
+    hooks.leaveGate();
+
+    expect(page.messages).toContainEqual({ action: 'scheduleGateReminder', originalUrl: 'https://www.reddit.com/r/all' });
+    expect(page.messages.filter((m) => m.action === 'recordGateOutcome')).toHaveLength(0);
+    expect(page.historyCalls[0]).toEqual(['go', -1]);
+  });
+
+  it('lets a manual override countdown be cancelled before it grants access', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    const page = createPageHarness({
+      responders: {
+        getManualOverrideStatus: { success: true, status: { requiredDelaySeconds: 12, locked: false, remainingSeconds: 0 } },
+        grantTemporaryAccess: { success: true, access: { domain: 'reddit.com', expiresAt: Date.now() + 60000 } }
+      }
+    });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+    hooks.transitionToPhase(hooks.PHASES.PRECHECK);
+
+    hooks.handleManualOverride();
+    vi.advanceTimersByTime(4000);
+    expect(page.get('manual-override-btn').textContent).toBe('Cancel (8s)');
+    expect(page.get('manual-override-btn').disabled).toBe(false);
+    expect(page.get('start-unlock-challenge').disabled).toBe(true);
+
+    hooks.handleManualOverride();
+    vi.advanceTimersByTime(20000);
+
+    expect(page.get('manual-override-btn').textContent).toBe('Manual Override');
+    expect(page.get('start-unlock-challenge').disabled).toBe(false);
+    expect(page.messages.filter((m) => m.action === 'grantTemporaryAccess')).toHaveLength(0);
+  });
+
+  it('caps a manual override at the default window even if a longer one is picked', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    const page = createPageHarness({
+      responders: {
+        getManualOverrideStatus: { success: true, status: { requiredDelaySeconds: 10, locked: false, remainingSeconds: 0 } },
+        grantTemporaryAccess: { success: true, access: { domain: 'reddit.com', expiresAt: Date.now() + 60000 } }
+      }
+    });
+    const hooks = await page.load();
+    hooks.__setCurrentSettingsForTest(freeSettings);
+    hooks.__setAccessDurationForTest(15);
+    hooks.__setSelectedAccessMinutesForTest(30);
+
+    hooks.handleManualOverride();
+    vi.advanceTimersByTime(10000);
+
+    const grant = page.messages.find((m) => m.action === 'grantTemporaryAccess');
+    expect(grant.duration).toBe(15);
+    expect(grant.meta.method).toBe('manualOverride');
+  });
+
+  it('maps Escape to leaving and Enter to the phase\'s main action', async () => {
+    const page = createPageHarness({ responders: { recordGateOutcome: { success: true } } });
+    const hooks = await page.load();
+    page.fireDomReady();
+
+    let continued = 0;
+    page.get('continue-to-challenge').addEventListener('click', () => { continued += 1; });
+    hooks.transitionToPhase(hooks.PHASES.INTENTION);
+    page.keydown({ key: 'Enter' });
+    expect(continued).toBe(1);
+
+    // Enter on a focused button is left to the browser.
+    page.keydown({ key: 'Enter', target: { tagName: 'BUTTON' } });
+    expect(continued).toBe(1);
+
+    hooks.transitionToPhase(hooks.PHASES.SUCCESS);
+    page.keydown({ key: 'Escape' });
+    expect(page.messages.filter((m) => m.action === 'recordGateOutcome')).toHaveLength(0);
+
+    hooks.transitionToPhase(hooks.PHASES.PRECHECK);
+    page.keydown({ key: 'Escape' });
+    expect(page.messages.filter((m) => m.action === 'recordGateOutcome')).toHaveLength(1);
+  });
+
+  it('keeps the destination and stated reason in view during the challenge', async () => {
+    const page = createPageHarness();
+    const hooks = await page.load();
+    hooks.__setOriginalUrlForTest('https://www.reddit.com/r/all');
+    expect(hooks.getChallengeContextLine()).toBe('→ reddit.com');
+
+    hooks.__setChallengeMetaForTest({ taskIntent: 'Reply to the mod message' });
+    expect(hooks.getChallengeContextLine()).toBe('→ reddit.com · “Reply to the mod message”');
   });
 });

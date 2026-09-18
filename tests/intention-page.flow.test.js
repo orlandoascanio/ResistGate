@@ -242,4 +242,25 @@ describe('Intention page pause layer', () => {
     expect(classSets['success-panel'].has('hidden')).toBe(false);
     expect(elements['continue-to-site'].href).toBe('https://www.reddit.com/');
   });
+
+  it('records leaving the pause as a resisted visit before going back', async () => {
+    const messages = [];
+    const history = [];
+    const { context } = await loadIntentionPage({
+      window: { history: { length: 3, back: () => history.push('back') } },
+      chromeRuntime: {
+        sendMessage: (request, callback) => {
+          messages.push(request);
+          if (callback) callback({ success: true });
+        }
+      }
+    });
+    const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
+    hooks.__setOriginalUrlForTest('https://www.reddit.com/r/all');
+
+    hooks.leavePage();
+
+    expect(messages).toEqual([{ action: 'recordGateOutcome', domain: 'www.reddit.com' }]);
+    expect(history).toEqual(['back']);
+  });
 });

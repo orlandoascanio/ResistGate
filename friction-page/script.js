@@ -3,6 +3,8 @@ let startTime = null;
 let accessDurationMinutes = 15;
 let accessCountdownInterval = null;
 let waitCountdownInterval = null;
+let overrideCountdownInterval = null;
+let unlockCountdownInterval = null;
 let breathingAnimationInterval = null;
 let breathingPhaseInterval = null;
 let breathingPhaseTimeout = null;
@@ -11,6 +13,9 @@ let skipIntentionPage = false;
 let skipBlockedVisitRecord = false;
 let currentSettings = null;
 let currentWorkTimer = null;
+let selectedAccessMinutes = null;
+let gateExitRecorded = false;
+let grantedAccessDomain = null;
 let manualOverrideState = {
   requiredDelaySeconds: 12,
   locked: false,
@@ -37,28 +42,41 @@ const INTENTION_PRECHECK_KEY = 'resistgateIntentionPrecheck';
 const CHALLENGE_LEVEL_COPY = {
   easy: {
     badge: 'Easy drill',
-    precheck: 'Easy drill: type a short random code with full accuracy.',
+    precheck: (size) => `Easy drill: type a ${size}-character code with full accuracy.`,
     instruction: 'Type the code exactly as shown to continue.',
     unitLabel: 'Code'
   },
   moderate: {
     badge: 'Moderate drill',
-    precheck: 'Moderate drill: type 1-2 focus sentences with full accuracy.',
+    precheck: (size) => `Moderate drill: type ${size === 1 ? 'one focus sentence' : `${size} focus sentences`} with full accuracy.`,
     instruction: 'Type the sentences exactly as shown to continue.',
     unitLabel: 'Prompt'
   },
   hard: {
     badge: 'Hard mode',
-    precheck: 'Hard mode: complete 5 paragraphs with full accuracy.',
+    precheck: (size) => `Hard mode: complete ${size} paragraphs with full accuracy.`,
     instruction: 'Type the text exactly as shown to continue.',
     unitLabel: 'Paragraph'
   },
   custom: {
     badge: 'Your phrase',
-    precheck: 'Your phrase: type the line you wrote, with full accuracy.',
+    precheck: (size) => (size === 1
+      ? 'Your phrase: type the line you wrote, with full accuracy.'
+      : `Your phrase: type the line you wrote ${size} times, with full accuracy.`),
     instruction: 'Type your phrase exactly as you wrote it to continue.',
     unitLabel: 'Phrase'
   }
+};
+
+// Picking a shorter visit than the default earns a lighter challenge; a longer one costs
+// more typing. Sizes are code characters (easy), sentences (moderate), paragraphs (hard),
+// or repetitions of the custom phrase.
+const ACCESS_DURATION_CHOICES = [5, 15, 30];
+const CHALLENGE_SIZES = {
+  easy: { light: 8, standard: 12, heavy: 16 },
+  moderate: { light: 1, standard: 2, heavy: 3 },
+  hard: { light: 3, standard: 5, heavy: 8 },
+  custom: { light: 1, standard: 1, heavy: 2 }
 };
 
 const MODERATE_CHALLENGE_SENTENCES = [
@@ -153,26 +171,12 @@ document.addEventListener('DOMContentLoaded', function () {
   skipIntentionPage = urlParams.get('skipIntention') === '1';
   skipBlockedVisitRecord = urlParams.get('skipRecord') === '1';
 
-  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
   const blockedSite = document.getElementById('blocked-site');
+  const hostname = getTargetHostname();
 
-  if (safeTargetUrl) {
-    const hostname = new URL(safeTargetUrl).hostname;
+  if (hostname) {
     blockedSite.textContent = hostname;
-    if (!skipBlockedVisitRecord) {
-      chrome.runtime.sendMessage({
-        action: 'recordBlockedVisit',
-        urlPattern: hostname
-      }, function (response) {
-        if (response && response.resistanceCount > 0) {
-          const countEl = document.getElementById('resistance-count');
-          if (countEl) {
-            const n = response.resistanceCount;
-            countEl.textContent = `You've resisted ${hostname} ${n} ${n === 1 ? 'time' : 'times'} today.`;
-          }
-        }
-      });
-    }
+    loadVisitStats(hostname);
   } else {
     blockedSite.textContent = 'Unknown destination';
   }
@@ -184,8 +188,17 @@ document.addEventListener('DOMContentLoaded', function () {
     transitionToPhase(PHASES.PRECHECK);
   });
 
-  document.getElementById('go-back-btn').addEventListener('click', function () {
-    goBack();
+  // Every step has a way out, and every way out counts as a resisted visit.
+  ['go-back-btn', 'precheck-go-back-btn'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      leaveGate();
+    });
+  });
+
+  ['remind-later-btn', 'precheck-remind-later-btn'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      handleRemindLater();
+    });
   });
 
   // Phase 2: Start Challenge
@@ -197,7 +210,169 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('manual-override-btn').addEventListener('click', function () {
     handleManualOverride();
   });
+
+  // Phase 4: Success
+  document.getElementById('never-mind-btn').addEventListener('click', function () {
+    handleNeverMind();
+  });
+
+  document.getElementById('close-tab-btn').addEventListener('click', function () {
+    closeCurrentTab();
+  });
+
+  document.addEventListener('keydown', handleGlobalKeydown);
 });
+
+function loadVisitStats(hostname) {
+  if (skipBlockedVisitRecord) {
+    // The Intention Page already counted this arrival; just read the count back.
+    chrome.runtime.sendMessage({ action: 'getResistanceCount', domain: hostname }, function (response) {
+      renderResistanceCount(hostname, response && response.success ? response.count : 0);
+    });
+  } else {
+    chrome.runtime.sendMessage({
+      action: 'recordBlockedVisit',
+      urlPattern: hostname
+    }, function (response) {
+      renderResistanceCount(hostname, response ? response.resistanceCount : 0);
+    });
+  }
+
+  chrome.runtime.sendMessage({ action: 'getGateOutcomeSummary' }, function (response) {
+    renderGateStreak(response && response.success ? response.summary : null);
+  });
+}
+
+function renderResistanceCount(hostname, count) {
+  const n = Number(count) || 0;
+  const text = n > 0
+    ? `You've resisted ${hostname} ${n} ${n === 1 ? 'time' : 'times'} today.`
+    : '';
+
+  ['resistance-count', 'precheck-resistance-count'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = text;
+    }
+  });
+}
+
+function getGateStreakText(summary) {
+  const total = Number(summary?.total) || 0;
+  const resisted = Number(summary?.resisted) || 0;
+  if (total < 2 || resisted < 1) {
+    return '';
+  }
+
+  return `You've gone back ${resisted} of the last ${total} times today.`;
+}
+
+function renderGateStreak(summary) {
+  const text = getGateStreakText(summary);
+  ['gate-streak', 'precheck-gate-streak'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = text;
+    }
+  });
+}
+
+function getTargetHostname({ stripWww = false } = {}) {
+  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
+  if (!safeTargetUrl) {
+    return '';
+  }
+
+  const hostname = new URL(safeTargetUrl).hostname.toLowerCase();
+  return stripWww ? hostname.replace(/^www\./, '') : hostname;
+}
+
+function normalizeBlocklistPattern(pattern) {
+  return String(pattern || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/^\*\./, '')
+    .replace(/^www\./, '')
+    .replace(/^\.+|\.+$/g, '');
+}
+
+// A pattern matches its own host and its subdomains, never a lookalike: "x.com" covers
+// "www.x.com" and "m.x.com" but not "box.com". The most specific pattern wins.
+function findBlocklistEntry(hostname, blocklist = currentSettings?.blocklist) {
+  const host = normalizeBlocklistPattern(hostname);
+  if (!host || !Array.isArray(blocklist)) {
+    return null;
+  }
+
+  let best = null;
+  let bestLength = 0;
+  for (const entry of blocklist) {
+    const pattern = normalizeBlocklistPattern(entry?.urlPattern);
+    if (!pattern) {
+      continue;
+    }
+
+    if ((host === pattern || host.endsWith(`.${pattern}`)) && pattern.length > bestLength) {
+      best = entry;
+      bestLength = pattern.length;
+    }
+  }
+
+  return best;
+}
+
+function announce(message) {
+  const status = document.getElementById('status-announcement');
+  if (status) {
+    status.textContent = message || '';
+  }
+}
+
+function handleGlobalKeydown(event) {
+  if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) {
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    // On the success screen access is already granted; leaving there is "never mind",
+    // which should be a deliberate click.
+    if (currentPhase === PHASES.SUCCESS) {
+      return;
+    }
+
+    event.preventDefault();
+    if (currentPhase === PHASES.CHALLENGE) {
+      reportAnalyticsEvent('challenge_failed');
+    }
+    leaveGate();
+    return;
+  }
+
+  if (event.key !== 'Enter' || event.shiftKey || currentPhase === PHASES.CHALLENGE) {
+    return;
+  }
+
+  const tagName = String(event.target?.tagName || '').toLowerCase();
+  if (tagName === 'button' || tagName === 'a') {
+    return;
+  }
+
+  const primaryIds = {
+    [PHASES.INTENTION]: 'continue-to-challenge',
+    [PHASES.PRECHECK]: 'start-unlock-challenge',
+    [PHASES.SUCCESS]: 'continue-to-site'
+  };
+  const primary = document.getElementById(primaryIds[currentPhase]);
+  if (!primary || primary.disabled || primary.classList?.contains('hidden')) {
+    return;
+  }
+
+  event.preventDefault();
+  primary.click();
+}
 
 function setPhase(phase) {
   const container = document.getElementById('main-container');
@@ -216,6 +391,7 @@ function transitionToPhase(phase) {
   
   // Phase-specific initialization
   if (phase === PHASES.PRECHECK) {
+    renderDurationPicker();
     renderChallengeSummary();
     renderBundlePanel();
     renderProPrecheck();
@@ -224,12 +400,123 @@ function transitionToPhase(phase) {
 }
 
 function goBack() {
-  if (window.history && window.history.length > 1) {
-    window.history.back();
+  // Arriving from the Intention Page adds one history entry; stepping back once would
+  // land on that pause screen again instead of where the user came from.
+  const steps = skipIntentionPage ? 2 : 1;
+  if (window.history && window.history.length > steps) {
+    window.history.go(-steps);
+    return;
+  }
+
+  closeCurrentTab();
+}
+
+function closeCurrentTab() {
+  if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.getCurrent === 'function') {
+    chrome.tabs.getCurrent(function (tab) {
+      if (tab && tab.id !== undefined) {
+        chrome.tabs.remove(tab.id);
+        return;
+      }
+      window.close();
+    });
     return;
   }
 
   window.close();
+}
+
+// Records the exit as a resisted visit, then leaves. Recording is best-effort: the page
+// never waits more than a moment for it.
+function leaveGate({ reversesAccess = false } = {}) {
+  stopAllCountdowns();
+  recordResistedOutcome({ reversesAccess }, goBack);
+}
+
+function recordResistedOutcome({ reversesAccess = false } = {}, onDone = function () {}) {
+  const domain = getTargetHostname();
+  if (gateExitRecorded || !domain) {
+    onDone();
+    return;
+  }
+
+  gateExitRecorded = true;
+  let finished = false;
+  const finish = function () {
+    if (!finished) {
+      finished = true;
+      onDone();
+    }
+  };
+
+  setTimeout(finish, 400);
+  chrome.runtime.sendMessage({ action: 'recordGateOutcome', domain, reversesAccess }, finish);
+}
+
+function setRemindButtonsDisabled(disabled) {
+  ['remind-later-btn', 'precheck-remind-later-btn'].forEach(function (id) {
+    const button = document.getElementById(id);
+    if (button) {
+      button.disabled = disabled;
+    }
+  });
+}
+
+function handleRemindLater() {
+  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
+  if (!safeTargetUrl) {
+    showPageError('This destination cannot be reopened later.');
+    return;
+  }
+
+  setRemindButtonsDisabled(true);
+  chrome.runtime.sendMessage({ action: 'scheduleGateReminder', originalUrl: safeTargetUrl }, function (response) {
+    if (!(response && response.success)) {
+      setRemindButtonsDisabled(false);
+      showPageError(response?.error || 'ResistGate could not set a reminder. Try again.');
+      return;
+    }
+
+    // The background already recorded this as a resisted visit.
+    gateExitRecorded = true;
+    stopAllCountdowns();
+    announce('Reminder set. This site will reopen in 10 minutes.');
+    goBack();
+  });
+}
+
+function handleNeverMind() {
+  const domain = grantedAccessDomain || getTargetHostname();
+  const button = document.getElementById('never-mind-btn');
+  if (button) {
+    button.disabled = true;
+  }
+
+  chrome.runtime.sendMessage({ action: 'revokeTemporaryAccess', domain }, function (response) {
+    const alreadyEnded = /no longer active/i.test(response?.error || '');
+    if (!(response && response.success) && !alreadyEnded) {
+      if (button) {
+        button.disabled = false;
+      }
+      showPageError(response?.error || 'ResistGate could not close access. Try again.');
+      return;
+    }
+
+    leaveGate({ reversesAccess: true });
+  });
+}
+
+function stopAllCountdowns() {
+  [waitCountdownInterval, overrideCountdownInterval, unlockCountdownInterval, accessCountdownInterval]
+    .forEach(function (interval) {
+      if (interval) {
+        clearInterval(interval);
+      }
+    });
+  waitCountdownInterval = null;
+  overrideCountdownInterval = null;
+  unlockCountdownInterval = null;
+  accessCountdownInterval = null;
 }
 
 function loadSettings() {
@@ -289,57 +576,69 @@ function refreshManualOverrideStatus(onReady) {
 function renderBundlePanel() {
   const panel = document.getElementById('bundle-panel');
   const labelEl = document.getElementById('bundle-label');
+  const barWrap = document.getElementById('bundle-progress-wrap');
   const bar = document.getElementById('bundle-progress-bar');
   const progressText = document.getElementById('bundle-progress-text');
   if (!panel || !labelEl || !bar || !progressText) return;
 
-  const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
-  if (!safeTargetUrl || !currentSettings) {
-    panel.classList.add('hidden');
-    return;
-  }
-
-  const hostname = new URL(safeTargetUrl).hostname.replace(/^www\./, '');
-  const entry = (currentSettings.blocklist || []).find((e) => {
-    const p = (e.urlPattern || '').toLowerCase();
-    return hostname.endsWith(p) || p.endsWith(hostname);
-  });
-
-  const bundle = entry?.temptationBundle;
-  if (!bundle || bundle.enabled !== true) {
+  const entry = currentSettings ? findBlocklistEntry(getTargetHostname()) : null;
+  const copy = getBundlePanelCopy(entry?.temptationBundle, currentWorkTimer, new Date());
+  if (!copy) {
     panel.classList.add('hidden');
     return;
   }
 
   panel.classList.remove('hidden');
+  labelEl.textContent = copy.label;
+  progressText.textContent = copy.progressText;
+
+  // A time-of-day condition has no meaningful start, so a bar would only measure how far
+  // we are from midnight. Only work-timer progress gets one.
+  if (copy.progressPercent === null) {
+    if (barWrap) barWrap.classList.add('hidden');
+    bar.style.width = '0%';
+  } else {
+    if (barWrap) barWrap.classList.remove('hidden');
+    bar.style.width = `${copy.progressPercent}%`;
+  }
+}
+
+// The access condition makes the site free once it is met; before that, the challenge
+// is still available. The copy says both, so it never reads as "you can't come in yet".
+function getBundlePanelCopy(bundle, workTimer, now) {
+  if (!bundle || bundle.enabled !== true) {
+    return null;
+  }
+
+  const metText = 'Condition met — this site is unlocked. Reload it to continue.';
 
   if (bundle.conditionType === 'time_of_day') {
     const [h, m] = (bundle.afterTime || '17:00').split(':').map(Number);
-    const label12 = formatTime12(h, m);
-    labelEl.textContent = `You can visit this site after ${label12} today.`;
-    const now = new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
-    const targetMins = h * 60 + m;
-    const progress = Math.min(100, Math.round((currentMins / targetMins) * 100));
-    bar.style.width = `${progress}%`;
-    const minsLeft = Math.max(0, targetMins - currentMins);
-    progressText.textContent = minsLeft > 0
-      ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m until unlocked`
-      : 'Condition met — start the challenge to access the site.';
-    return;
+    const minsLeft = Math.max(0, (h * 60 + m) - currentMins);
+    return {
+      label: `Free access after ${formatTime12(h, m)} — or earn it now.`,
+      progressText: minsLeft > 0
+        ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m until free access.`
+        : metText,
+      progressPercent: null
+    };
   }
 
   if (bundle.conditionType === 'work_timer') {
     const required = bundle.requiredMinutes || 60;
-    const done = currentWorkTimer ? Math.floor(currentWorkTimer.effectiveMinutes) : 0;
+    const done = workTimer ? Math.floor(workTimer.effectiveMinutes) || 0 : 0;
     const left = Math.max(0, required - done);
-    const progress = Math.min(100, Math.round((done / required) * 100));
-    labelEl.textContent = `You can visit this site after ${required} min of focused work today.`;
-    bar.style.width = `${progress}%`;
-    progressText.textContent = done >= required
-      ? 'Condition met — start the challenge to access the site.'
-      : `${done} / ${required} min logged — ${left} min to go.`;
+    return {
+      label: `Free access after ${required} min of focused work — or earn it now.`,
+      progressText: done >= required
+        ? metText
+        : `${done} / ${required} min logged — ${left} min to go.`,
+      progressPercent: Math.min(100, Math.round((done / required) * 100))
+    };
   }
+
+  return null;
 }
 
 function formatTime12(h, m) {
@@ -349,39 +648,13 @@ function formatTime12(h, m) {
 }
 
 function renderIntentionPage() {
-  // If intention page is disabled, go directly to precheck
-  if (!isIntentionPageEnabled()) {
-    transitionToPhase(PHASES.PRECHECK);
-    const intentionLabel = document.getElementById('intention-label');
-    const personalGoalDisplay = document.getElementById('personal-goal-display');
-    const breathingExercise = document.getElementById('breathing-exercise');
-    intentionLabel.textContent = 'Pause before proceeding';
-    personalGoalDisplay.textContent = 'You blocked this for a reason.';
-    breathingExercise.classList.add('hidden');
-    return;
-  }
-
   const intentionPage = currentSettings?.proFeatures?.intentionPage || {};
   const personalGoalDisplay = document.getElementById('personal-goal-display');
   const breathingExercise = document.getElementById('breathing-exercise');
   const intentionLabel = document.getElementById('intention-label');
 
-  let perDomainGoal = '';
-
-  if (isIntentionPageEnabled()) {
-    const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
-    if (safeTargetUrl) {
-      const hostname = new URL(safeTargetUrl).hostname.replace(/^www\./, '');
-      const entry = (currentSettings.blocklist || []).find((e) => {
-        const p = (e.urlPattern || '').toLowerCase();
-        return hostname.endsWith(p) || p.endsWith(hostname);
-      });
-      if (entry?.personalGoal && entry.personalGoal.trim()) {
-        perDomainGoal = entry.personalGoal.trim();
-      }
-    }
-  }
-
+  const entry = findBlocklistEntry(getTargetHostname());
+  const perDomainGoal = typeof entry?.personalGoal === 'string' ? entry.personalGoal.trim() : '';
 
   if (perDomainGoal) {
     intentionLabel.textContent = 'See your reminder';
@@ -581,6 +854,11 @@ function renderManualOverrideState() {
   const locked = manualOverrideState.locked === true;
   const earnAccessActive = isEarnAccessRuleActive();
 
+  if (overrideCountdownInterval) {
+    // A running countdown owns the button: it stays clickable so it can be cancelled.
+    return;
+  }
+
   const isDisabled = strictActive || locked || earnAccessActive;
   manualOverrideButton.disabled = isDisabled;
 
@@ -617,21 +895,98 @@ function handleStartChallenge() {
     earnAccessEnabled: precheck.earnAccessEnabled
   };
 
-  let waitSeconds = precheck.timedWaitSeconds;
+  // Even without a Pro timed wait, a short 3-second beat separates "decide" from "type".
+  const waitSeconds = precheck.timedWaitSeconds > 0 ? precheck.timedWaitSeconds : 3;
+  startTimedWait(waitSeconds, function () {
+    startTypingChallenge(currentOriginalUrl);
+  });
+}
 
-  // Apply a default 3 second countdown for better UX
-  if (waitSeconds <= 0) {
-    waitSeconds = 3;
+function getAccessDurationOptions(defaultMinutes = accessDurationMinutes) {
+  const parsed = Math.round(Number(defaultMinutes));
+  const base = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+  return [...new Set([...ACCESS_DURATION_CHOICES, base])].sort((a, b) => a - b);
+}
+
+function getSelectedAccessMinutes() {
+  return selectedAccessMinutes || accessDurationMinutes;
+}
+
+function getChallengeWeight(minutes = getSelectedAccessMinutes(), defaultMinutes = accessDurationMinutes) {
+  if (minutes < defaultMinutes) {
+    return 'light';
   }
+  if (minutes > defaultMinutes) {
+    return 'heavy';
+  }
+  return 'standard';
+}
 
-  if (waitSeconds > 0) {
-    startTimedWait(waitSeconds, function () {
-      startTypingChallenge(currentOriginalUrl);
-    });
+function getChallengeSize(level, weight = 'standard') {
+  const sizes = CHALLENGE_SIZES[level] || CHALLENGE_SIZES[DEFAULT_CHALLENGE_LEVEL];
+  return sizes[weight] || sizes.standard;
+}
+
+function getDurationHint(level = getEffectiveChallengeLevel(), weight = getChallengeWeight()) {
+  const size = getChallengeSize(level, weight);
+  const standardSize = getChallengeSize(level, 'standard');
+  if (size < standardSize) {
+    return 'Shorter visit, lighter challenge.';
+  }
+  if (size > standardSize) {
+    return 'Longer visit, longer challenge.';
+  }
+  return weight === 'standard' ? 'Your usual access window.' : '';
+}
+
+function renderDurationPicker() {
+  const picker = document.getElementById('duration-picker');
+  const optionsEl = document.getElementById('duration-options');
+  if (!picker || !optionsEl || typeof document.createElement !== 'function') {
     return;
   }
 
-  startTypingChallenge(currentOriginalUrl);
+  optionsEl.textContent = '';
+  getAccessDurationOptions().forEach(function (minutes) {
+    const id = `access-duration-${minutes}`;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'access-duration';
+    input.id = id;
+    input.value = String(minutes);
+    input.className = 'duration-input';
+    input.checked = minutes === getSelectedAccessMinutes();
+    input.addEventListener('change', function () {
+      selectedAccessMinutes = minutes;
+      renderChallengeSummary();
+      renderDurationHint();
+    });
+
+    const label = document.createElement('label');
+    label.htmlFor = id;
+    label.className = 'duration-option';
+    label.textContent = `${minutes} min`;
+
+    optionsEl.appendChild(input);
+    optionsEl.appendChild(label);
+  });
+
+  picker.classList.remove('hidden');
+  renderDurationHint();
+}
+
+function renderDurationHint() {
+  const hint = document.getElementById('duration-hint');
+  if (hint) {
+    hint.textContent = getDurationHint();
+  }
+}
+
+function setDurationPickerDisabled(disabled) {
+  const picker = document.getElementById('duration-picker');
+  if (picker) {
+    picker.disabled = disabled;
+  }
 }
 
 function startTimedWait(seconds, onComplete) {
@@ -647,6 +1002,7 @@ function startTimedWait(seconds, onComplete) {
   }
   
   challengeBtn.disabled = true;
+  setDurationPickerDisabled(true);
   challengeBtn.textContent = `Starting in ${seconds}s...`;
 
   let remaining = seconds;
@@ -675,6 +1031,7 @@ function startTimedWait(seconds, onComplete) {
       waitCountdownInterval = null;
 
       challengeBtn.disabled = false;
+      setDurationPickerDisabled(false);
       challengeBtn.textContent = 'Start Challenge';
       onComplete();
       return;
@@ -688,6 +1045,11 @@ function startTimedWait(seconds, onComplete) {
 }
 
 function handleManualOverride() {
+  if (overrideCountdownInterval) {
+    cancelManualOverride();
+    return;
+  }
+
   refreshManualOverrideStatus(function () {
     clearPrecheckError();
 
@@ -708,7 +1070,7 @@ function handleManualOverride() {
 
     const safeTargetUrl = getSafeTargetUrl(currentOriginalUrl);
     if (!safeTargetUrl) {
-      alert('Invalid destination URL.');
+      showPrecheckError('This destination is not a valid web address.');
       return;
     }
 
@@ -716,29 +1078,29 @@ function handleManualOverride() {
     const manualBtn = document.getElementById('manual-override-btn');
     const challengeBtn = document.getElementById('start-unlock-challenge');
 
-    manualBtn.disabled = true;
+    // The button stays enabled as a way out of the countdown.
+    manualBtn.disabled = false;
     challengeBtn.disabled = true;
+    setDurationPickerDisabled(true);
 
     let remaining = delaySeconds;
-    manualBtn.textContent = `Wait ${remaining}s`;
+    manualBtn.textContent = `Cancel (${remaining}s)`;
+    announce(`Manual override opens access in ${remaining} seconds. Press the button again to cancel.`);
 
-    if (waitCountdownInterval) {
-      clearInterval(waitCountdownInterval);
-    }
-
-    waitCountdownInterval = setInterval(function () {
+    overrideCountdownInterval = setInterval(function () {
       remaining -= 1;
 
       if (remaining <= 0) {
-        clearInterval(waitCountdownInterval);
-        waitCountdownInterval = null;
+        clearInterval(overrideCountdownInterval);
+        overrideCountdownInterval = null;
 
         manualBtn.textContent = 'Manual Override';
-        challengeBtn.disabled = false;
+        manualBtn.disabled = true;
 
         requestTemporaryAccess({
           targetUrl: safeTargetUrl,
-          duration: accessDurationMinutes,
+          // An override skips the challenge, so it cannot buy a longer window than the default.
+          duration: Math.min(getSelectedAccessMinutes(), accessDurationMinutes),
           timeSpent: 0,
           meta: {
             method: 'manualOverride',
@@ -746,14 +1108,38 @@ function handleManualOverride() {
             taskIntent: '',
             customChallengeAnswered: false,
             earnAccessEnabled: false
+          },
+          onFailure: function () {
+            challengeBtn.disabled = false;
+            setDurationPickerDisabled(false);
+            renderManualOverrideState();
           }
         });
         return;
       }
 
-      manualBtn.textContent = `Wait ${remaining}s`;
+      manualBtn.textContent = `Cancel (${remaining}s)`;
     }, 1000);
   });
+}
+
+function cancelManualOverride() {
+  if (overrideCountdownInterval) {
+    clearInterval(overrideCountdownInterval);
+    overrideCountdownInterval = null;
+  }
+
+  const manualBtn = document.getElementById('manual-override-btn');
+  const challengeBtn = document.getElementById('start-unlock-challenge');
+  if (manualBtn) {
+    manualBtn.textContent = 'Manual Override';
+  }
+  if (challengeBtn) {
+    challengeBtn.disabled = false;
+  }
+  setDurationPickerDisabled(false);
+  renderManualOverrideState();
+  announce('Manual override cancelled.');
 }
 
 function collectPrecheckMeta() {
@@ -856,20 +1242,26 @@ function startTypingChallenge(originalUrl) {
   showTypingChallenge(originalUrl);
 }
 
+const BLOCKED_INPUT_TYPES = new Set(['insertFromPaste', 'insertFromDrop', 'insertFromYank', 'insertReplacementText']);
+const SHORTCUT_MESSAGE = 'No shortcuts in ResistGate. Earn it.';
+
 function showTypingChallenge(originalUrl) {
   const container = document.getElementById('phase-challenge');
   container.innerHTML = '';
+  clearUnlockCountdown();
 
   const challengeLevel = getEffectiveChallengeLevel();
   const challengeCopy = getChallengeLevelCopy(challengeLevel);
-  const selectedSegments = buildTypingChallengeSegments(challengeLevel);
+  const selectedSegments = buildTypingChallengeSegments(challengeLevel, getChallengeWeight());
   const totalSegments = selectedSegments.length;
+  const contextLine = getChallengeContextLine();
   let currentSegmentIndex = 0;
-  let completedSegments = 0;
 
   function displayCurrentParagraph() {
-    const currentSegment = selectedSegments[currentSegmentIndex];
-    const currentText = currentSegment.text;
+    clearUnlockCountdown();
+
+    const currentText = selectedSegments[currentSegmentIndex].text;
+    const isLastSegment = currentSegmentIndex === totalSegments - 1;
     const stepBadge = totalSegments === 1
       ? challengeCopy.badge
       : `${challengeCopy.unitLabel} ${currentSegmentIndex + 1} of ${totalSegments}`;
@@ -880,21 +1272,22 @@ function showTypingChallenge(originalUrl) {
         <header class="challenge-header">
           <span class="step-badge">${escapeHtml(stepBadge)}</span>
           <p class="instruction-text">${escapeHtml(challengeCopy.instruction)}</p>
+          ${contextLine ? `<p class="challenge-context">${escapeHtml(contextLine)}</p>` : ''}
         </header>
         ${totalSegments > 1 ? `
-        <div class="segment-progress" aria-label="Challenge progress">
-          <span class="segment-progress-bar" style="width: ${Math.round((completedSegments / totalSegments) * 100)}%"></span>
+        <div class="segment-progress" role="progressbar" aria-label="Challenge progress" aria-valuemin="0" aria-valuemax="${totalSegments}" aria-valuenow="${currentSegmentIndex}">
+          <span class="segment-progress-bar" style="width: ${Math.round((currentSegmentIndex / totalSegments) * 100)}%"></span>
         </div>` : ''}
 
         <div class="quote-box">
-          <p class="${quoteClass}">${escapeHtml(currentText)}</p>
+          <p id="challenge-quote" class="${quoteClass}">${escapeHtml(currentText)}</p>
         </div>
-        
+
         <label class="typing-label" for="typing-input">Type exactly</label>
-        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..." spellcheck="false" aria-describedby="typing-error challenge-stats"></textarea>
-        <p id="typing-error" class="typing-error" role="alert" aria-live="polite"></p>
-        
-        <div class="challenge-stats" id="challenge-stats" aria-live="polite">
+        <textarea id="typing-input" class="challenge-typing-input" placeholder="Start typing here..." spellcheck="false" autocomplete="off" aria-describedby="typing-error challenge-stats"></textarea>
+        <p id="typing-error" class="typing-error" role="alert"></p>
+
+        <div class="challenge-stats" id="challenge-stats">
           <div class="stat-item">
             <span class="stat-label">Progress</span>
             <span class="stat-value"><span id="char-count">0</span> / ${currentText.length}</span>
@@ -904,29 +1297,57 @@ function showTypingChallenge(originalUrl) {
             <span id="accuracy" class="stat-value accurate">100%</span>
           </div>
         </div>
-        
+
         <div class="challenge-actions">
-          <button id="cancel-challenge" class="btn btn-secondary">Quit</button>
-          <button id="submit-typing" class="btn btn-primary" disabled>Continue</button>
+          <button id="cancel-challenge" class="btn btn-secondary" type="button">Quit</button>
+          <button id="submit-typing" class="btn btn-primary" type="button" disabled>Continue</button>
         </div>
       </div>
     `;
 
     const typingInput = document.getElementById('typing-input');
+    const quoteEl = document.getElementById('challenge-quote');
     const charCount = document.getElementById('char-count');
     const accuracySpan = document.getElementById('accuracy');
     const submitBtn = document.getElementById('submit-typing');
     const errorText = document.getElementById('typing-error');
 
+    function rejectShortcut(event) {
+      event.preventDefault();
+      errorText.textContent = SHORTCUT_MESSAGE;
+    }
+
+    function updateSubmitState() {
+      if (typingInput.value !== currentText) {
+        clearUnlockCountdown();
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Continue';
+        return;
+      }
+
+      // Earn-Access: finishing early doesn't throw the work away, it just waits.
+      if (isLastSegment && getEarnAccessRemainingSeconds() > 0) {
+        startUnlockCountdown(submitBtn);
+        return;
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Continue';
+    }
+
+    renderQuoteHighlight(quoteEl, currentText, '');
     typingInput.focus();
     typingInput.addEventListener('contextmenu', (e) => e.preventDefault());
-    typingInput.addEventListener('paste', (e) => {
-      e.preventDefault();
-      showPrecheckError('No shortcuts in ResistGate. Earn it.');
+    typingInput.addEventListener('paste', rejectShortcut);
+    typingInput.addEventListener('drop', rejectShortcut);
+    typingInput.addEventListener('beforeinput', function (e) {
+      if (BLOCKED_INPUT_TYPES.has(e.inputType)) {
+        rejectShortcut(e);
+      }
     });
 
     typingInput.addEventListener('keydown', function (e) {
-      if (e.ctrlKey && (['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) {
+      if ((e.ctrlKey || e.metaKey) && ['a', 'c', 'v', 'x'].includes(String(e.key).toLowerCase())) {
         e.preventDefault();
       }
       if (e.key === 'Enter') {
@@ -939,6 +1360,7 @@ function showTypingChallenge(originalUrl) {
 
     typingInput.addEventListener('input', function () {
       const typedText = typingInput.value;
+      const diff = computeTypingDiff(currentText, typedText);
       charCount.textContent = typedText.length;
 
       let correctChars = 0;
@@ -952,36 +1374,164 @@ function showTypingChallenge(originalUrl) {
       accuracySpan.textContent = `${accuracy}%`;
       accuracySpan.className = 'stat-value ' + (accuracy === 100 ? 'accurate' : 'error');
 
-      const prefix = currentText.slice(0, typedText.length);
-      const hasError = typedText !== prefix;
+      renderQuoteHighlight(quoteEl, currentText, typedText);
+      typingInput.classList.toggle('has-error', diff.hasError);
+      errorText.textContent = diff.hasError
+        ? 'You have a mismatch, marked in red above. Correct it to continue.'
+        : '';
 
-      typingInput.classList.toggle('has-error', hasError);
-      errorText.textContent = hasError ? 'You have a mismatch. Correct it to continue.' : '';
-
-      const isCorrect = typedText === currentText;
-      submitBtn.disabled = !isCorrect;
-      submitBtn.textContent = isCorrect ? 'Continue' : 'Continue';
+      updateSubmitState();
     });
 
     submitBtn.addEventListener('click', function () {
-      if (typingInput.value === currentText) {
-        completedSegments++;
-        if (completedSegments === totalSegments) {
-          completeChallenge(accessDurationMinutes, originalUrl);
-        } else {
-          currentSegmentIndex++;
-          displayCurrentParagraph();
-        }
+      if (submitBtn.disabled || typingInput.value !== currentText) {
+        return;
       }
+
+      if (!isLastSegment) {
+        announce(`${challengeCopy.unitLabel} ${currentSegmentIndex + 1} of ${totalSegments} done.`);
+        currentSegmentIndex++;
+        displayCurrentParagraph();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      completeChallenge(getSelectedAccessMinutes(), originalUrl, {
+        onFailure: function () {
+          submitBtn.disabled = false;
+        }
+      });
     });
 
     document.getElementById('cancel-challenge').addEventListener('click', function () {
       reportAnalyticsEvent('challenge_failed');
-      location.reload();
+      leaveGate();
     });
   }
 
   displayCurrentParagraph();
+}
+
+// Where the typed text first diverges from the target. Everything before
+// `correctLength` matches; target characters from there up to `errorEnd` sit under
+// mistyped input.
+function computeTypingDiff(target, typed) {
+  const limit = Math.min(target.length, typed.length);
+  let correctLength = 0;
+  while (correctLength < limit && typed[correctLength] === target[correctLength]) {
+    correctLength++;
+  }
+
+  const hasError = typed.length > correctLength;
+  return {
+    correctLength,
+    errorEnd: hasError ? Math.min(target.length, typed.length) : correctLength,
+    hasError,
+    complete: !hasError && typed.length === target.length
+  };
+}
+
+function getQuoteHighlightParts(target, typed) {
+  const diff = computeTypingDiff(target, typed);
+  const parts = [{ className: 'qc-done', text: target.slice(0, diff.correctLength) }];
+
+  if (diff.hasError) {
+    parts.push({ className: 'qc-error', text: target.slice(diff.correctLength, diff.errorEnd) });
+    parts.push({ className: '', text: target.slice(diff.errorEnd) });
+  } else {
+    parts.push({ className: 'qc-current', text: target.slice(diff.correctLength, diff.correctLength + 1) });
+    parts.push({ className: '', text: target.slice(diff.correctLength + 1) });
+  }
+
+  return parts.filter((part) => part.text);
+}
+
+function renderQuoteHighlight(quoteEl, target, typed) {
+  if (!quoteEl || typeof document.createElement !== 'function') {
+    return;
+  }
+
+  quoteEl.textContent = '';
+  getQuoteHighlightParts(target, typed).forEach(function (part) {
+    if (!part.className) {
+      quoteEl.appendChild(document.createTextNode(part.text));
+      return;
+    }
+
+    const span = document.createElement('span');
+    span.className = part.className;
+    span.textContent = part.text;
+    quoteEl.appendChild(span);
+  });
+}
+
+function getChallengeContextLine() {
+  const hostname = getTargetHostname({ stripWww: true });
+  if (!hostname) {
+    return '';
+  }
+
+  const reason = getStatedIntent();
+  if (!reason) {
+    return `→ ${hostname}`;
+  }
+
+  const shortReason = reason.length > 80 ? `${reason.slice(0, 79).trimEnd()}…` : reason;
+  return `→ ${hostname} · “${shortReason}”`;
+}
+
+function getStatedIntent() {
+  const fromPrecheck = typeof challengeMeta.taskIntent === 'string' ? challengeMeta.taskIntent.trim() : '';
+  if (fromPrecheck) {
+    return fromPrecheck;
+  }
+
+  return getIntentionPrecheck()?.taskIntent || '';
+}
+
+function getEarnAccessRemainingSeconds(now = Date.now()) {
+  if (!isEarnAccessRuleActive() || !startTime) {
+    return 0;
+  }
+
+  const elapsed = Math.floor((now - startTime) / 1000);
+  return Math.max(0, getEarnAccessMinChallengeSeconds() - elapsed);
+}
+
+function formatCountdown(seconds) {
+  const safe = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+function startUnlockCountdown(submitBtn) {
+  if (unlockCountdownInterval) {
+    return;
+  }
+
+  const remaining = getEarnAccessRemainingSeconds();
+  submitBtn.disabled = true;
+  submitBtn.textContent = `Unlocks in ${formatCountdown(remaining)}`;
+  announce(`Done. Earn-Access unlocks in ${remaining} seconds.`);
+
+  unlockCountdownInterval = setInterval(function () {
+    const left = getEarnAccessRemainingSeconds();
+    if (left > 0) {
+      submitBtn.textContent = `Unlocks in ${formatCountdown(left)}`;
+      return;
+    }
+
+    clearUnlockCountdown();
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Continue';
+    announce('Access unlocked. Press Enter to continue.');
+  }, 1000);
+}
+
+function clearUnlockCountdown() {
+  if (unlockCountdownInterval) {
+    clearInterval(unlockCountdownInterval);
+    unlockCountdownInterval = null;
+  }
 }
 
 function renderChallengeSummary() {
@@ -990,7 +1540,8 @@ function renderChallengeSummary() {
     return;
   }
 
-  subtitle.textContent = getChallengeLevelCopy(getEffectiveChallengeLevel()).precheck;
+  const level = getEffectiveChallengeLevel();
+  subtitle.textContent = getChallengeLevelCopy(level).precheck(getChallengeSize(level, getChallengeWeight()));
 }
 
 function sanitizeChallengeLevel(level) {
@@ -1046,25 +1597,25 @@ function getEffectiveChallengeLevel(settings = currentSettings) {
   return getTypingChallengeLevel(settings);
 }
 
-function buildTypingChallengeSegments(level = getEffectiveChallengeLevel()) {
+function buildTypingChallengeSegments(level = getEffectiveChallengeLevel(), weight = 'standard') {
   if (level === 'custom') {
     const phrase = getCustomChallengePhrase();
     if (phrase) {
-      return [{ text: phrase }];
+      return Array.from({ length: getChallengeSize('custom', weight) }, () => ({ text: phrase }));
     }
   }
 
   const selectedLevel = sanitizeChallengeLevel(level);
+  const size = getChallengeSize(selectedLevel, weight);
   if (selectedLevel === 'easy') {
-    return [{ text: generateRandomCharacterSequence(12) }];
+    return [{ text: generateRandomCharacterSequence(size) }];
   }
 
   if (selectedLevel === 'moderate') {
-    const sentenceCount = Math.random() < 0.5 ? 1 : 2;
-    return [{ text: getRandomItems(MODERATE_CHALLENGE_SENTENCES).slice(0, sentenceCount).join(' ') }];
+    return [{ text: getRandomItems(MODERATE_CHALLENGE_SENTENCES).slice(0, size).join(' ') }];
   }
 
-  return getRandomItems(PRODUCTIVITY_TEXTS).slice(0, 5).map((text) => ({ text }));
+  return getRandomItems(PRODUCTIVITY_TEXTS).slice(0, size).map((text) => ({ text }));
 }
 
 function getRandomItems(items) {
@@ -1085,18 +1636,19 @@ function generateRandomCharacterSequence(length) {
   return sequence;
 }
 
-function completeChallenge(duration, originalUrl) {
+function completeChallenge(duration, originalUrl, { onFailure } = {}) {
   const timeSpent = Math.floor((Date.now() - startTime) / 1000);
   const safeTargetUrl = getSafeTargetUrl(originalUrl);
   if (!safeTargetUrl) {
-    alert('Invalid destination URL.');
+    showPageError('This destination is not a valid web address.');
+    if (typeof onFailure === 'function') onFailure();
     return;
   }
 
+  // The button already waits out Earn-Access; this only guards a clock that drifted.
   if (isEarnAccessRuleActive() && timeSpent < getEarnAccessMinChallengeSeconds()) {
-    reportAnalyticsEvent('challenge_failed');
-    showPrecheckError(`Earn-Access requires at least ${getEarnAccessMinChallengeSeconds()}s challenge time. Try again.`);
-    setTimeout(() => location.reload(), 2000);
+    showPageError(`Earn-Access needs ${getEarnAccessRemainingSeconds()} more seconds. Your typing is kept.`);
+    if (typeof onFailure === 'function') onFailure();
     return;
   }
 
@@ -1116,11 +1668,12 @@ function completeChallenge(duration, originalUrl) {
     successDetails: {
       bonusMinutes,
       timeSpent
-    }
+    },
+    onFailure
   });
 }
 
-function requestTemporaryAccess({ targetUrl, duration, timeSpent, meta, successDetails }) {
+function requestTemporaryAccess({ targetUrl, duration, timeSpent, meta, successDetails, onFailure }) {
   const domain = new URL(targetUrl).hostname;
 
   chrome.runtime.sendMessage({
@@ -1136,6 +1689,7 @@ function requestTemporaryAccess({ targetUrl, duration, timeSpent, meta, successD
       }
       renderSuccessState({
         targetUrl,
+        domain: response.access?.domain || domain,
         duration,
         timeSpent: successDetails?.timeSpent || 0,
         bonusMinutes: successDetails?.bonusMinutes || 0,
@@ -1144,16 +1698,20 @@ function requestTemporaryAccess({ targetUrl, duration, timeSpent, meta, successD
       return;
     }
 
-    alert(response?.error || 'ResistGate could not grant access. Please try again.');
-    location.reload();
+    // Stay put: the typed work and the current step are kept, so the user can retry.
+    showPageError(response?.error || 'ResistGate could not grant access. Please try again.');
+    if (typeof onFailure === 'function') {
+      onFailure();
+    }
   });
 }
 
-function renderSuccessState({ targetUrl, duration, timeSpent, bonusMinutes, expiresAt }) {
+function renderSuccessState({ targetUrl, domain, duration, timeSpent, bonusMinutes, expiresAt }) {
   transitionToPhase(PHASES.SUCCESS);
-  
+  grantedAccessDomain = domain;
+
   document.getElementById('success-duration').textContent = `Access is open for ${duration} minutes.`;
-  
+
   const bonusEl = document.getElementById('success-bonus');
   if (bonusMinutes > 0) {
     bonusEl.textContent = `Bonus time added: +${bonusMinutes} min`;
@@ -1161,20 +1719,46 @@ function renderSuccessState({ targetUrl, duration, timeSpent, bonusMinutes, expi
   } else {
     bonusEl.classList.add('hidden');
   }
-  
+
   const timeInvestedEl = document.getElementById('success-time-invested');
   if (timeSpent > 0) {
     timeInvestedEl.textContent = `Time invested: ${formatTime(timeSpent)}`;
   } else {
     timeInvestedEl.textContent = 'Access granted via manual override.';
   }
-  
+
+  const intentEl = document.getElementById('success-intent');
+  const intent = getStatedIntent();
+  if (intentEl) {
+    intentEl.textContent = intent ? `You said you're here to: ${intent}` : '';
+    intentEl.classList.toggle('hidden', !intent);
+  }
+
   const continueLink = document.getElementById('continue-to-site');
   continueLink.href = targetUrl;
-  
+  continueLink.classList.remove('hidden');
+  document.getElementById('close-tab-btn').classList.add('hidden');
+  document.getElementById('never-mind-btn').classList.remove('hidden');
+  document.getElementById('success-prompt').classList.remove('hidden');
+
   const timerEl = document.getElementById('access-timer');
   const resolvedExpiry = expiresAt || (Date.now() + (parseInt(duration, 10) * 60 * 1000));
-  startAccessCountdown(timerEl, resolvedExpiry);
+  startAccessCountdown(timerEl, resolvedExpiry, renderAccessExpired);
+}
+
+// The window closed while the user was still on this page. The link would only bounce
+// back to the gate now, so offer to close the tab instead.
+function renderAccessExpired() {
+  const timerEl = document.getElementById('access-timer');
+  if (timerEl) {
+    timerEl.textContent = 'Time\'s up — close the tab?';
+  }
+
+  document.getElementById('continue-to-site').classList.add('hidden');
+  document.getElementById('never-mind-btn').classList.add('hidden');
+  document.getElementById('success-prompt').classList.add('hidden');
+  document.getElementById('close-tab-btn').classList.remove('hidden');
+  announce('Access has ended. Close the tab?');
 }
 
 function getEarnAccessBonus(timeSpentSeconds) {
@@ -1268,6 +1852,19 @@ function showPrecheckError(message) {
   document.getElementById('precheck-error').textContent = message || '';
 }
 
+// Errors show where the user is looking: each phase has its own message slot.
+function showPageError(message) {
+  const errorIds = {
+    [PHASES.INTENTION]: 'intention-error',
+    [PHASES.CHALLENGE]: 'typing-error',
+    [PHASES.SUCCESS]: 'success-error'
+  };
+  const el = document.getElementById(errorIds[currentPhase] || 'precheck-error');
+  if (el) {
+    el.textContent = message || '';
+  }
+}
+
 function clearPrecheckError() {
   document.getElementById('precheck-error').textContent = '';
 }
@@ -1287,7 +1884,7 @@ function formatTime(seconds) {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-function startAccessCountdown(targetElement, expiresAt) {
+function startAccessCountdown(targetElement, expiresAt, onExpire) {
   if (!targetElement || !Number.isFinite(expiresAt)) {
     return;
   }
@@ -1302,6 +1899,9 @@ function startAccessCountdown(targetElement, expiresAt) {
       targetElement.textContent = 'Access ends in: 00:00';
       clearInterval(accessCountdownInterval);
       accessCountdownInterval = null;
+      if (typeof onExpire === 'function') {
+        onExpire();
+      }
       return;
     }
 
@@ -1355,6 +1955,29 @@ if (typeof globalThis !== 'undefined') {
     isIntentionPageEnabled,
     getIntentionPrecheck,
     goBack,
+    leaveGate,
+    handleRemindLater,
+    handleNeverMind,
+    handleManualOverride,
+    cancelManualOverride,
+    handleGlobalKeydown,
+    showPageError,
+    computeTypingDiff,
+    getQuoteHighlightParts,
+    getEarnAccessRemainingSeconds,
+    formatCountdown,
+    findBlocklistEntry,
+    normalizeBlocklistPattern,
+    getBundlePanelCopy,
+    getAccessDurationOptions,
+    getChallengeWeight,
+    getChallengeSize,
+    getDurationHint,
+    getGateStreakText,
+    getChallengeContextLine,
+    requestTemporaryAccess,
+    completeChallenge,
+    startAccessCountdown,
     getModerateChallengeSentenceBank: () => [...MODERATE_CHALLENGE_SENTENCES],
     getChallengePromptBank: () => [...PRODUCTIVITY_TEXTS],
     generateRandomCharacterSequence,
@@ -1379,6 +2002,19 @@ if (typeof globalThis !== 'undefined') {
     },
     __setSkipIntentionForTest: (value) => {
       skipIntentionPage = value === true;
-    }
+    },
+    __setStartTimeForTest: (value) => {
+      startTime = value;
+    },
+    __setChallengeMetaForTest: (meta) => {
+      challengeMeta = { ...challengeMeta, ...meta };
+    },
+    __setSelectedAccessMinutesForTest: (minutes) => {
+      selectedAccessMinutes = minutes;
+    },
+    __setAccessDurationForTest: (minutes) => {
+      accessDurationMinutes = minutes;
+    },
+    __getCurrentPhase: () => currentPhase
   };
 }

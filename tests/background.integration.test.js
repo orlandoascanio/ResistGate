@@ -907,4 +907,105 @@ describe('ResistGate background integration', () => {
     const accessCall = posthogCalls.find((entry) => entry.body.event === 'access_granted');
     expect(accessCall.body.properties.domain).toBe('youtube.com');
   });
+
+  describe('gate outcomes and reminders', () => {
+    async function blockSites(patterns) {
+      const current = await env.sendMessage({ action: 'getSettings' });
+      const next = current.settings;
+      next.blocklist = patterns.map((urlPattern, i) => ({ id: String(i + 1), urlPattern }));
+      const saved = await env.sendMessage({ action: 'updateSettings', settings: next });
+      expect(saved.success).toBe(true);
+    }
+
+    it('counts exits as resisted and grants as accessed for the streak line', async () => {
+      await blockSites(['reddit.com']);
+
+      const empty = await env.sendMessage({ action: 'getGateOutcomeSummary' });
+      expect(empty.summary).toEqual({ total: 0, resisted: 0 });
+
+      await env.sendMessage({ action: 'recordGateOutcome', domain: 'www.reddit.com' });
+      await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
+      const after = await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com' });
+
+      expect(after.summary).toEqual({ total: 3, resisted: 2 });
+      expect(env.storageData.gateOutcomes.outcomes.map((entry) => entry.outcome))
+        .toEqual(['resisted', 'accessed', 'resisted']);
+    });
+
+    it('keeps the streak to the last five outcomes', async () => {
+      await blockSites(['reddit.com']);
+      for (let i = 0; i < 4; i++) {
+        await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
+      }
+      for (let i = 0; i < 3; i++) {
+        await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com' });
+      }
+
+      const response = await env.sendMessage({ action: 'getGateOutcomeSummary' });
+      expect(response.summary).toEqual({ total: 5, resisted: 3 });
+    });
+
+    it('turns a granted visit into a resisted one on "never mind" instead of adding an entry', async () => {
+      await blockSites(['reddit.com']);
+      await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
+      await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com', reversesAccess: true });
+
+      expect(env.storageData.gateOutcomes.outcomes).toHaveLength(1);
+      expect(env.storageData.gateOutcomes.outcomes[0].outcome).toBe('resisted');
+    });
+
+    it('ignores outcomes stored on a previous day', async () => {
+      env.storageData.gateOutcomes = {
+        date: '2000-01-01',
+        outcomes: [{ domain: 'reddit.com', outcome: 'resisted', at: 1 }]
+      };
+
+      const response = await env.sendMessage({ action: 'getGateOutcomeSummary' });
+      expect(response.summary).toEqual({ total: 0, resisted: 0 });
+    });
+
+    it('schedules a 10-minute reminder that reopens the destination', async () => {
+      await blockSites(['reddit.com']);
+
+      const response = await env.sendMessage({
+        action: 'scheduleGateReminder',
+        originalUrl: 'https://www.reddit.com/r/programming'
+      });
+      expect(response.success).toBe(true);
+      expect(response.reminder.domain).toBe('reddit.com');
+
+      const alarms = await env.chrome.alarms.getAll();
+      const alarm = alarms.find((entry) => entry.name === 'resistgate-gate-reminder-reddit.com');
+      expect(alarm.delayInMinutes).toBe(10);
+
+      const summary = await env.sendMessage({ action: 'getGateOutcomeSummary' });
+      expect(summary.summary).toEqual({ total: 1, resisted: 1 });
+
+      await env.triggerAlarm({ name: 'resistgate-gate-reminder-reddit.com' });
+      expect(env.createdTabs.at(-1)).toEqual({ url: 'https://www.reddit.com/r/programming', active: true });
+      expect(env.storageData.gateReminders['reddit.com']).toBeUndefined();
+
+      // A second firing has nothing left to open.
+      const tabCount = env.createdTabs.length;
+      await env.triggerAlarm({ name: 'resistgate-gate-reminder-reddit.com' });
+      expect(env.createdTabs).toHaveLength(tabCount);
+    });
+
+    it('refuses reminders for unblocked sites and non-web URLs', async () => {
+      await blockSites(['reddit.com']);
+
+      const unblocked = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'https://example.com/' });
+      expect(unblocked.success).toBe(false);
+
+      const lookalike = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'https://notreddit.com/' });
+      expect(lookalike.success).toBe(false);
+
+      const script = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'javascript:alert(1)' });
+      expect(script.success).toBe(false);
+
+      expect(await env.chrome.alarms.getAll()).not.toContainEqual(
+        expect.objectContaining({ name: expect.stringContaining('resistgate-gate-reminder-') })
+      );
+    });
+  });
 });

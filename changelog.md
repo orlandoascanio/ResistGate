@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [1.5.0] - 2026-09-18
 
-A settings page that saves itself, tells you what's wrong before it matters, and lets you take your setup with you. Plus a Weekly Review that tells you what to change, not just how you did.
+A settings page that saves itself, tells you what's wrong before it matters, and lets you take your setup with you. Plus a Weekly Review that tells you what to change, not just how you did, and a friction page that is easier to get through honestly and easier to walk away from.
 
 ### Changed
 - **Settings save themselves.** The two full-width **Save Settings** buttons are gone. Every setting saves about half a second after you change it, and the header shows *Saving… / ✓ Saved*. Before, sites saved instantly while everything else waited for the button, with nothing to tell you which was which. Closing the tab with a change still pending flushes it first.
@@ -22,6 +22,10 @@ A settings page that saves itself, tells you what's wrong before it matters, and
 - **"Top distraction domains" was folded into "Where the gate holds".** The Weekly Review no longer shows the same domain ranking twice; the surviving section carries the attempt counts plus what happened at the gate.
 - **Dropped the decorative quote glyph** behind the weekly feedback line.
 - **The friction page, Intention Page, and welcome page were toned down.** Removed the decorative gradient washes, the graph-paper backdrop, the drenched hero panel with its numbered 01/02/03 ladder, the accent stripe on the challenge quote, and the uppercase letter-spaced labels; reduced display type to a size that suits an interruption. Read-only content is no longer boxed into cards nested inside cards.
+- **Mistakes are marked in the text.** The part you have typed is dimmed, the next character is underlined, and a mismatch is marked in red.
+- **The destination and your reason stay in view** while you type (*→ reddit.com · "Reply to the mod message"*).
+- **Moderate mode is always two sentences**, instead of randomly one or two.
+- **Screen readers no longer announce the character count on every keystroke**; they hear when each paragraph is done.
 
 ### Added (Free)
 - **Paste a list of sites.** The site box accepts several domains at once, separated by commas, spaces, or new lines (paste a column straight from a note). ResistGate says what it blocked, what was already blocked, and what it couldn't read, and leaves anything unreadable in the box so you can fix it.
@@ -29,6 +33,13 @@ A settings page that saves itself, tells you what's wrong before it matters, and
 - **Filter your blocklist.** Once you block more than eight sites, a filter box appears above the list.
 - **Today, at a glance.** A strip at the top of General shows today's blocked attempts and the site that tried hardest. Free users see it too: the full Progress dashboard stays Pro, but you can see the gate is working.
 - **Back up and restore your settings.** *Export settings* saves your blocklist, reminders, and settings to a JSON file. *Import settings* restores them after a reinstall or on another computer, after a confirmation that says what will be replaced. A backup never carries your plan or an active lock: importing can't grant Pro, and can't start or extend a Commitment Mode.
+- **Choose how long you need: 5, 15, or 30 minutes.** A shorter window than your default gets a lighter challenge; a longer one costs more typing. Manual override is capped at your default window.
+- **A way out on every step.** *Go back instead* on Prepare, *Actually, never mind* on the success screen (it closes access again), and *Not now, remind me in 10 min*, which reopens the site later. Every exit counts as a resisted visit.
+- **A streak line:** *You've gone back 3 of the last 5 times today.*
+- **Manual override can be cancelled** while it counts down.
+- **Your resistance count shows on Prepare too**, for users without the Intention Page.
+- **Keyboard shortcuts:** Enter runs each step's main action; Esc leaves.
+- **The success screen repeats what you said you were there for**, and says *Time's up — close the tab?* when the window ends.
 
 ### Added (Pro)
 - **Commitment Mode asks properly.** The browser's plain confirm box was replaced with ResistGate's own dialog. It shows exactly when the lock ends ("until 4:30 PM today") and asks you to type **LOCK** before it starts.
@@ -46,6 +57,13 @@ A settings page that saves itself, tells you what's wrong before it matters, and
 - **Blocked sites were described by what they lacked.** Each entry read "No access condition · No reminder"; entries now list only the rules they actually have, or "Always blocked" when they have none.
 - **The Progress Dashboard drew a divider under empty space.** The scoreboard's separator rule assumed content followed it inside the same card; it is now drawn only when something actually does.
 - **The blocklist clipped its last row.** The list had a fixed 240px cap that cut an entry in half; it now fills the space its card has and reserves room for its scrollbar.
+- **Errors during the challenge are visible.** The paste warning and the Earn-Access message were written to the Prepare screen, which is hidden while you type, so neither ever appeared.
+- **Earn-Access no longer throws away finished work.** Finishing faster than the minimum challenge time used to reload the page after two seconds, losing every paragraph. The **Continue** button now counts down (*Unlocks in 0:34*) and waits.
+- **Quit no longer inflates your counters.** It reloaded the page, which counted another blocked visit and restarted the breathing exercise. It now leaves the page. A failed access request stays on the page with an inline message instead of an alert and a reload.
+- **The access-condition panel tells the truth.** It said "You can visit this site after 5:00 PM" while the challenge was still available; it now reads *Free access after 5:00 PM — or earn it now*. The time-of-day progress bar, which measured from midnight, is gone.
+- **Paste blocking covers Cmd shortcuts and drag-and-drop.**
+- **Per-site reminders match the right site.** `x.com` could match an unrelated site; a pattern now matches only its own host and subdomains.
+- **Going back from a hand-off skips the Intention Page** instead of landing on it again.
 
 ---
 

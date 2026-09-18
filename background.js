@@ -17,6 +17,12 @@ const DAILY_COUNT_KEY = 'dailyBlockCount';
 const RESISTANCE_COUNTERS_KEY = 'resistanceCounters';
 const WORK_TIMER_KEY = 'workTimer';
 const PENDING_OUTCOME_TAP_KEY = 'pendingOutcomeTap';
+const GATE_OUTCOMES_KEY = 'gateOutcomes';
+const GATE_REMINDERS_KEY = 'gateReminders';
+const GATE_REMINDER_ALARM_PREFIX = 'resistgate-gate-reminder-';
+const GATE_REMINDER_DELAY_MINUTES = 10;
+const MAX_GATE_OUTCOMES = 100;
+const GATE_STREAK_WINDOW = 5;
 const MAX_ANALYTICS_EVENTS = 3000;
 const POSTHOG_PROJECT_TOKEN = 'phc_u3HfEJ9tnozSthBr37cVGdbC6UYkR6caDHEesudUXMa3';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
@@ -210,6 +216,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     })();
   }
 
+  if (alarm.name.startsWith(GATE_REMINDER_ALARM_PREFIX)) {
+    const domain = alarm.name.slice(GATE_REMINDER_ALARM_PREFIX.length);
+    void openGateReminder(domain).catch((err) => {
+      console.error('Gate reminder failed:', err);
+    });
+  }
+
   if (alarm.name === ENTITLEMENT_SYNC_ALARM) {
     void syncEntitlement('alarm', { force: true });
   }
@@ -315,6 +328,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'getResistanceCount': {
           const count = await getResistanceCount(request.domain);
           sendResponse({ success: true, count });
+          return;
+        }
+
+        case 'recordGateOutcome': {
+          const summary = await recordGateOutcome(request.domain, 'resisted', {
+            reversesAccess: request.reversesAccess === true
+          });
+          sendResponse({ success: true, summary });
+          return;
+        }
+
+        case 'getGateOutcomeSummary': {
+          const summary = await getGateOutcomeSummary();
+          sendResponse({ success: true, summary });
+          return;
+        }
+
+        case 'scheduleGateReminder': {
+          const reminder = await scheduleGateReminder(request.originalUrl);
+          sendResponse({ success: true, reminder });
           return;
         }
 
@@ -1307,6 +1340,8 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
     await recordManualOverride(settings, now, domain);
   }
 
+  await recordGateOutcome(domain, 'accessed');
+
   return { domain, duration, expiresAt };
 }
 
@@ -1477,6 +1512,137 @@ async function getTodaySummary() {
     blockedToday: daily.date === today ? (Number(daily.count) || 0) : 0,
     topDomains
   };
+}
+
+// What happened at the gate today, newest last: 'resisted' when the user left without
+// access (go back, quit, never mind, remind me later), 'accessed' when access was granted.
+// Blocked-visit counters only record arrivals; this is what the streak line is built from.
+async function getGateOutcomes() {
+  const today = getDateKey(Date.now());
+  const result = await getFromStorage([GATE_OUTCOMES_KEY]);
+  const data = result[GATE_OUTCOMES_KEY];
+  if (!data || data.date !== today || !Array.isArray(data.outcomes)) {
+    return { date: today, outcomes: [] };
+  }
+
+  return {
+    date: today,
+    outcomes: data.outcomes.filter((entry) => (
+      entry
+      && (entry.outcome === 'resisted' || entry.outcome === 'accessed')
+      && typeof entry.domain === 'string'
+    ))
+  };
+}
+
+async function recordGateOutcome(urlPattern, outcome, { reversesAccess = false } = {}) {
+  const domain = normalizeDomain(urlPattern);
+  if (!domain || (outcome !== 'resisted' && outcome !== 'accessed')) {
+    return getGateOutcomeSummary();
+  }
+
+  const data = await getGateOutcomes();
+  const outcomes = [...data.outcomes];
+
+  // "Actually, never mind" after access was granted turns that grant into a resisted
+  // visit instead of adding a second entry for the same arrival.
+  let reversedIndex = -1;
+  if (reversesAccess) {
+    for (let i = outcomes.length - 1; i >= 0; i--) {
+      if (outcomes[i].domain === domain && outcomes[i].outcome === 'accessed') {
+        reversedIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (reversedIndex >= 0) {
+    outcomes[reversedIndex] = { ...outcomes[reversedIndex], outcome: 'resisted' };
+  } else {
+    outcomes.push({ domain, outcome, at: Date.now() });
+  }
+
+  await setInStorage({
+    [GATE_OUTCOMES_KEY]: { date: data.date, outcomes: outcomes.slice(-MAX_GATE_OUTCOMES) }
+  });
+
+  return summarizeGateOutcomes(outcomes);
+}
+
+function summarizeGateOutcomes(outcomes) {
+  const recent = outcomes.slice(-GATE_STREAK_WINDOW);
+  return {
+    total: recent.length,
+    resisted: recent.filter((entry) => entry.outcome === 'resisted').length
+  };
+}
+
+async function getGateOutcomeSummary() {
+  const data = await getGateOutcomes();
+  return summarizeGateOutcomes(data.outcomes);
+}
+
+// "Not now, remind me in 10 min": the user leaves the gate, and the same destination is
+// reopened later. It goes back through the blocking rules, so it only skips the gate if
+// the site is no longer blocked by then.
+async function scheduleGateReminder(originalUrl) {
+  let parsed;
+  try {
+    parsed = new URL(originalUrl);
+  } catch {
+    throw new Error('Invalid destination for a reminder');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Invalid destination for a reminder');
+  }
+
+  const settings = await getSettings();
+  const hostname = normalizeDomain(parsed.hostname);
+  const entry = settings.blocklist.find((item) => {
+    const pattern = normalizeDomain(item.urlPattern);
+    return pattern && hostname && (hostname === pattern || hostname.endsWith(`.${pattern}`));
+  });
+  if (!entry) {
+    throw new Error('Domain is not in blocklist');
+  }
+
+  const domain = normalizeDomain(entry.urlPattern);
+  const remindAt = Date.now() + GATE_REMINDER_DELAY_MINUTES * 60 * 1000;
+  const result = await getFromStorage([GATE_REMINDERS_KEY]);
+  const reminders = { ...(result[GATE_REMINDERS_KEY] || {}) };
+  reminders[domain] = { url: parsed.href, remindAt };
+  await setInStorage({ [GATE_REMINDERS_KEY]: reminders });
+  await chrome.alarms.create(`${GATE_REMINDER_ALARM_PREFIX}${domain}`, {
+    delayInMinutes: GATE_REMINDER_DELAY_MINUTES
+  });
+  await recordGateOutcome(domain, 'resisted');
+
+  return { domain, remindAt };
+}
+
+async function openGateReminder(domain) {
+  const result = await getFromStorage([GATE_REMINDERS_KEY]);
+  const reminders = { ...(result[GATE_REMINDERS_KEY] || {}) };
+  const reminder = reminders[domain];
+  if (!reminder) {
+    return;
+  }
+
+  delete reminders[domain];
+  await setInStorage({ [GATE_REMINDERS_KEY]: reminders });
+
+  let url;
+  try {
+    url = new URL(reminder.url);
+  } catch {
+    return;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return;
+  }
+
+  await chrome.tabs.create({ url: url.href, active: true });
 }
 
 async function recordAnalyticsEvent(type, domain) {
