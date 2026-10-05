@@ -71,7 +71,6 @@ jobs:
             commitment-page
             welcome
             shared
-            vendor
             icons
           )
 

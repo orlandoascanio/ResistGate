@@ -139,6 +139,12 @@ export function createChromeMock() {
         set: (value, callback) => {
           Object.assign(storageData, value || {});
           callback();
+        },
+        remove: (keys, callback) => {
+          for (const key of Array.isArray(keys) ? keys : [keys]) {
+            delete storageData[key];
+          }
+          callback();
         }
       }
     },
@@ -238,120 +244,6 @@ export function createChromeMock() {
       nextRulesUpdateError = new Error(message);
     }
   };
-}
-
-const BILLING_ENDPOINTS = {
-  checkout: 'https://www.orlandoascanio.com/api/checkout/session',
-  activate: 'https://www.orlandoascanio.com/api/entitlement/activate-install',
-  status: 'https://www.orlandoascanio.com/api/entitlement/install-status'
-};
-
-/**
- * Stands in for the orlandoascanio.com billing API. It enforces the same checks the
- * real server must make: an activation token only activates the session it was minted
- * for, and only for the install credential, device, and extension bound to that session.
- */
-export function createBillingApiMock() {
-  const calls = [];
-  const sessions = new Map();
-  const tokens = new Map();
-  const overrides = new Map();
-  let grant = { pro: true, plan: 'yearly', status: 'active' };
-  let counter = 0;
-
-  function respond(status, body) {
-    return {
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => body
-    };
-  }
-
-  async function fetchMock(url, init = {}) {
-    const body = init.body ? JSON.parse(init.body) : null;
-    calls.push({ url, body });
-
-    const override = overrides.get(url);
-    if (override === 'network-error') {
-      throw new Error('Network request failed');
-    }
-    if (override) {
-      return respond(override.status, override.body);
-    }
-
-    if (url === BILLING_ENDPOINTS.checkout) {
-      counter += 1;
-      const checkoutId = `chk_${counter}`;
-      sessions.set(checkoutId, {
-        checkoutId,
-        plan: body.plan,
-        deviceId: body.deviceId,
-        extensionId: body.extensionId,
-        installCredential: body.installCredential
-      });
-      return respond(200, { checkoutId, plan: body.plan, expiresAt: Date.now() + 30 * 60 * 1000 });
-    }
-
-    if (url === BILLING_ENDPOINTS.activate) {
-      const session = sessions.get(tokens.get(body.activationToken));
-      if (!session) {
-        return respond(400, { error: 'Invalid or expired activation token' });
-      }
-      if (
-        session.installCredential !== body.installCredential ||
-        session.deviceId !== body.deviceId ||
-        session.extensionId !== body.extensionId
-      ) {
-        return respond(403, { error: 'Activation token does not match this installation' });
-      }
-      return respond(200, { pro: true, plan: session.plan, status: 'active', checkoutId: session.checkoutId });
-    }
-
-    if (url === BILLING_ENDPOINTS.status) {
-      const known = [...sessions.values()].some((session) => session.installCredential === body.installCredential);
-      if (!known) {
-        return respond(403, { error: 'Unknown install credential' });
-      }
-      return respond(200, { ...grant });
-    }
-
-    throw new Error(`Unexpected billing request: ${url}`);
-  }
-
-  return {
-    fetch: fetchMock,
-    calls,
-    sessions,
-    endpoints: BILLING_ENDPOINTS,
-    latestCheckoutId: () => [...sessions.keys()].at(-1),
-    issueActivationToken(checkoutId, token) {
-      counter += 1;
-      const activationToken = token || `tok_${counter}`;
-      tokens.set(activationToken, checkoutId);
-      return activationToken;
-    },
-    setGrant(next) {
-      grant = { ...grant, ...next };
-    },
-    override(endpoint, response) {
-      overrides.set(endpoint, response);
-    },
-    clearOverrides() {
-      overrides.clear();
-    }
-  };
-}
-
-/** Runs the full purchase handshake: plan selection, checkout session, token exchange. */
-export async function purchaseProInTest(env, api, plan = 'yearly') {
-  const checkout = await env.sendMessage({ action: 'openPricingPage', plan });
-  const activationToken = api.issueActivationToken(checkout.checkoutId);
-  const activation = await env.sendExternalMessage(
-    { action: 'activateProFromWebsite', activationToken },
-    { url: 'https://www.orlandoascanio.com/en/pricing' }
-  );
-
-  return { checkout, activation, activationToken };
 }
 
 export async function loadScriptInVm(relativeScriptPath, globals = {}) {

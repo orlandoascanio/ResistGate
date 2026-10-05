@@ -23,45 +23,12 @@ const GATE_REMINDER_DELAY_MINUTES = 10;
 const MAX_GATE_OUTCOMES = 100;
 const GATE_STREAK_WINDOW = 5;
 const MAX_ANALYTICS_EVENTS = 3000;
-const POSTHOG_PROJECT_TOKEN = 'phc_u3HfEJ9tnozSthBr37cVGdbC6UYkR6caDHEesudUXMa3';
-const POSTHOG_HOST = 'https://us.i.posthog.com';
-const POSTHOG_EVENT_ALLOWLIST = new Set([
-  'install',
-  'update',
-  'onboarding_start',
-  'blocklist_created',
-  'first_block_hit',
-  'challenge_completed',
-  'access_granted',
-  'return_day_1',
-  'uninstall_reason_submit'
-]);
 const RESISTGATE_LIFECYCLE_URLS = {
   install: 'https://orlandoascanio.com/resistgate/installed',
   update: 'https://orlandoascanio.com/resistgate/updated'
 };
-
-const RESISTGATE_SITE_ORIGIN = 'https://www.orlandoascanio.com';
-const PRICING_PAGE_URL = `${RESISTGATE_SITE_ORIGIN}/en/pricing`;
-const CHECKOUT_SESSION_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/checkout/session`;
-const ACTIVATE_INSTALL_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/entitlement/activate-install`;
-const INSTALL_STATUS_ENDPOINT = `${RESISTGATE_SITE_ORIGIN}/api/entitlement/install-status`;
-const BILLING_REQUEST_TIMEOUT_MS = 15000;
-const CHECKOUT_PLANS = new Set(['monthly', 'yearly', 'lifetime']);
-const DEFAULT_CHECKOUT_PLAN = 'yearly';
-const ENTITLEMENT_SYNC_ALARM = 'resistgate-entitlement-sync';
-const ENTITLEMENT_SYNC_PERIOD_MINUTES = 360;
-const ENTITLEMENT_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
-// How long a verified grant is trusted without the server confirming it again.
-//
-// Transient failures preserve the last verified state so a brief outage never signs a paying
-// customer out. But that trust has to end somewhere: without a ceiling, a subscription that
-// lapsed at Paddle keeps Pro forever as long as the client never completes another sync —
-// whether that is a week-long outage, or someone simply keeping the extension offline. At the
-// ceiling the extension drops to Free and asks the user to reconnect, rather than extending
-// trust indefinitely.
-const ENTITLEMENT_GRACE_PERIOD_MS = 72 * 60 * 60 * 1000;
-const INSTALL_CREDENTIAL_PATTERN = /^[0-9a-f]{64}$/;
+// Left behind by the paid tier removed in 2.0. Cleared on startup.
+const LEGACY_ENTITLEMENT_SYNC_ALARM = 'resistgate-entitlement-sync';
 const CUSTOM_CHALLENGE_PHRASE_MAX_LENGTH = 200;
 
 const DEFAULT_SETTINGS = {
@@ -80,9 +47,7 @@ const DEFAULT_SETTINGS = {
       endTime: '17:00'
     }
   },
-  subscription: {
-    tier: 'free'
-  },
+  // Every feature is free. The key keeps its old name so existing settings load unchanged.
   proFeatures: {
     accountabilityPreset: 'balanced',
     customChallengePhrase: {
@@ -217,15 +182,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.runtime.setUninstallURL('https://www.orlandoascanio.com/resistgate/uninstall');
   
   // Show welcome page on first install, what's new page on update
-  if (details.reason === 'install') {
-    void trackPosthogEventOnce('install', {
-      installReason: details.reason
-    });
-    openLifecyclePage(details, RESISTGATE_LIFECYCLE_URLS);
-  } else if (details.reason === 'update') {
-    void trackPosthogEventOnce('update', {
-      previousVersion: typeof details.previousVersion === 'string' ? details.previousVersion : null
-    });
+  if (details.reason === 'install' || details.reason === 'update') {
     openLifecyclePage(details, RESISTGATE_LIFECYCLE_URLS);
   }
 });
@@ -259,10 +216,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     void openGateReminder(domain).catch((err) => {
       console.error('Gate reminder failed:', err);
     });
-  }
-
-  if (alarm.name === ENTITLEMENT_SYNC_ALARM) {
-    void syncEntitlement('alarm', { force: true });
   }
 
   if (alarm.name === COMMITMENT_ALARM) {
@@ -438,21 +391,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'updateSettings': {
           const currentSettings = await getSettings();
           const nextSettings = sanitizeSettings(request.settings || {});
-          nextSettings.subscription = currentSettings.subscription;
-          if (!hasProAccess(currentSettings)) {
-            const intentionPage = nextSettings.proFeatures?.intentionPage;
-            nextSettings.proFeatures = currentSettings.proFeatures;
-            if (canUseIntentionPage() && intentionPage) {
-              nextSettings.proFeatures.intentionPage = intentionPage;
-            }
-          }
-
-          const currentBlocklistLength = Array.isArray(currentSettings.blocklist)
-            ? currentSettings.blocklist.length
-            : 0;
-          const nextBlocklistLength = Array.isArray(nextSettings.blocklist)
-            ? nextSettings.blocklist.length
-            : 0;
 
           if (isCommitmentModeActive(currentSettings, Date.now())) {
             throw new Error('Commitment Mode is active. All settings are locked until it expires.');
@@ -469,7 +407,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             nextSettings.blocklist = currentSettings.blocklist;
             nextSettings.challengeTypes = currentSettings.challengeTypes;
             nextSettings.freeExperience = currentSettings.freeExperience;
-            nextSettings.subscription = currentSettings.subscription;
 
             if (nextSettings.proFeatures) {
               nextSettings.proFeatures.accountabilityPreset = currentSettings.proFeatures.accountabilityPreset;
@@ -482,12 +419,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           const transition = applyStrictModeUpdate(currentSettings, nextSettings, Date.now());
           await saveSettings(transition.settings);
-          if (currentBlocklistLength < 3 && nextBlocklistLength >= 3) {
-            await trackPosthogEventOnce('blocklist_created', {
-              blocklistSize: nextBlocklistLength
-            });
-          }
-          if (transition.justDisabled && hasProAccess(transition.settings)) {
+          if (transition.justDisabled) {
             await appendAnalyticsEvent({
               type: 'manual_disable',
               timestamp: Date.now(),
@@ -511,24 +443,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         case 'getAnalyticsDashboard': {
-          const settings = await getSettings();
-          if (!hasProAccess(settings)) {
-            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
-            return;
-          }
-
           const dashboard = await getAnalyticsDashboard();
           sendResponse({ success: true, dashboard });
           return;
         }
 
         case 'getWeeklyReport': {
-          const settings = await getSettings();
-          if (!hasProAccess(settings)) {
-            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
-            return;
-          }
-
           const report = await getWeeklyReport();
           sendResponse({ success: true, report });
           return;
@@ -536,11 +456,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'activateCommitmentMode': {
           const settings = await getSettings();
-          if (!hasProAccess(settings)) {
-            sendResponse({ success: false, proRequired: true, error: 'Pro subscription required' });
-            return;
-          }
-
           const now = Date.now();
           if (isCommitmentModeActive(settings, now)) {
             sendResponse({ success: false, error: 'Commitment Mode is already active.' });
@@ -621,70 +536,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
-        case 'openPricingPage': {
-          const plan = resolveCheckoutPlan(request.plan);
-          if (!plan) {
-            sendResponse({ success: false, error: 'That plan is not available.', retryable: false });
-            return;
-          }
-
-          const session = await createCheckoutSession(plan);
-          if (!session.ok) {
-            sendResponse({ success: false, error: session.error, retryable: session.transient === true, plan });
-            return;
-          }
-
-          const url = buildPricingUrl(session.checkoutId, plan);
-          await chrome.tabs.create({ url });
-          sendResponse({
-            success: true,
-            url,
-            plan,
-            checkoutId: session.checkoutId,
-            expiresAt: session.expiresAt
-          });
-          return;
-        }
-
-        case 'getBillingState': {
-          const [installation, settings] = await Promise.all([getInstallation(), getSettings()]);
-          sendResponse({
-            success: true,
-            state: {
-              pro: hasProAccess(settings),
-              plan: installation.entitlement?.plan || null,
-              status: installation.entitlement?.status || null,
-              checkedAt: installation.entitlement?.checkedAt || null,
-              hasCheckout: Boolean(installation.installCredential),
-              // A grant that aged out of the grace window. The user paid, but we have not been
-              // able to confirm it for long enough that Pro had to lapse — they need to get
-              // back online and recheck, not buy again.
-              needsReconnect: installation.entitlement?.stale === true
-            }
-          });
-          return;
-        }
-
-        case 'refreshEntitlement': {
-          const result = await syncEntitlement('manual', { force: true });
-          if (result.skipped) {
-            sendResponse({
-              success: false,
-              error: 'No purchase is linked to this browser yet.',
-              retryable: false
-            });
-            return;
-          }
-
-          if (!result.ok) {
-            sendResponse({ success: false, error: result.error, retryable: result.transient === true });
-            return;
-          }
-
-          sendResponse({ success: true, pro: result.pro, changed: result.changed });
-          return;
-        }
-
         case 'openFeedbackPage': {
           const surface = typeof request.surface === 'string' ? request.surface : 'extension';
           const url = `https://www.orlandoascanio.com/en/resistgate/feedback?source=${encodeURIComponent(surface)}`;
@@ -697,14 +548,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const url = `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`;
           await chrome.tabs.create({ url });
           sendResponse({ success: true, url });
-          return;
-        }
-
-        case 'trackPosthogEvent': {
-          const eventName = typeof request.eventName === 'string' ? request.eventName.trim() : '';
-          const eventProps = request.properties && typeof request.properties === 'object' ? request.properties : {};
-          const tracked = await trackPosthogEventOnce(eventName, eventProps);
-          sendResponse({ success: true, tracked });
           return;
         }
 
@@ -741,44 +584,6 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return false;
   }
 
-  if (request.action === 'activateProFromWebsite') {
-    void (async () => {
-      try {
-        await initializeExtension('external-message');
-
-        const activationToken = sanitizeOpaqueString(request.activationToken);
-        if (!activationToken) {
-          sendResponse({ success: false, error: 'Missing activation token', retryable: false });
-          return;
-        }
-
-        const result = await activateInstallWithToken(activationToken);
-        if (!result.ok) {
-          sendResponse({ success: false, error: result.error, retryable: result.transient === true });
-          return;
-        }
-
-        const successUrl = new URL(chrome.runtime.getURL('options/options.html'));
-        successUrl.searchParams.set('activation', 'success');
-        if (result.plan) {
-          successUrl.searchParams.set('plan', result.plan);
-        }
-        await chrome.tabs.create({ url: successUrl.toString() });
-
-        sendResponse({
-          success: true,
-          subscription: { tier: 'pro' },
-          plan: result.plan,
-          status: result.status
-        });
-      } catch (error) {
-        console.error('Pro activation failed:', error);
-        sendResponse({ success: false, error: error?.message || 'Activation failed', retryable: true });
-      }
-    })();
-    return true;
-  }
-
   if (request.action === 'getOnboardingState' || request.action === 'openOnboarding') {
     void (async () => {
       try {
@@ -803,20 +608,6 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         } });
       } catch (err) {
         sendResponse({ success: false, error: err.message });
-      }
-    })();
-    return true;
-  }
-
-  // Lets the pricing page confirm the extension is reachable before it promises instant activation.
-  if (request.action === 'getActivationState') {
-    void (async () => {
-      try {
-        await initializeExtension('external-state');
-        const settings = await getSettings();
-        sendResponse({ success: true, installed: true, pro: hasProAccess(settings) });
-      } catch (error) {
-        sendResponse({ success: false, error: error?.message || 'Unavailable' });
       }
     })();
     return true;
@@ -884,305 +675,6 @@ async function saveWelcomeChange(request) {
   return { ...await getWelcomeState(), savedDomain };
 }
 
-// ── Billing and entitlement ───────────────────────────────────────
-// The extension never decides who is Pro. It creates a server checkout session,
-// hands the website an opaque checkout ID, and only flips the local tier after the
-// server verifies a signed activation token against this install's credential.
-
-function resolveCheckoutPlan(rawPlan) {
-  if (rawPlan === undefined || rawPlan === null || rawPlan === '') {
-    return DEFAULT_CHECKOUT_PLAN;
-  }
-
-  if (typeof rawPlan !== 'string') {
-    return null;
-  }
-
-  const plan = rawPlan.trim().toLowerCase();
-  return CHECKOUT_PLANS.has(plan) ? plan : null;
-}
-
-function buildPricingUrl(checkoutId, plan) {
-  const url = new URL(PRICING_PAGE_URL);
-  url.searchParams.set('source', 'extension');
-  url.searchParams.set('plan', plan);
-  url.searchParams.set('checkout', checkoutId);
-  return url.toString();
-}
-
-function generateInstallCredential() {
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  let credential = '';
-  while (credential.length < 64) {
-    credential += Math.floor(Math.random() * 16).toString(16);
-  }
-  return credential;
-}
-
-function sanitizeInstallCredential(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const credential = value.trim().toLowerCase();
-  return INSTALL_CREDENTIAL_PATTERN.test(credential) ? credential : null;
-}
-
-function sanitizeEntitlement(raw) {
-  const incoming = raw && typeof raw === 'object' ? raw : {};
-  const checkedAt = sanitizeTimestamp(incoming.checkedAt);
-
-  if (incoming.pro !== true && !incoming.status && !checkedAt) {
-    return null;
-  }
-
-  return {
-    pro: incoming.pro === true,
-    plan: sanitizeOpaqueString(incoming.plan),
-    status: sanitizeOpaqueString(incoming.status),
-    checkedAt,
-    // Set when a grant aged past the grace period without the server confirming it. Keeps
-    // the options page able to say "reconnect" rather than the bare "you are on Free".
-    stale: incoming.stale === true
-  };
-}
-
-function fetchWithTimeout(url, init) {
-  if (typeof AbortController !== 'function') {
-    return fetch(url, init);
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), BILLING_REQUEST_TIMEOUT_MS);
-  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
-}
-
-async function requestBillingApi(endpoint, payload) {
-  if (typeof fetch !== 'function') {
-    return { ok: false, transient: true, error: 'Network unavailable in this browser.' };
-  }
-
-  let response;
-  try {
-    response = await fetchWithTimeout(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  } catch (error) {
-    console.error(`Billing request failed (${endpoint}):`, error?.name || 'network error');
-    return { ok: false, transient: true, error: 'Could not reach ResistGate. Check your connection and try again.' };
-  }
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const transient = response.status === 408 || response.status === 429 || response.status >= 500;
-    return {
-      ok: false,
-      transient,
-      status: response.status,
-      error: sanitizeOpaqueString(data?.error) || `ResistGate could not complete this request (${response.status}).`
-    };
-  }
-
-  return { ok: true, status: response.status, data: data || {} };
-}
-
-async function ensureInstallCredential() {
-  const installation = await getInstallation();
-  const existing = sanitizeInstallCredential(installation.installCredential);
-  if (existing) {
-    return { installation, credential: existing };
-  }
-
-  installation.installCredential = generateInstallCredential();
-  await saveInstallation(installation);
-  return { installation, credential: installation.installCredential };
-}
-
-// Drop the verified grant, but keep the install credential.
-//
-// The credential is the only handle this browser has back to its own purchase: it is what
-// `install-status` is keyed on, and it exists nowhere the user can reach. Destroying it turns
-// a recoverable state ("the server currently says no") into a permanent one ("this browser can
-// never ask again"), which for a Lifetime buyer means losing something they own outright to a
-// single bad 403. Keeping it costs nothing — a credential the server does not recognize is
-// inert — and it means a later successful sync can restore access on its own.
-async function clearBillingCredentials() {
-  const installation = await getInstallation();
-  const hadServerGrant = installation.entitlement?.pro === true;
-  installation.entitlement = null;
-  await saveInstallation(installation);
-
-  if (hadServerGrant) {
-    const settings = await getSettings();
-    if (hasProAccess(settings)) {
-      settings.subscription = { tier: 'free' };
-      await saveSettings(settings);
-      await queueRulesUpdate('entitlement:credential-cleared');
-    }
-  }
-}
-
-async function applyVerifiedEntitlement(grant, reason) {
-  const pro = grant?.pro === true;
-
-  const installation = await getInstallation();
-  installation.entitlement = {
-    pro,
-    plan: sanitizeOpaqueString(grant?.plan),
-    status: sanitizeOpaqueString(grant?.status),
-    checkedAt: Date.now()
-  };
-  await saveInstallation(installation);
-
-  const settings = await getSettings();
-  const wasPro = hasProAccess(settings);
-  if (wasPro !== pro) {
-    settings.subscription = { tier: pro ? 'pro' : 'free' };
-    await saveSettings(settings);
-    await queueRulesUpdate(`entitlement:${reason}`);
-  }
-
-  return {
-    pro,
-    changed: wasPro !== pro,
-    plan: installation.entitlement.plan,
-    status: installation.entitlement.status
-  };
-}
-
-async function createCheckoutSession(plan) {
-  const { installation, credential } = await ensureInstallCredential();
-
-  const result = await requestBillingApi(CHECKOUT_SESSION_ENDPOINT, {
-    plan,
-    source: 'extension',
-    extensionId: chrome.runtime.id,
-    deviceId: installation.deviceId,
-    installCredential: credential
-  });
-
-  if (!result.ok) {
-    return { ok: false, error: result.error, transient: result.transient };
-  }
-
-  const checkoutId = sanitizeOpaqueString(result.data.checkoutId);
-  if (!checkoutId) {
-    return { ok: false, error: 'Checkout could not be started. Please try again.', transient: true };
-  }
-
-  return { ok: true, checkoutId, expiresAt: sanitizeTimestamp(result.data.expiresAt) };
-}
-
-async function activateInstallWithToken(activationToken) {
-  const installation = await getInstallation();
-  const credential = sanitizeInstallCredential(installation.installCredential);
-  if (!credential) {
-    return {
-      ok: false,
-      transient: false,
-      error: 'This browser has no checkout in progress. Start the upgrade from ResistGate.'
-    };
-  }
-
-  const result = await requestBillingApi(ACTIVATE_INSTALL_ENDPOINT, {
-    activationToken,
-    installCredential: credential,
-    deviceId: installation.deviceId,
-    extensionId: chrome.runtime.id
-  });
-
-  if (!result.ok) {
-    return { ok: false, error: result.error, transient: result.transient };
-  }
-
-  if (result.data.pro !== true) {
-    return {
-      ok: false,
-      transient: false,
-      error: sanitizeOpaqueString(result.data.error) || 'This purchase could not be confirmed yet.'
-    };
-  }
-
-  const applied = await applyVerifiedEntitlement(result.data, 'activation');
-  return { ok: true, plan: applied.plan, status: applied.status };
-}
-
-async function syncEntitlement(reason, { force = false } = {}) {
-  const installation = await getInstallation();
-  const credential = sanitizeInstallCredential(installation.installCredential);
-  if (!credential) {
-    return { ok: false, skipped: true, reason: 'no-credential' };
-  }
-
-  const checkedAt = installation.entitlement?.checkedAt || 0;
-  if (!force && Date.now() - checkedAt < ENTITLEMENT_SYNC_MIN_INTERVAL_MS) {
-    return { ok: true, skipped: true, reason: 'recently-checked' };
-  }
-
-  const result = await requestBillingApi(INSTALL_STATUS_ENDPOINT, {
-    installCredential: credential,
-    deviceId: installation.deviceId,
-    extensionId: chrome.runtime.id
-  });
-
-  if (!result.ok) {
-    // Only an explicit rejection of the credential invalidates local billing state.
-    // Network failures, rate limits, and server errors preserve the last verified grant.
-    if (result.status === 401 || result.status === 403) {
-      await clearBillingCredentials();
-      return { ok: false, cleared: true, transient: false, error: result.error };
-    }
-
-    // Transient failure. Preserve the last verified grant — unless it has now gone
-    // unconfirmed for longer than the grace period, at which point trust expires.
-    const expired = await expireStaleEntitlement();
-    return { ok: false, transient: true, expired, error: result.error };
-  }
-
-  return { ok: true, ...(await applyVerifiedEntitlement(result.data, `sync:${reason}`)) };
-}
-
-// Returns true when a grant was too old to keep trusting and Pro was withdrawn.
-//
-// Only the verified grant is dropped: the install credential survives, so a single successful
-// sync once the server is reachable again restores Pro with no action from the user.
-async function expireStaleEntitlement() {
-  const installation = await getInstallation();
-  const entitlement = installation.entitlement;
-
-  if (entitlement?.pro !== true || !entitlement.checkedAt) {
-    return false;
-  }
-
-  if (Date.now() - entitlement.checkedAt <= ENTITLEMENT_GRACE_PERIOD_MS) {
-    return false;
-  }
-
-  installation.entitlement = { ...entitlement, pro: false, stale: true };
-  await saveInstallation(installation);
-
-  const settings = await getSettings();
-  if (hasProAccess(settings)) {
-    settings.subscription = { tier: 'free' };
-    await saveSettings(settings);
-    await queueRulesUpdate('entitlement:grace-expired');
-  }
-
-  return true;
-}
-
 async function initializeExtension(reason) {
   if (initialized) {
     return;
@@ -1217,38 +709,15 @@ async function initializeExtension(reason) {
       await saveOverrideState(normalizedOverrideState);
     }
 
-    const existingInstallation = await getInstallationRaw();
-    const normalizedInstallation = sanitizeInstallation(existingInstallation || {});
-    let installationChanged = false;
-    if (!normalizedInstallation.firstSeenAt) {
-      normalizedInstallation.firstSeenAt = Date.now();
-      installationChanged = true;
-    }
-    if (JSON.stringify(existingInstallation || {}) !== JSON.stringify(normalizedInstallation)) {
-      await saveInstallation(normalizedInstallation);
-    } else if (installationChanged) {
-      await saveInstallation(normalizedInstallation);
-    }
-
-    if (
-      normalizedInstallation.firstSeenAt
-      && !hasTrackedPosthogEvent(normalizedInstallation, 'return_day_1')
-      && isWithinReturnDayOneWindow(normalizedInstallation.firstSeenAt, Date.now())
-    ) {
-      await trackPosthogEventOnce('return_day_1', {
-        daysSinceInstall: 1
-      });
-    }
+    // Billing and telemetry were removed in 2.0. Drop what they left on this device:
+    // the install credential, the anonymous device ID, and the entitlement sync alarm.
+    await removeFromStorage([INSTALLATION_KEY]);
+    await chrome.alarms.clear(LEGACY_ENTITLEMENT_SYNC_ALARM);
 
     // Register daily badge reset alarm (fires at midnight, repeats every 24h)
     const nextMidnight = new Date();
     nextMidnight.setHours(24, 0, 0, 0);
     chrome.alarms.create(DAILY_RESET_ALARM, { when: nextMidnight.getTime(), periodInMinutes: 1440 });
-
-    chrome.alarms.create(ENTITLEMENT_SYNC_ALARM, {
-      periodInMinutes: ENTITLEMENT_SYNC_PERIOD_MINUTES
-    });
-    void syncEntitlement(reason);
 
     // Restore badge count for today (survives service worker restarts)
     await restoreDailyBadge();
@@ -1458,31 +927,20 @@ async function grantTemporaryAccess(urlPattern, durationMinutes, timeSpentOnChal
   await saveTemporaryAccess(temporaryAccess);
   await queueRulesUpdate(`grant:${domain}`);
 
-  if (hasProAccess(settings)) {
-    await appendAnalyticsEvent({
-      type: 'access_granted',
-      timestamp: now,
-      domain,
-      method: parsedMeta.method,
-      durationMinutes: duration,
-      strictSessionActive: isStrictFocusActive(settings, now),
-      timeSpentSeconds: positiveInt(timeSpentOnChallenge, 0),
-      taskIntentLength: parsedMeta.taskIntentLength,
-      customChallengeAnswered: parsedMeta.customChallengeAnswered,
-      earnAccessEnabled: parsedMeta.earnAccessEnabled
-    });
-  }
-
-  await trackPosthogEventOnce('access_granted', {
+  await appendAnalyticsEvent({
+    type: 'access_granted',
+    timestamp: now,
     domain,
     method: parsedMeta.method,
     durationMinutes: duration,
     strictSessionActive: isStrictFocusActive(settings, now),
     timeSpentSeconds: positiveInt(timeSpentOnChallenge, 0),
+    taskIntentLength: parsedMeta.taskIntentLength,
+    customChallengeAnswered: parsedMeta.customChallengeAnswered,
     earnAccessEnabled: parsedMeta.earnAccessEnabled
   });
 
-  if (parsedMeta.method === 'manualOverride' && hasProAccess(settings)) {
+  if (parsedMeta.method === 'manualOverride') {
     await recordManualOverride(settings, now, domain);
   }
 
@@ -1572,24 +1030,13 @@ async function recordBlockedVisit(urlPattern) {
     return 0;
   }
 
-  // Always track for all users: badge count and per-site resistance counter
   await incrementDailyBadge();
   const resistanceCount = await incrementResistanceCount(domain);
-
-  // Pro analytics only
-  const settings = await getSettings();
-  if (resistanceCount === 1) {
-    await trackPosthogEventOnce('first_block_hit', {
-      domain
-    });
-  }
-  if (hasProAccess(settings)) {
-    await appendAnalyticsEvent({
-      type: 'blocked_visit',
-      timestamp: Date.now(),
-      domain
-    });
-  }
+  await appendAnalyticsEvent({
+    type: 'blocked_visit',
+    timestamp: Date.now(),
+    domain
+  });
 
   return resistanceCount;
 }
@@ -1792,20 +1239,6 @@ async function openGateReminder(domain) {
 }
 
 async function recordAnalyticsEvent(type, domain) {
-  const settings = await getSettings();
-  const rawDomain = typeof domain === 'string' ? domain.trim().slice(0, 120) : '';
-  if (POSTHOG_EVENT_ALLOWLIST.has(type)) {
-    await trackPosthogEventOnce(type, {
-      domain: normalizeDomain(domain) || rawDomain || 'system',
-      surface: rawDomain || 'system',
-      source: 'extension'
-    });
-  }
-
-  if (!hasProAccess(settings)) {
-    return;
-  }
-
   const allowedTypes = new Set([
     'override_triggered',
     'challenge_failed',
@@ -2014,10 +1447,6 @@ function sanitizeSettings(settings) {
     }
   };
 
-  const subscription = {
-    tier: (incoming.subscription?.tier === 'pro') ? 'pro' : 'free'
-  };
-
   const incomingBehavioral = incoming.proFeatures?.behavioralFriction || {};
   const incomingOverrideCooldown = incoming.proFeatures?.overrideCooldown || {};
   const proFeatures = {
@@ -2074,7 +1503,6 @@ function sanitizeSettings(settings) {
     blocklist,
     challengeTypes,
     freeExperience,
-    subscription,
     proFeatures
   };
 }
@@ -2092,34 +1520,6 @@ function sanitizeTypingChallengeLevel(level, difficulty) {
     return 'moderate';
   }
   return DEFAULT_SETTINGS.challengeTypes.typing.level;
-}
-
-function sanitizeInstallation(installation) {
-  const incoming = installation && typeof installation === 'object' ? installation : {};
-  return {
-    deviceId: sanitizeOpaqueString(incoming.deviceId) || generateDeviceId(),
-    firstSeenAt: sanitizeTimestamp(incoming.firstSeenAt),
-    posthogSentEvents: sanitizePosthogSentEvents(incoming.posthogSentEvents),
-    installCredential: sanitizeInstallCredential(incoming.installCredential),
-    entitlement: sanitizeEntitlement(incoming.entitlement)
-  };
-}
-
-function sanitizePosthogSentEvents(raw) {
-  const incoming = raw && typeof raw === 'object' ? raw : {};
-  const sanitized = {};
-
-  for (const [key, value] of Object.entries(incoming)) {
-    if (typeof key !== 'string' || !key.trim()) {
-      continue;
-    }
-
-    if (value === true) {
-      sanitized[key] = true;
-    }
-  }
-
-  return sanitized;
 }
 
 function sanitizeTemptationBundle(bundle) {
@@ -2372,10 +1772,6 @@ function sanitizeBlocklist(blocklist) {
   return deduped;
 }
 
-function hasProAccess(settings) {
-  return settings?.subscription?.tier === 'pro';
-}
-
 function canUseIntentionPage() {
   // Free feature. Stored under proFeatures for backward compatibility with existing settings.
   return true;
@@ -2400,10 +1796,6 @@ function isConfigurationLocked(settings, now) {
 }
 
 function isEarnAccessActive(settings) {
-  if (!hasProAccess(settings)) {
-    return false;
-  }
-
   const behavior = settings?.proFeatures?.behavioralFriction || {};
   return behavior.enabled === true && behavior.earnAccessEnabled !== false;
 }
@@ -2471,9 +1863,8 @@ async function getManualOverrideStatus(settings, now) {
     10,
     15
   );
-  const isPro = hasProAccess(settings);
   const policy = settings?.proFeatures?.overrideCooldown || {};
-  if (!isPro || policy.enabled === false) {
+  if (policy.enabled === false) {
     return {
       requiredDelaySeconds: baseDelay,
       locked: false,
@@ -2518,10 +1909,6 @@ async function getManualOverrideStatus(settings, now) {
 }
 
 async function recordManualOverride(settings, now, domain) {
-  if (!hasProAccess(settings)) {
-    return;
-  }
-
   await appendAnalyticsEvent({
     type: 'override_triggered',
     timestamp: now,
@@ -2663,24 +2050,6 @@ function sanitizeTimestamp(value) {
   return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
 }
 
-function sanitizeOpaqueString(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, 512) : null;
-}
-
-
-
-function generateDeviceId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-
-  return `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function normalizeDomain(value) {
   if (typeof value !== 'string') {
@@ -2724,29 +2093,6 @@ async function getSettings() {
 
 async function saveSettings(settings) {
   await setInStorage({ [SETTINGS_KEY]: sanitizeSettings(settings) });
-}
-
-async function getInstallationRaw() {
-  const result = await getFromStorage([INSTALLATION_KEY]);
-  return result[INSTALLATION_KEY] || {};
-}
-
-async function getInstallation() {
-  const rawInstallation = await getInstallationRaw();
-  const normalizedInstallation = sanitizeInstallation(rawInstallation || {});
-  if (!normalizedInstallation.firstSeenAt) {
-    normalizedInstallation.firstSeenAt = Date.now();
-  }
-
-  if (JSON.stringify(rawInstallation || {}) !== JSON.stringify(normalizedInstallation)) {
-    await saveInstallation(normalizedInstallation);
-  }
-
-  return normalizedInstallation;
-}
-
-async function saveInstallation(installation) {
-  await setInStorage({ [INSTALLATION_KEY]: sanitizeInstallation(installation) });
 }
 
 async function getTemporaryAccessRaw() {
@@ -2796,121 +2142,6 @@ async function appendAnalyticsEvent(event) {
   }
   await saveAnalytics(analytics);
 }
-
-function sanitizePosthogProperties(properties) {
-  const incoming = properties && typeof properties === 'object' ? properties : {};
-  const sanitized = {};
-
-  for (const [key, value] of Object.entries(incoming)) {
-    if (typeof key !== 'string' || !key.trim()) {
-      continue;
-    }
-
-    if (value === null || value === undefined) {
-      continue;
-    }
-
-    if (typeof value === 'string') {
-      sanitized[key] = value.trim().slice(0, 250);
-      continue;
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      sanitized[key] = value;
-      continue;
-    }
-
-    if (typeof value === 'boolean') {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized;
-}
-
-function getPosthogConfig() {
-  const apiKey = typeof globalThis !== 'undefined' && typeof globalThis.__RESISTGATE_POSTHOG_API_KEY__ === 'string'
-    ? globalThis.__RESISTGATE_POSTHOG_API_KEY__.trim()
-    : POSTHOG_PROJECT_TOKEN;
-  const host = typeof globalThis !== 'undefined' && typeof globalThis.__RESISTGATE_POSTHOG_HOST__ === 'string'
-    ? globalThis.__RESISTGATE_POSTHOG_HOST__.trim()
-    : POSTHOG_HOST;
-
-  return {
-    apiKey,
-    host: host || POSTHOG_HOST
-  };
-}
-
-function hasTrackedPosthogEvent(installation, eventName) {
-  if (!installation || typeof installation !== 'object') {
-    return false;
-  }
-
-  return installation.posthogSentEvents?.[eventName] === true;
-}
-
-function isWithinReturnDayOneWindow(firstSeenAt, now) {
-  if (!Number.isFinite(firstSeenAt) || !Number.isFinite(now)) {
-    return false;
-  }
-
-  const elapsedMs = now - firstSeenAt;
-  return elapsedMs >= 24 * 60 * 60 * 1000 && elapsedMs < 48 * 60 * 60 * 1000;
-}
-
-async function trackPosthogEventOnce(eventName, properties = {}) {
-  const name = typeof eventName === 'string' ? eventName.trim() : '';
-  if (!name || !POSTHOG_EVENT_ALLOWLIST.has(name)) {
-    return false;
-  }
-
-  const { apiKey, host } = getPosthogConfig();
-  if (!apiKey || typeof fetch !== 'function') {
-    return false;
-  }
-
-  const installation = await getInstallation();
-  if (hasTrackedPosthogEvent(installation, name)) {
-    return false;
-  }
-
-  const manifest = chrome.runtime?.getManifest ? chrome.runtime.getManifest() : null;
-  installation.posthogSentEvents = {
-    ...(installation.posthogSentEvents || {}),
-    [name]: true
-  };
-  await saveInstallation(installation);
-
-  const payload = {
-    api_key: apiKey,
-    event: name,
-    properties: {
-      distinct_id: installation.deviceId,
-      extension: 'resistgate',
-      extension_version: manifest && typeof manifest.version === 'string' ? manifest.version : 'unknown',
-      installation_first_seen_at: installation.firstSeenAt || null,
-      ...sanitizePosthogProperties(properties)
-    }
-  };
-
-  try {
-    await fetch(`${host.replace(/\/+$/, '')}/capture/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      keepalive: true
-    });
-    return true;
-  } catch (error) {
-    console.warn('PostHog event capture failed:', error);
-    return false;
-  }
-}
-
-
 
 async function getAnalyticsDashboard() {
   const analytics = await getAnalytics();
@@ -3291,6 +2522,19 @@ function getFromStorage(keys) {
   });
 }
 
+function removeFromStorage(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(`storage.remove failed: ${chrome.runtime.lastError.message}`));
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
 function setInStorage(value) {
   return new Promise((resolve, reject) => {
     chrome.storage.local.set(value, () => {
@@ -3330,7 +2574,6 @@ if (typeof globalThis !== 'undefined') {
     buildWeeklyRecommendation,
     formatHourLabel,
     getWeeklyFeedbackLine,
-    hasProAccess,
     canUseIntentionPage,
     removeExpiredBlocks,
     removeExpiredTemporaryAccess,
@@ -3339,22 +2582,10 @@ if (typeof globalThis !== 'undefined') {
     isCommitmentModeActive,
     sanitizeTemptationBundle,
     sanitizeWorkTimer,
-    sanitizePosthogSentEvents,
-    sanitizePosthogProperties,
-    isWithinReturnDayOneWindow,
-    hasTrackedPosthogEvent,
-    trackPosthogEventOnce,
     isBundleConditionMet,
     getEffectiveWorkMinutes,
     syncBundleUnlockAlarms,
-    resolveCheckoutPlan,
-    buildPricingUrl,
-    sanitizeInstallation,
-    sanitizeInstallCredential,
-    sanitizeEntitlement,
-    generateInstallCredential,
-    syncEntitlement,
     BUNDLE_UNLOCK_ALARM_PREFIX,
-    ENTITLEMENT_SYNC_ALARM
+    LEGACY_ENTITLEMENT_SYNC_ALARM
   };
 }

@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createBillingApiMock, createChromeMock, loadScriptInVm, purchaseProInTest } from './helpers/vm-env.js';
+import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 const trustedSender = { url: 'https://www.orlandoascanio.com/resistgate/installed' };
 
 describe('Welcome setup and website bridge', () => {
   let env;
-  let api;
   beforeEach(async () => {
     env = createChromeMock();
-    api = createBillingApiMock();
-    await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+    await loadScriptInVm('background.js', { chrome: env.chrome });
     await env.sendMessage({ action: 'getSettings' });
   });
 
@@ -86,7 +84,8 @@ describe('Welcome setup and website bridge', () => {
     const result = await env.sendMessage({ action: 'saveWelcomeSetup', domain: 'youtube.com', level: 'hard', subscription: { tier: 'pro' } });
     expect(result.settings.blocklist).toHaveLength(1);
     expect(result.settings.blocklist[0]).toMatchObject({ id: 'keep', personalGoal: 'Study' });
-    expect(result.settings).toMatchObject({ enabled: false, defaultAccessDuration: 7, subscription: { tier: 'free' } });
+    expect(result.settings).toMatchObject({ enabled: false, defaultAccessDuration: 7 });
+    expect(result.settings).not.toHaveProperty('subscription');
     expect(result.settings.freeExperience.schedule.enabled).toBe(true);
     expect(result.activeDomains).toEqual([]);
     const resumed = await env.sendMessage({ action: 'getWelcomeState' });
@@ -138,7 +137,6 @@ describe('Welcome setup and website bridge', () => {
 
   it.each(['strict', 'commitment'])('preserves the %s lock for all welcome writes', async (mode) => {
     await env.sendMessage({ action: 'saveWelcomeSetup', domain: 'reddit.com', level: 'easy' });
-    await purchaseProInTest(env, api);
     if (mode === 'strict') {
       const { settings } = await env.sendMessage({ action: 'getSettings' });
       settings.proFeatures.strictModeEnabled = true;

@@ -4,6 +4,7 @@ const DEFAULT_OVERRIDE_DELAY_SECONDS = 12;
 const DEFAULT_STRICT_DISABLE_DELAY_SECONDS = 30;
 const DEFAULT_PRO_PRESET = 'balanced';
 const DEFAULT_CHALLENGE_LEVEL = 'hard';
+const SOURCE_REPO_URL = 'https://github.com/orlandoascanio/ResistGate';
 
 const CHALLENGE_LEVEL_DIFFICULTY = {
   easy: 1,
@@ -51,10 +52,7 @@ const PRO_PRESET_VALUES = {
 };
 
 let activeTab = 'general';
-let queuedProScreen = null;
 let cachedSettings = null;
-let _paywallReturnFocus = null;
-let _comparisonReturnFocus = null;
 let _siteEditorReturnFocus = null;
 let _weeklyRecommendation = null;
 let commitmentCountdownTimer = null;
@@ -157,11 +155,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.querySelectorAll('[data-pro-preset]').forEach((button) => {
     button.addEventListener('click', function () {
-      if (!isProUser()) {
-        showPaywall('pro-preset');
-        return;
-      }
-
       const preset = sanitizePreset(button.getAttribute('data-pro-preset'));
       setActivePresetButton(preset);
       applyPresetToInputs(preset);
@@ -213,36 +206,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirmDialog);
   document.getElementById('confirm-type-input').addEventListener('input', updateConfirmAcceptState);
 
-  const proControls = document.querySelectorAll('[data-pro-feature]');
-  proControls.forEach((control) => {
-    if (control.type === 'checkbox') {
-      control.addEventListener('change', function () {
-        if (!isProUser()) {
-          renderProFeatureInputs();
-          showPaywall('pro-feature-toggle');
-        }
-      });
-    } else {
-      control.addEventListener('focus', function () {
-        if (!isProUser()) {
-          control.blur();
-          renderProFeatureInputs();
-          showPaywall('pro-feature-field');
-        }
-      });
-    }
-  });
-
-  document.getElementById('open-pricing-btn').addEventListener('click', function () {
-    showPaywall('pro-panel');
-  });
-
-  document.getElementById('compare-plans-btn').addEventListener('click', function () {
-    showPlanComparison();
-  });
-
-  document.getElementById('refresh-entitlement-btn').addEventListener('click', function () {
-    refreshEntitlement();
+  document.getElementById('view-source-btn').addEventListener('click', function () {
+    chrome.tabs.create({ url: SOURCE_REPO_URL });
   });
 
   document.getElementById('whats-new-btn').addEventListener('click', function () {
@@ -257,28 +222,10 @@ document.addEventListener('DOMContentLoaded', function () {
     openReviewPage();
   });
 
-  document.getElementById('view-pricing-btn').addEventListener('click', function () {
-    startCheckout(getSelectedPlan());
-  });
-
-  document.getElementById('close-paywall-btn').addEventListener('click', hidePaywall);
-
-  document.getElementById('view-comparison-pricing-btn').addEventListener('click', function () {
-    hidePlanComparison();
-    showPaywall('plan-comparison');
-  });
-
-  document.getElementById('close-comparison-btn').addEventListener('click', hidePlanComparison);
   document.getElementById('close-site-editor-btn').addEventListener('click', hideBlockedSiteEditor);
   document.getElementById('weekly-recommendation-apply').addEventListener('click', applyWeeklyRecommendation);
-  // refresh-entitlement-btn removed
 
   document.getElementById('activate-commitment-btn').addEventListener('click', function () {
-    if (!isProUser()) {
-      showPaywall('commitment-mode');
-      return;
-    }
-
     const hoursInput = document.getElementById('commitment-duration-hours');
     if (!validateNumberInput(hoursInput)) {
       hoursInput.focus();
@@ -328,22 +275,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   loadTodaySummary();
 
-  loadSettings(function (loaded) {
-    if (!loaded) {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('activation') === 'success') {
-      const planLabel = PLAN_LABELS[params.get('plan')] || 'Pro';
-      setActiveTab('pro');
-      showMessage(
-        `${planLabel} is active. Your payment went through and this browser is already using the stronger locks.`,
-        'success'
-      );
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  });
+  loadSettings();
 
   initDetailsAnimation();
 });
@@ -380,7 +312,6 @@ function handleSettingsStorageChange(changes, namespace) {
     return;
   }
 
-  const previousTier = cachedSettings?.subscription?.tier;
   cachedSettings = changes.settings.newValue;
   // Any settings write (adding a site, a sync, another tab) fires this. Re-rendering the
   // form while an edit is still waiting to save would overwrite it with the stored value,
@@ -391,15 +322,6 @@ function handleSettingsStorageChange(changes, namespace) {
     renderSettings();
   }
 
-  if (previousTier !== 'pro' && isProUser()) {
-    showMessage('Stronger locks are active. This browser synced automatically.', 'success');
-  }
-
-  if (queuedProScreen && isProUser()) {
-    const target = queuedProScreen;
-    queuedProScreen = null;
-    handleTabRequest(target);
-  }
 }
 
 function renderSettings() {
@@ -424,23 +346,16 @@ function renderSettings() {
   );
 
   renderScheduleInputs(settings.freeExperience?.schedule || {});
-  renderPlanPill();
-  renderSubscriptionStatus();
   loadBlockedSites(blocklist);
   renderProFeatureInputs();
-  renderProAccessState();
   invalidLocalEdits = false;
   clearFieldErrors();
 
-  if (isProGatedTab(activeTab) && !isProUser()) {
-    setActiveTab('general');
-  }
-
-  if (activeTab === 'analytics' && isProUser()) {
+  if (activeTab === 'analytics') {
     loadAnalytics();
   }
 
-  if (activeTab === 'report' && isProUser()) {
+  if (activeTab === 'report') {
     loadWeeklyReport();
   }
 }
@@ -450,10 +365,7 @@ function renderSettingsExceptForm() {
     return;
   }
 
-  renderPlanPill();
-  renderSubscriptionStatus();
   loadBlockedSites(cachedSettings.blocklist || []);
-  renderProAccessState();
 }
 
 // Never overwrite the field the user is typing in; a stored value arriving mid-edit
@@ -463,109 +375,6 @@ function setInputValue(input, value) {
     return;
   }
   input.value = value;
-}
-
-function renderPlanPill() {
-  const planPill = document.getElementById('plan-pill');
-  const openPricingBtn = document.getElementById('open-pricing-btn');
-  const planCard = document.querySelector('.sidebar-plan-card');
-  const sidebarPlanLabel = document.getElementById('sidebar-plan-label');
-  const sidebarPlanTitle = document.getElementById('sidebar-plan-title');
-  const sidebarPlanCopy = document.getElementById('sidebar-plan-copy');
-  const comparePlansBtn = document.getElementById('compare-plans-btn');
-  if (!planPill || !openPricingBtn) {
-    return;
-  }
-
-  const todayLink = document.getElementById('today-strip-link');
-  if (todayLink) {
-    todayLink.textContent = isProUser() ? 'Open Progress' : 'See your trends with Pro';
-  }
-
-  if (isProUser()) {
-    planPill.textContent = 'Unlocked';
-    planPill.classList.add('pro');
-    openPricingBtn.style.display = 'none';
-    planCard?.classList.add('is-pro');
-    if (sidebarPlanLabel) sidebarPlanLabel.textContent = 'Pro plan';
-    if (sidebarPlanTitle) sidebarPlanTitle.textContent = 'Stronger locks active';
-    if (sidebarPlanCopy) {
-      sidebarPlanCopy.textContent = 'Progress, Weekly Review, stricter access rules, and Commitment Mode are unlocked.';
-    }
-    if (comparePlansBtn) comparePlansBtn.hidden = true;
-    return;
-  }
-
-  planPill.textContent = 'Free';
-  planPill.classList.remove('pro');
-  openPricingBtn.style.display = '';
-  openPricingBtn.textContent = 'See upgrade options';
-  planCard?.classList.remove('is-pro');
-  if (sidebarPlanLabel) sidebarPlanLabel.textContent = 'Free plan';
-  if (sidebarPlanTitle) sidebarPlanTitle.textContent = 'Core blocking is free';
-  if (sidebarPlanCopy) {
-    sidebarPlanCopy.textContent =
-      'Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.';
-  }
-  if (comparePlansBtn) comparePlansBtn.hidden = false;
-}
-
-function renderSubscriptionStatus() {
-  const statusNode = document.getElementById('subscription-status');
-  if (!statusNode || !cachedSettings) {
-    return;
-  }
-
-  if (isProUser()) {
-    statusNode.textContent = 'Stronger locks are active on this browser.';
-  } else {
-    statusNode.textContent = 'Unlock stronger locks. Pay once at checkout and this browser activates itself.';
-  }
-
-  renderEntitlementRow();
-}
-
-function renderEntitlementRow() {
-  const row = document.getElementById('entitlement-row');
-  const detail = document.getElementById('entitlement-detail');
-  if (!row || !detail) {
-    return;
-  }
-
-  chrome.runtime.sendMessage({ action: 'getBillingState' }, function (response) {
-    const state = response?.state;
-    if (!(response && response.success) || !state?.hasCheckout) {
-      row.classList.add('hidden');
-      return;
-    }
-
-    row.classList.remove('hidden');
-    detail.textContent = state.pro
-      ? `${PLAN_LABELS[state.plan] || 'Pro'} plan, verified ${formatCheckedAt(state.checkedAt)}.`
-      : 'Checkout started on this browser. If you already paid, recheck your access.';
-  });
-}
-
-function formatCheckedAt(checkedAt) {
-  if (!checkedAt) {
-    return 'recently';
-  }
-
-  const minutes = Math.max(0, Math.round((Date.now() - checkedAt) / 60000));
-  if (minutes < 2) {
-    return 'just now';
-  }
-  if (minutes < 60) {
-    return `${minutes} minutes ago`;
-  }
-
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) {
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-  }
-
-  const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 function renderScheduleInputs(schedule) {
@@ -739,27 +548,6 @@ function updateIntentionPanelState(enabled) {
   }
 }
 
-function renderProAccessState() {
-  const hasPro = isProUser();
-
-  document.querySelectorAll('.tab-btn[data-pro-screen]').forEach((button) => {
-    const requestedTab = button.getAttribute('data-tab');
-    const isLocked = isProGatedTab(requestedTab) && !hasPro;
-    button.classList.toggle('locked', isLocked);
-    button.setAttribute('aria-disabled', String(isLocked));
-  });
-
-  const proPanel = document.getElementById('panel-pro');
-  if (proPanel) {
-    proPanel.toggleAttribute('inert', !hasPro);
-    proPanel.setAttribute('aria-hidden', hasPro ? 'false' : 'true');
-  }
-
-  document.querySelectorAll('[data-pro-feature]').forEach((control) => {
-    control.disabled = !hasPro;
-  });
-}
-
 function formatCommitmentCountdown(remainingMs) {
   const totalSecs = Math.max(0, Math.ceil(remainingMs / 1000));
   const h = Math.floor(totalSecs / 3600);
@@ -811,20 +599,14 @@ function renderCommitmentStatus() {
       commitmentCountdownTimer = setInterval(tickCountdown, 1000);
     } else {
       statusEl.classList.add('hidden');
-      activateBtn.disabled = !isProUser();
-      activateBtn.textContent = isProUser() ? 'Activate Commitment Mode' : 'Unlock Commitment Mode';
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Activate Commitment Mode';
     }
   });
 }
 
 function handleTabRequest(requestedTab) {
   if (!requestedTab) {
-    return;
-  }
-
-  if (isProGatedTab(requestedTab) && !isProUser()) {
-    queuedProScreen = requestedTab;
-    showPaywall(`tab-${requestedTab}`);
     return;
   }
 
@@ -851,10 +633,6 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab-panel').forEach((panel) => {
     panel.classList.toggle('active', panel.id === `panel-${tabName}`);
   });
-}
-
-function isProGatedTab(tabName) {
-  return tabName === 'analytics' || tabName === 'report' || tabName === 'pro';
 }
 
 // Accepts one domain or a pasted list ("reddit.com, x.com" or one per line) and reports
@@ -1711,13 +1489,11 @@ function findInvalidSettingsField() {
   }
 
   // A phrase switched on with nothing to type would be an open gate.
-  if (isProUser()) {
-    const customPhrase = getCustomChallengePhraseInput();
-    const phraseMissing = customPhrase.enabled && !customPhrase.text;
-    setFieldError('custom-phrase-error', phraseMissing ? 'Write your challenge phrase to turn this on.' : null);
-    if (phraseMissing && !firstInvalid) {
-      firstInvalid = document.getElementById('custom-challenge-phrase-text');
-    }
+  const customPhrase = getCustomChallengePhraseInput();
+  const phraseMissing = customPhrase.enabled && !customPhrase.text;
+  setFieldError('custom-phrase-error', phraseMissing ? 'Write your challenge phrase to turn this on.' : null);
+  if (phraseMissing && !firstInvalid) {
+    firstInvalid = document.getElementById('custom-challenge-phrase-text');
   }
 
   return firstInvalid;
@@ -1765,22 +1541,20 @@ function saveSettings() {
     settings.proFeatures.intentionPage.enabled = document.getElementById('intention-page-enabled').checked;
     settings.proFeatures.intentionPage.showBreathingExercise = document.getElementById('breathing-exercise-enabled').checked;
 
-    if (isProUser()) {
-      settings.proFeatures.accountabilityPreset = getSelectedPreset();
-      settings.proFeatures.strictModeEnabled = document.getElementById('strict-mode-toggle').checked;
-      settings.proFeatures.strictModeDisableDelaySeconds = getStrictDisableDelay();
+    settings.proFeatures.accountabilityPreset = getSelectedPreset();
+    settings.proFeatures.strictModeEnabled = document.getElementById('strict-mode-toggle').checked;
+    settings.proFeatures.strictModeDisableDelaySeconds = getStrictDisableDelay();
 
-      settings.proFeatures.behavioralFriction = settings.proFeatures.behavioralFriction || {};
-      settings.proFeatures.behavioralFriction.enabled = document.getElementById('behavioral-friction-enabled').checked;
-      settings.proFeatures.behavioralFriction.requireTaskIntent = document.getElementById('require-task-intent').checked;
-      settings.proFeatures.behavioralFriction.timedWaitEnabled = document.getElementById('timed-wait-enabled').checked;
-      settings.proFeatures.behavioralFriction.timedWaitSeconds = parseInt(document.getElementById('timed-wait-seconds').value, 10) || 20;
-      settings.proFeatures.behavioralFriction.earnAccessEnabled = document.getElementById('earn-access-enabled').checked;
-      settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
-      settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
+    settings.proFeatures.behavioralFriction = settings.proFeatures.behavioralFriction || {};
+    settings.proFeatures.behavioralFriction.enabled = document.getElementById('behavioral-friction-enabled').checked;
+    settings.proFeatures.behavioralFriction.requireTaskIntent = document.getElementById('require-task-intent').checked;
+    settings.proFeatures.behavioralFriction.timedWaitEnabled = document.getElementById('timed-wait-enabled').checked;
+    settings.proFeatures.behavioralFriction.timedWaitSeconds = parseInt(document.getElementById('timed-wait-seconds').value, 10) || 20;
+    settings.proFeatures.behavioralFriction.earnAccessEnabled = document.getElementById('earn-access-enabled').checked;
+    settings.proFeatures.behavioralFriction.earnAccessMinChallengeSeconds = getEarnAccessMinChallengeSeconds();
+    settings.proFeatures.behavioralFriction.customChallengePrompt = document.getElementById('custom-challenge-prompt').value.trim();
 
-      settings.proFeatures.customChallengePhrase = getCustomChallengePhraseInput();
-    }
+    settings.proFeatures.customChallengePhrase = getCustomChallengePhraseInput();
 
     chrome.runtime.sendMessage({
       action: 'updateSettings',
@@ -1914,8 +1688,8 @@ function parseSettingsImport(text) {
 
 function mergeImportedSettings(current, imported) {
   const next = JSON.parse(JSON.stringify(imported || {}));
-  // The tier always comes from this browser's verified entitlement, never from a file.
-  next.subscription = current?.subscription;
+  // Backups made before 2.0 can carry the old paid tier, which no longer means anything.
+  delete next.subscription;
   next.proFeatures = stripLockState(next.proFeatures, current?.proFeatures || {});
   return next;
 }
@@ -2058,11 +1832,7 @@ function getWhatsNewUrl() {
 function loadAnalytics() {
   chrome.runtime.sendMessage({ action: 'getAnalyticsDashboard' }, function (response) {
     if (!(response && response.success && response.dashboard)) {
-      if (response?.proRequired) {
-        showPaywall('analytics-load');
-      } else {
-        showMessage(response?.error || 'Unable to load analytics.', 'error');
-      }
+      showMessage(response?.error || 'Unable to load analytics.', 'error');
       return;
     }
 
@@ -2261,11 +2031,7 @@ function getStrictSessionInsight(value) {
 function loadWeeklyReport() {
   chrome.runtime.sendMessage({ action: 'getWeeklyReport' }, function (response) {
     if (!(response && response.success && response.report)) {
-      if (response?.proRequired) {
-        showPaywall('weekly-report-load');
-      } else {
-        showMessage(response?.error || 'Unable to load weekly report.', 'error');
-      }
+      showMessage(response?.error || 'Unable to load weekly report.', 'error');
       return;
     }
 
@@ -2521,58 +2287,6 @@ function applyWeeklyRecommendation() {
   });
 }
 
-function showPaywall(source) {
-  _paywallReturnFocus = document.activeElement;
-  const modal = document.getElementById('paywall-modal');
-  modal.dataset.source = source || 'unknown';
-  modal.classList.remove('hidden');
-  setCheckoutStatus('');
-  const checkoutBtn = document.getElementById('view-pricing-btn');
-  if (checkoutBtn) {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = 'Continue to checkout';
-  }
-  // Focus the first interactive element in the modal
-  const firstFocusable = modal.querySelector('input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])');
-  if (firstFocusable) {
-    firstFocusable.focus();
-  }
-  _attachModalFocusTrap(modal, hidePaywall);
-}
-
-function hidePaywall() {
-  const modal = document.getElementById('paywall-modal');
-  _detachModalFocusTrap(modal);
-  modal.classList.add('hidden');
-  setCheckoutStatus('');
-  // Restore focus to the element that opened the modal
-  if (_paywallReturnFocus && typeof _paywallReturnFocus.focus === 'function') {
-    _paywallReturnFocus.focus();
-  }
-  _paywallReturnFocus = null;
-}
-
-function showPlanComparison() {
-  _comparisonReturnFocus = document.activeElement;
-  const modal = document.getElementById('plan-comparison-modal');
-  modal.classList.remove('hidden');
-  const firstFocusable = modal.querySelector('button, [href], [tabindex]:not([tabindex="-1"])');
-  if (firstFocusable) {
-    firstFocusable.focus();
-  }
-  _attachModalFocusTrap(modal, hidePlanComparison);
-}
-
-function hidePlanComparison() {
-  const modal = document.getElementById('plan-comparison-modal');
-  _detachModalFocusTrap(modal);
-  modal.classList.add('hidden');
-  if (_comparisonReturnFocus && typeof _comparisonReturnFocus.focus === 'function') {
-    _comparisonReturnFocus.focus();
-  }
-  _comparisonReturnFocus = null;
-}
-
 function _attachModalFocusTrap(modal, closeModal) {
   const focusableSelectors = 'button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])';
   function getFocusable() {
@@ -2612,91 +2326,6 @@ function _detachModalFocusTrap(modal) {
     modal.removeEventListener('keydown', modal._focusTrapHandler);
     modal._focusTrapHandler = null;
   }
-}
-
-const PLAN_LABELS = {
-  monthly: 'Monthly',
-  yearly: 'Yearly',
-  lifetime: 'Lifetime'
-};
-
-function getSelectedPlan() {
-  const checked = document.querySelector('input[name="checkout-plan"]:checked');
-  return checked ? checked.value : 'yearly';
-}
-
-function setCheckoutStatus(text, tone) {
-  const status = document.getElementById('checkout-status');
-  if (!status) {
-    return;
-  }
-
-  status.textContent = text || '';
-  status.classList.remove('is-success', 'is-error');
-  status.classList.toggle('hidden', !text);
-  if (tone) {
-    status.classList.add(tone === 'success' ? 'is-success' : 'is-error');
-  }
-}
-
-function startCheckout(plan) {
-  const button = document.getElementById('view-pricing-btn');
-  const planLabel = PLAN_LABELS[plan] || 'Pro';
-
-  if (button) {
-    button.disabled = true;
-  }
-  setCheckoutStatus('Preparing secure checkout…');
-
-  chrome.runtime.sendMessage({ action: 'openPricingPage', plan }, function (response) {
-    if (button) {
-      button.disabled = false;
-    }
-
-    if (!(response && response.success)) {
-      const retryable = response?.retryable !== false;
-      setCheckoutStatus(response?.error || 'Checkout could not be opened.', 'error');
-      if (button) {
-        button.textContent = retryable ? 'Try again' : 'Continue to checkout';
-      }
-      return;
-    }
-
-    if (button) {
-      button.textContent = 'Reopen checkout';
-    }
-    setCheckoutStatus(
-      `${planLabel} checkout opened in a new tab. Pay there, and Pro switches on here by itself — you can leave this page open.`,
-      'success'
-    );
-  });
-}
-
-function refreshEntitlement() {
-  const button = document.getElementById('refresh-entitlement-btn');
-  if (button) {
-    button.disabled = true;
-    button.textContent = 'Checking…';
-  }
-
-  chrome.runtime.sendMessage({ action: 'refreshEntitlement' }, function (response) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = 'Recheck access';
-    }
-
-    if (!(response && response.success)) {
-      showMessage(response?.error || 'Could not check your access right now.', 'error');
-      return;
-    }
-
-    loadSettings();
-    if (response.pro) {
-      showMessage(response.changed ? 'Pro is active on this browser.' : 'Pro is active. Nothing to change.', 'success');
-    } else {
-      showMessage('No active Pro purchase is linked to this browser.', 'error');
-    }
-  });
 }
 
 function openFeedbackPage() {
@@ -2878,7 +2507,6 @@ if (typeof globalThis !== 'undefined') {
     formatTimeLabel,
     getEarnAccessMinChallengeSeconds,
     getCustomChallengePhraseInput,
-    isProGatedTab,
     planSiteAdditions,
     formatSiteAddResult,
     getSiteSuggestions,
@@ -2916,10 +2544,6 @@ function initDetailsAnimation() {
       }
     });
   });
-}
-
-function isProUser() {
-  return cachedSettings?.subscription?.tier === 'pro';
 }
 
 function withLatestSettings(onSuccess, onFailure) {

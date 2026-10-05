@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createChromeMock, createBillingApiMock, loadScriptInVm } from './helpers/vm-env.js';
+import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 async function setupPage() {
   const env = createChromeMock();
-  const api = createBillingApiMock();
-  await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+  await loadScriptInVm('background.js', { chrome: env.chrome });
   const requests = [];
   env.chrome.runtime.sendMessage = (message, callback) => {
     requests.push(message);

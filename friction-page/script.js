@@ -798,11 +798,10 @@ function renderProPrecheck() {
     return;
   }
 
-  const isPro = currentSettings.subscription?.tier === 'pro';
   const friction = currentSettings.proFeatures?.behavioralFriction || {};
   const intentionPrecheck = getIntentionPrecheck();
 
-  if (!isPro || friction.enabled !== true) {
+  if (friction.enabled !== true) {
     proPrecheck.classList.add('hidden');
     return;
   }
@@ -895,7 +894,7 @@ function handleStartChallenge() {
     earnAccessEnabled: precheck.earnAccessEnabled
   };
 
-  // Even without a Pro timed wait, a short 3-second beat separates "decide" from "type".
+  // Even without a timed wait, a short 3-second beat separates "decide" from "type".
   const waitSeconds = precheck.timedWaitSeconds > 0 ? precheck.timedWaitSeconds : 3;
   startTimedWait(waitSeconds, function () {
     startTypingChallenge(currentOriginalUrl);
@@ -1143,11 +1142,10 @@ function cancelManualOverride() {
 }
 
 function collectPrecheckMeta() {
-  const isPro = currentSettings?.subscription?.tier === 'pro';
   const friction = currentSettings?.proFeatures?.behavioralFriction || {};
   const intentionPrecheck = getIntentionPrecheck();
 
-  if (!isPro || friction.enabled !== true) {
+  if (friction.enabled !== true) {
     return {
       valid: true,
       timedWaitSeconds: 0,
@@ -1573,13 +1571,7 @@ function getChallengeLevelCopy(level) {
   return CHALLENGE_LEVEL_COPY[sanitizeChallengeLevel(level)];
 }
 
-// Pro only. Free settings can still carry a phrase from a lapsed subscription, so the
-// tier is checked here rather than trusting the stored flag.
 function getCustomChallengePhrase(settings = currentSettings) {
-  if (settings?.subscription?.tier !== 'pro') {
-    return '';
-  }
-
   const custom = settings?.proFeatures?.customChallengePhrase;
   if (custom?.enabled !== true || typeof custom.text !== 'string') {
     return '';
@@ -1762,9 +1754,8 @@ function renderAccessExpired() {
 }
 
 function getEarnAccessBonus(timeSpentSeconds) {
-  const isPro = currentSettings?.subscription?.tier === 'pro';
   const friction = currentSettings?.proFeatures?.behavioralFriction || {};
-  if (!isPro || friction.enabled !== true || friction.earnAccessEnabled === false) {
+  if (friction.enabled !== true || friction.earnAccessEnabled === false) {
     return 0;
   }
 
@@ -1780,9 +1771,8 @@ function getEarnAccessBonus(timeSpentSeconds) {
 }
 
 function isEarnAccessRuleActive() {
-  const isPro = currentSettings?.subscription?.tier === 'pro';
   const friction = currentSettings?.proFeatures?.behavioralFriction || {};
-  return isPro && friction.enabled === true && friction.earnAccessEnabled !== false;
+  return friction.enabled === true && friction.earnAccessEnabled !== false;
 }
 
 function getEarnAccessMinChallengeSeconds() {
@@ -1804,11 +1794,7 @@ function getManualOverrideDelaySeconds() {
 }
 
 function isStrictFocusWindowActive() {
-  if (!currentSettings || currentSettings.subscription?.tier !== 'pro') {
-    return false;
-  }
-
-  if (currentSettings.proFeatures?.strictModeEnabled !== true) {
+  if (currentSettings?.proFeatures?.strictModeEnabled !== true) {
     return false;
   }
 

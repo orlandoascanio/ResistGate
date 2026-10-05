@@ -1,27 +1,25 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  createBillingApiMock,
-  createChromeMock,
-  loadScriptInVm,
-  purchaseProInTest
-} from './helpers/vm-env.js';
+import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 describe('ResistGate background integration', () => {
   let env;
-  let api;
+  let fetchCalls;
   let hooks;
+
+  // ResistGate makes no network requests. Any call to fetch is recorded so tests can prove it.
+  function recordingFetch(calls) {
+    return async (url, init) => {
+      calls.push({ url, init });
+      throw new Error(`Unexpected network request: ${url}`);
+    };
+  }
 
   beforeEach(async () => {
     env = createChromeMock();
-    api = createBillingApiMock();
-    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+    fetchCalls = [];
+    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: recordingFetch(fetchCalls) });
     hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
-
-  async function activateProForTest(targetEnv = env, targetApi = api) {
-    const { activation } = await purchaseProInTest(targetEnv, targetApi);
-    expect(activation.success).toBe(true);
-  }
 
   it('normalizes and saves free settings for blocklist/schedule', async () => {
     const settingsRes = await env.sendMessage({ action: 'getSettings' });
@@ -53,7 +51,7 @@ describe('ResistGate background integration', () => {
     expect(saved.settings.freeExperience.schedule.days).toEqual([1, 2, 6]);
   });
 
-  it('summarizes today\'s blocked attempts for free users', async () => {
+  it('summarizes today\'s blocked attempts', async () => {
     const empty = await env.sendMessage({ action: 'getTodaySummary' });
     expect(empty.success).toBe(true);
     expect(empty.summary.blockedToday).toBe(0);
@@ -63,9 +61,6 @@ describe('ResistGate background integration', () => {
     await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'reddit.com' });
     await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
 
-    const settings = await env.sendMessage({ action: 'getSettings' });
-    expect(settings.settings.subscription.tier).toBe('free');
-
     const response = await env.sendMessage({ action: 'getTodaySummary' });
     expect(response.success).toBe(true);
     expect(response.summary.blockedToday).toBe(3);
@@ -73,7 +68,70 @@ describe('ResistGate background integration', () => {
     expect(response.summary.topDomains[1]).toEqual({ domain: 'reddit.com', count: 1 });
   });
 
-  it('never lets an imported settings object elevate the tier', async () => {
+  it('returns today\'s resistance count for one domain', async () => {
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'reddit.com' });
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'reddit.com' });
+
+    const count = await env.sendMessage({ action: 'getResistanceCount', domain: 'reddit.com' });
+    const other = await env.sendMessage({ action: 'getResistanceCount', domain: 'youtube.com' });
+
+    expect(count).toEqual({ success: true, count: 2 });
+    expect(other).toEqual({ success: true, count: 0 });
+  });
+
+  it('turns the last grant for a domain into a resisted visit', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [{ id: 'r1', urlPattern: 'reddit.com', createdAt: Date.now() }];
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+
+    const granted = await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 5,
+      meta: { method: 'challenge' }
+    });
+    expect(granted.success).toBe(true);
+
+    const reversed = await env.sendMessage({
+      action: 'recordGateOutcome',
+      domain: 'reddit.com',
+      reversesAccess: true
+    });
+    expect(reversed.success).toBe(true);
+    expect(reversed.summary).toEqual({ total: 1, resisted: 1 });
+
+    const summary = await env.sendMessage({ action: 'getGateOutcomeSummary' });
+    expect(summary).toEqual({ success: true, summary: { total: 1, resisted: 1 } });
+  });
+
+  it('reopens a blocked destination ten minutes after the user leaves the gate', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [{ id: 'r1', urlPattern: 'reddit.com', createdAt: Date.now() }];
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+
+    const reminder = await env.sendMessage({
+      action: 'scheduleGateReminder',
+      originalUrl: 'https://www.reddit.com/r/all'
+    });
+    expect(reminder.success).toBe(true);
+    expect(reminder.reminder.domain).toBe('reddit.com');
+
+    await env.triggerAlarm({ name: 'resistgate-gate-reminder-reddit.com' });
+    expect(env.createdTabs.at(-1).url).toBe('https://www.reddit.com/r/all');
+  });
+
+  it('saves work timer minutes when a session stops', async () => {
+    const started = await env.sendMessage({ action: 'startWorkTimer' });
+    expect(started.success).toBe(true);
+    expect(started.state.running).toBe(true);
+
+    const stopped = await env.sendMessage({ action: 'stopWorkTimer' });
+    expect(stopped.success).toBe(true);
+    expect(stopped.state.running).toBe(false);
+    expect(stopped.state.todayMinutes).toBeGreaterThanOrEqual(0);
+  });
+
+  it('drops the old paid tier from an imported settings object', async () => {
     const current = await env.sendMessage({ action: 'getSettings' });
     const imported = {
       ...current.settings,
@@ -85,65 +143,8 @@ describe('ResistGate background integration', () => {
     expect(response.success).toBe(true);
 
     const saved = await env.sendMessage({ action: 'getSettings' });
-    expect(saved.settings.subscription.tier).toBe('free');
+    expect(saved.settings).not.toHaveProperty('subscription');
     expect(saved.settings.blocklist.map((entry) => entry.urlPattern)).toEqual(['x.com']);
-  });
-
-  it('opens pricing with an opaque checkout id and no device identifiers', async () => {
-    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'monthly' });
-    expect(response.success).toBe(true);
-    expect(response.plan).toBe('monthly');
-
-    const url = new URL(response.url);
-    expect(url.origin + url.pathname).toBe('https://www.orlandoascanio.com/en/pricing');
-    expect(url.searchParams.get('source')).toBe('extension');
-    expect(url.searchParams.get('plan')).toBe('monthly');
-    expect(url.searchParams.get('checkout')).toBe(api.latestCheckoutId());
-
-    const installation = env.storageData.installation;
-    expect(response.url).not.toContain(installation.deviceId);
-    expect(response.url).not.toContain(installation.installCredential);
-    expect(response.url).not.toContain(env.chrome.runtime.id);
-    expect(env.createdTabs.at(-1).url).toBe(response.url);
-  });
-
-  it('binds each checkout session to the validated plan and defaults generic upgrades to yearly', async () => {
-    for (const plan of ['monthly', 'yearly', 'lifetime']) {
-      const response = await env.sendMessage({ action: 'openPricingPage', plan });
-      expect(response.success).toBe(true);
-      expect(api.sessions.get(response.checkoutId).plan).toBe(plan);
-    }
-
-    const generic = await env.sendMessage({ action: 'openPricingPage' });
-    expect(generic.success).toBe(true);
-    expect(api.sessions.get(generic.checkoutId).plan).toBe('yearly');
-  });
-
-  it('refuses unsupported plans without opening checkout', async () => {
-    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'weekly' });
-    expect(response.success).toBe(false);
-    expect(response.retryable).toBe(false);
-    expect(api.calls).toHaveLength(0);
-    expect(env.createdTabs).toHaveLength(0);
-  });
-
-  it('does not open checkout when the session cannot be created', async () => {
-    api.override(api.endpoints.checkout, 'network-error');
-
-    const response = await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
-    expect(response.success).toBe(false);
-    expect(response.retryable).toBe(true);
-    expect(env.createdTabs).toHaveLength(0);
-  });
-
-  it('sends the install credential to the checkout API but never stores it in the URL', async () => {
-    await env.sendMessage({ action: 'openPricingPage', plan: 'lifetime' });
-
-    const checkoutCall = api.calls.find((call) => call.url === api.endpoints.checkout);
-    expect(checkoutCall.body.installCredential).toMatch(/^[0-9a-f]{64}$/);
-    expect(checkoutCall.body.extensionId).toBe(env.chrome.runtime.id);
-    expect(checkoutCall.body.deviceId).toBe(env.storageData.installation.deviceId);
-    expect(env.storageData.installation.installCredential).toBe(checkoutCall.body.installCredential);
   });
 
   it('opens feedback page via message handler', async () => {
@@ -166,215 +167,120 @@ describe('ResistGate background integration', () => {
     expect(env.createdTabs.at(-1).url).toBe(response.url);
   });
 
-  it('activates Pro after the server verifies the activation token', async () => {
-    const { activation } = await purchaseProInTest(env, api, 'lifetime');
+  it('unlocks every former Pro feature without a purchase', async () => {
+    const dashboard = await env.sendMessage({ action: 'getAnalyticsDashboard' });
+    expect(dashboard.success).toBe(true);
 
-    expect(activation.success).toBe(true);
-    expect(activation.subscription.tier).toBe('pro');
-    expect(activation.plan).toBe('lifetime');
-    expect(env.storageData.settings.subscription.tier).toBe('pro');
-    expect(env.storageData.installation.entitlement).toMatchObject({
-      pro: true,
-      plan: 'lifetime',
-      status: 'active'
+    const report = await env.sendMessage({ action: 'getWeeklyReport' });
+    expect(report.success).toBe(true);
+
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    expect(settings).not.toHaveProperty('subscription');
+    settings.proFeatures.strictModeEnabled = true;
+    settings.proFeatures.customChallengePhrase = { enabled: true, text: 'This can wait.' };
+    expect((await env.sendMessage({ action: 'updateSettings', settings })).success).toBe(true);
+
+    const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
+    expect(saved.proFeatures.strictModeEnabled).toBe(true);
+    expect(saved.proFeatures.customChallengePhrase.text).toBe('This can wait.');
+
+    const commitment = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 1 });
+    expect(commitment.success).toBe(true);
+  });
+
+  it('records local analytics for every install', async () => {
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [{ id: 'a1', urlPattern: 'youtube.com', createdAt: Date.now() }];
+    await env.sendMessage({ action: 'updateSettings', settings });
+
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
+    await env.sendMessage({ action: 'recordAnalyticsEvent', type: 'challenge_completed', domain: 'youtube.com' });
+
+    const types = env.storageData.analytics.events.map((event) => event.type);
+    expect(types).toEqual(['blocked_visit', 'challenge_completed']);
+
+    const dashboard = await env.sendMessage({ action: 'getAnalyticsDashboard' });
+    expect(dashboard.dashboard.totals.blockedAttempts).toBe(1);
+  });
+
+  it('makes no network requests across a full session', async () => {
+    await env.triggerInstalled({ reason: 'install' });
+
+    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
+    settings.blocklist = [
+      { id: 'n1', urlPattern: 'reddit.com', createdAt: Date.now() },
+      { id: 'n2', urlPattern: 'youtube.com', createdAt: Date.now() },
+      { id: 'n3', urlPattern: 'x.com', createdAt: Date.now() }
+    ];
+    await env.sendMessage({ action: 'updateSettings', settings });
+    await env.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'reddit.com' });
+    await env.sendMessage({ action: 'recordAnalyticsEvent', type: 'challenge_completed', domain: 'reddit.com' });
+    await env.sendMessage({
+      action: 'grantTemporaryAccess',
+      urlPattern: 'reddit.com',
+      duration: 5,
+      timeSpent: 30,
+      meta: { method: 'challenge' }
     });
-    expect(env.createdTabs.at(-1).url).toContain('options/options.html?activation=success');
-
-    const activationCall = api.calls.find((call) => call.url === api.endpoints.activate);
-    expect(activationCall.body.extensionId).toBe(env.chrome.runtime.id);
-    expect(activationCall.body.installCredential).toBe(env.storageData.installation.installCredential);
-  });
-
-  it('rejects an external activation with no token', async () => {
-    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
-
-    const response = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite' },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(response.success).toBe(false);
-    expect(response.error).toContain('Missing activation token');
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-    expect(api.calls.some((call) => call.url === api.endpoints.activate)).toBe(false);
-  });
-
-  it('rejects an external activation from an untrusted origin', async () => {
-    const { checkout } = { checkout: await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' }) };
-    const activationToken = api.issueActivationToken(checkout.checkoutId);
-
-    const response = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite', activationToken },
-      { url: 'https://evil.example.com/pricing' }
-    );
-
-    expect(response.success).toBe(false);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-  });
-
-  it('cannot grant Pro when the server rejects the exchange', async () => {
-    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
-
-    const response = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite', activationToken: 'forged-token' },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(response.success).toBe(false);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-    expect(env.storageData.installation.entitlement).toBeNull();
-  });
-
-  it('cannot activate a token minted for another installation', async () => {
-    const otherEnv = createChromeMock();
-    await loadScriptInVm('background.js', { chrome: otherEnv.chrome, fetch: api.fetch });
-    const otherCheckout = await otherEnv.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
-    const otherToken = api.issueActivationToken(otherCheckout.checkoutId);
-
-    await env.sendMessage({ action: 'openPricingPage', plan: 'yearly' });
-    const response = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite', activationToken: otherToken },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(response.success).toBe(false);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-  });
-
-  it('replaying a valid activation token is idempotent', async () => {
-    const { activationToken } = await purchaseProInTest(env, api, 'yearly');
-    const credential = env.storageData.installation.installCredential;
-
-    const replay = await env.sendExternalMessage(
-      { action: 'activateProFromWebsite', activationToken },
-      { url: 'https://www.orlandoascanio.com/en/pricing' }
-    );
-
-    expect(replay.success).toBe(true);
-    expect(env.storageData.settings.subscription.tier).toBe('pro');
-    expect(env.storageData.installation.installCredential).toBe(credential);
-  });
-
-  it('revokes Pro when a forced sync reports a verified inactive grant', async () => {
-    await activateProForTest();
-
-    api.setGrant({ pro: false, status: 'canceled' });
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(true);
-    expect(response.pro).toBe(false);
-    expect(response.changed).toBe(true);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-  });
-
-  it('preserves Pro when a sync fails transiently', async () => {
-    await activateProForTest();
-
-    api.override(api.endpoints.status, 'network-error');
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(false);
-    expect(response.retryable).toBe(true);
-    expect(env.storageData.settings.subscription.tier).toBe('pro');
-    expect(env.storageData.installation.entitlement.pro).toBe(true);
-  });
-
-  it('keeps Pro through a transient failure until the grace period runs out', async () => {
-    await activateProForTest();
-
-    // Age the last verified check past the 72-hour ceiling, then fail every sync. This is the
-    // "server unreachable indefinitely" case: without a bound, Pro would persist forever.
-    env.storageData.installation.entitlement.checkedAt = Date.now() - (73 * 60 * 60 * 1000);
-    api.override(api.endpoints.status, 'network-error');
-
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(false);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-    expect(env.storageData.installation.entitlement.stale).toBe(true);
-
-    // Expiry withdraws access but not the ability to recover: the credential survives, so
-    // getting back online restores Pro without a second payment.
-    expect(env.storageData.installation.installCredential).toBeTruthy();
-  });
-
-  it('restores Pro after grace expiry once the server is reachable again', async () => {
-    await activateProForTest();
-
-    env.storageData.installation.entitlement.checkedAt = Date.now() - (73 * 60 * 60 * 1000);
-    api.override(api.endpoints.status, 'network-error');
-    await env.sendMessage({ action: 'refreshEntitlement' });
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-
-    api.override(api.endpoints.status, null);
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(true);
-    expect(env.storageData.settings.subscription.tier).toBe('pro');
-    expect(env.storageData.installation.entitlement.stale).toBe(false);
-  });
-
-  it('drops Pro but keeps the install credential when the server rejects it', async () => {
-    await activateProForTest();
-    const credential = env.storageData.installation.installCredential;
-
-    api.override(api.endpoints.status, { status: 403, body: { error: 'Unknown install credential' } });
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(false);
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-    expect(env.storageData.installation.entitlement).toBeNull();
-
-    // The credential is this browser's only handle back to its own purchase. A 403 revokes
-    // access, but destroying the credential would make the revocation permanent and
-    // unrecoverable — including for a Lifetime buyer hit by a single bad response.
-    expect(env.storageData.installation.installCredential).toBe(credential);
-  });
-
-  it('restores Pro on a later successful sync after a rejection', async () => {
-    await activateProForTest();
-
-    api.override(api.endpoints.status, { status: 403, body: { error: 'Unknown install credential' } });
-    await env.sendMessage({ action: 'refreshEntitlement' });
-    expect(env.storageData.settings.subscription.tier).toBe('free');
-
-    // The server recognizes the install again. Because the credential survived, recovery needs
-    // no action from the user and no second payment.
-    api.override(api.endpoints.status, null);
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(true);
-    expect(env.storageData.settings.subscription.tier).toBe('pro');
-  });
-
-  it('does not sync entitlement for an install that never started checkout', async () => {
-    const response = await env.sendMessage({ action: 'refreshEntitlement' });
-
-    expect(response.success).toBe(false);
-    expect(api.calls.some((call) => call.url === api.endpoints.status)).toBe(false);
-  });
-
-  it('syncs entitlement on the six-hour alarm', async () => {
-    await activateProForTest();
-    api.setGrant({ pro: false, status: 'paused' });
-
+    await env.sendMessage({ action: 'getAnalyticsDashboard' });
+    await env.sendMessage({ action: 'getWeeklyReport' });
+    await env.triggerStartup();
     await env.triggerAlarm({ name: 'resistgate-entitlement-sync' });
 
-    expect(env.storageData.settings.subscription.tier).toBe('free');
+    expect(fetchCalls).toEqual([]);
   });
 
-  it('reports billing state to the options page without leaking secrets', async () => {
-    await activateProForTest();
+  it('refuses the removed billing and telemetry actions', async () => {
+    for (const action of ['openPricingPage', 'getBillingState', 'refreshEntitlement', 'trackPosthogEvent']) {
+      const response = await env.sendMessage({ action });
+      expect(response).toEqual({ success: false, error: 'Unknown action' });
+    }
 
-    const response = await env.sendMessage({ action: 'getBillingState' });
-    expect(response.success).toBe(true);
-    expect(response.state).toMatchObject({ pro: true, plan: 'yearly', hasCheckout: true });
-    expect(JSON.stringify(response.state)).not.toContain(env.storageData.installation.installCredential);
+    expect(env.createdTabs).toHaveLength(0);
+  });
+
+  it('refuses the removed billing messages from the website', async () => {
+    for (const request of [
+      { action: 'activateProFromWebsite', activationToken: 'tok' },
+      { action: 'getActivationState' }
+    ]) {
+      const response = await env.sendExternalMessage(request, {
+        url: 'https://www.orlandoascanio.com/en/pricing'
+      });
+      expect(response).toEqual({ success: false, error: 'Unknown action' });
+    }
+  });
+
+  it('deletes billing credentials and telemetry IDs left by earlier versions', async () => {
+    const upgraded = createChromeMock();
+    upgraded.storageData.installation = {
+      deviceId: 'device-123',
+      firstSeenAt: Date.now() - 1000,
+      posthogSentEvents: { install: true },
+      installCredential: 'a'.repeat(64),
+      entitlement: { pro: true, plan: 'yearly', status: 'active', checkedAt: Date.now() }
+    };
+    upgraded.storageData.settings = {
+      subscription: { tier: 'pro' },
+      blocklist: [{ id: 'k1', urlPattern: 'reddit.com', createdAt: Date.now() }],
+      proFeatures: { strictModeEnabled: true }
+    };
+    await upgraded.chrome.alarms.create('resistgate-entitlement-sync', { periodInMinutes: 360 });
+
+    const calls = [];
+    await loadScriptInVm('background.js', { chrome: upgraded.chrome, fetch: recordingFetch(calls) });
+    await upgraded.sendMessage({ action: 'getSettings' });
+
+    expect(upgraded.storageData).not.toHaveProperty('installation');
+    expect(upgraded.storageData.settings).not.toHaveProperty('subscription');
+    expect(upgraded.storageData.settings.blocklist.map((entry) => entry.urlPattern)).toEqual(['reddit.com']);
+    expect(upgraded.storageData.settings.proFeatures.strictModeEnabled).toBe(true);
+    expect((await upgraded.chrome.alarms.getAll()).map((alarm) => alarm.name))
+      .not.toContain('resistgate-entitlement-sync');
+    expect(calls).toEqual([]);
   });
 
   it('enforces strict mode lock during active schedule', async () => {
-    await activateProForTest();
-
     const initial = (await env.sendMessage({ action: 'getSettings' })).settings;
     initial.proFeatures.strictModeEnabled = true;
     initial.freeExperience.schedule = {
@@ -396,8 +302,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('applies strict mode disable cooldown before turning off', async () => {
-    await activateProForTest();
-
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.proFeatures.strictModeEnabled = true;
     settings.proFeatures.strictModeDisableDelaySeconds = 30;
@@ -424,8 +328,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces override cooldown policy and lock windows', async () => {
-    await activateProForTest();
-
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
     settings.freeExperience.schedule.enabled = false;
@@ -484,8 +386,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('enforces earn-access rule for manual override and minimum challenge time', async () => {
-    await activateProForTest();
-
     const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
     settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
     settings.proFeatures.behavioralFriction.enabled = true;
@@ -650,8 +550,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('generates weekly report with correct score formula and trend', async () => {
-    await activateProForTest();
-
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     env.storageData.analytics = {
@@ -675,8 +573,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('reports per-site hold rates and urge timing in the weekly report', async () => {
-    await activateProForTest();
-
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const atHour = (daysBack, hour) => {
@@ -747,8 +643,6 @@ describe('ResistGate background integration', () => {
   });
 
   it('activates and enforces commitment mode lockout', async () => {
-    await activateProForTest();
-
     const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
     settingsObj.blocklist = [{ id: 'c1', urlPattern: 'reddit.com', createdAt: Date.now() }];
     await env.sendMessage({ action: 'updateSettings', settings: settingsObj });
@@ -801,211 +695,5 @@ describe('ResistGate background integration', () => {
     const deactivate = await env.sendMessage({ action: 'deactivateCommitmentMode' });
     expect(deactivate.success).toBe(false);
     expect(deactivate.error).toContain('cannot be deactivated early');
-  });
-
-  it('requires Pro for commitment mode activation', async () => {
-    const res = await env.sendMessage({ action: 'activateCommitmentMode', durationHours: 2 });
-    expect(res.success).toBe(false);
-    expect(res.proRequired).toBe(true);
-  });
-
-  it('does not allow updateSettings to self-upgrade to Pro', async () => {
-    const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
-    settings.subscription = { tier: 'pro' };
-    settings.proFeatures.strictModeEnabled = true;
-
-    const updateRes = await env.sendMessage({ action: 'updateSettings', settings });
-    expect(updateRes.success).toBe(true);
-
-    const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
-    expect(saved.subscription.tier).toBe('free');
-    expect(saved.proFeatures.strictModeEnabled).toBe(false);
-
-    const dashboardRes = await env.sendMessage({ action: 'getAnalyticsDashboard' });
-    expect(dashboardRes.success).toBe(false);
-    expect(dashboardRes.proRequired).toBe(true);
-  });
-
-  it('captures the PostHog funnel milestones exactly once', async () => {
-    const posthogCalls = [];
-    const fetchMock = async (url, init = {}) => {
-      posthogCalls.push({
-        url,
-        body: init.body ? JSON.parse(init.body) : null
-      });
-
-      return {
-        status: 200,
-        headers: {
-          get: () => null
-        }
-      };
-    };
-
-    const posthogEnv = createChromeMock();
-    posthogEnv.storageData.installation = {
-      deviceId: 'device-test-123',
-      firstSeenAt: Date.now() - (25 * 60 * 60 * 1000),
-      posthogSentEvents: {}
-    };
-
-    const context = await loadScriptInVm('background.js', {
-      chrome: posthogEnv.chrome,
-      fetch: fetchMock,
-      __RESISTGATE_POSTHOG_API_KEY__: 'phc_test_key',
-      __RESISTGATE_POSTHOG_HOST__: 'https://us.i.posthog.com'
-    });
-
-    const posthogHooks = context.__RESISTGATE_TEST_HOOKS__;
-    expect(posthogCalls[0].body.event).toBe('return_day_1');
-
-    await posthogEnv.sendMessage({
-      action: 'recordAnalyticsEvent',
-      type: 'onboarding_start',
-      domain: 'welcome'
-    });
-
-    let settings = (await posthogEnv.sendMessage({ action: 'getSettings' })).settings;
-    settings.blocklist = [
-      { id: '1', urlPattern: 'youtube.com', createdAt: Date.now() },
-      { id: '2', urlPattern: 'reddit.com', createdAt: Date.now() },
-      { id: '3', urlPattern: 'x.com', createdAt: Date.now() }
-    ];
-    await posthogEnv.sendMessage({ action: 'updateSettings', settings });
-
-    await posthogEnv.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
-    await posthogEnv.sendMessage({ action: 'recordBlockedVisit', urlPattern: 'youtube.com' });
-
-    await posthogEnv.sendMessage({
-      action: 'grantTemporaryAccess',
-      urlPattern: 'youtube.com',
-      duration: 10,
-      meta: { method: 'challenge', waitedSeconds: 12 }
-    });
-
-    await posthogHooks.trackPosthogEventOnce('install', {
-      installReason: 'install'
-    });
-    await posthogHooks.trackPosthogEventOnce('install', {
-      installReason: 'install'
-    });
-
-    const eventNames = posthogCalls.map((entry) => entry.body.event);
-    expect(eventNames).toContain('return_day_1');
-    expect(eventNames).toContain('onboarding_start');
-    expect(eventNames).toContain('blocklist_created');
-    expect(eventNames).toContain('first_block_hit');
-    expect(eventNames).toContain('access_granted');
-    expect(eventNames).toContain('install');
-
-    expect(eventNames.filter((event) => event === 'install')).toHaveLength(1);
-    expect(eventNames.filter((event) => event === 'first_block_hit')).toHaveLength(1);
-
-    const onboardingCall = posthogCalls.find((entry) => entry.body.event === 'onboarding_start');
-    expect(onboardingCall.body.properties.surface).toBe('welcome');
-
-    const accessCall = posthogCalls.find((entry) => entry.body.event === 'access_granted');
-    expect(accessCall.body.properties.domain).toBe('youtube.com');
-  });
-
-  describe('gate outcomes and reminders', () => {
-    async function blockSites(patterns) {
-      const current = await env.sendMessage({ action: 'getSettings' });
-      const next = current.settings;
-      next.blocklist = patterns.map((urlPattern, i) => ({ id: String(i + 1), urlPattern }));
-      const saved = await env.sendMessage({ action: 'updateSettings', settings: next });
-      expect(saved.success).toBe(true);
-    }
-
-    it('counts exits as resisted and grants as accessed for the streak line', async () => {
-      await blockSites(['reddit.com']);
-
-      const empty = await env.sendMessage({ action: 'getGateOutcomeSummary' });
-      expect(empty.summary).toEqual({ total: 0, resisted: 0 });
-
-      await env.sendMessage({ action: 'recordGateOutcome', domain: 'www.reddit.com' });
-      await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
-      const after = await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com' });
-
-      expect(after.summary).toEqual({ total: 3, resisted: 2 });
-      expect(env.storageData.gateOutcomes.outcomes.map((entry) => entry.outcome))
-        .toEqual(['resisted', 'accessed', 'resisted']);
-    });
-
-    it('keeps the streak to the last five outcomes', async () => {
-      await blockSites(['reddit.com']);
-      for (let i = 0; i < 4; i++) {
-        await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
-      }
-      for (let i = 0; i < 3; i++) {
-        await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com' });
-      }
-
-      const response = await env.sendMessage({ action: 'getGateOutcomeSummary' });
-      expect(response.summary).toEqual({ total: 5, resisted: 3 });
-    });
-
-    it('turns a granted visit into a resisted one on "never mind" instead of adding an entry', async () => {
-      await blockSites(['reddit.com']);
-      await env.sendMessage({ action: 'grantTemporaryAccess', urlPattern: 'reddit.com', duration: 5, meta: { method: 'challenge' } });
-      await env.sendMessage({ action: 'recordGateOutcome', domain: 'reddit.com', reversesAccess: true });
-
-      expect(env.storageData.gateOutcomes.outcomes).toHaveLength(1);
-      expect(env.storageData.gateOutcomes.outcomes[0].outcome).toBe('resisted');
-    });
-
-    it('ignores outcomes stored on a previous day', async () => {
-      env.storageData.gateOutcomes = {
-        date: '2000-01-01',
-        outcomes: [{ domain: 'reddit.com', outcome: 'resisted', at: 1 }]
-      };
-
-      const response = await env.sendMessage({ action: 'getGateOutcomeSummary' });
-      expect(response.summary).toEqual({ total: 0, resisted: 0 });
-    });
-
-    it('schedules a 10-minute reminder that reopens the destination', async () => {
-      await blockSites(['reddit.com']);
-
-      const response = await env.sendMessage({
-        action: 'scheduleGateReminder',
-        originalUrl: 'https://www.reddit.com/r/programming'
-      });
-      expect(response.success).toBe(true);
-      expect(response.reminder.domain).toBe('reddit.com');
-
-      const alarms = await env.chrome.alarms.getAll();
-      const alarm = alarms.find((entry) => entry.name === 'resistgate-gate-reminder-reddit.com');
-      expect(alarm.delayInMinutes).toBe(10);
-
-      const summary = await env.sendMessage({ action: 'getGateOutcomeSummary' });
-      expect(summary.summary).toEqual({ total: 1, resisted: 1 });
-
-      await env.triggerAlarm({ name: 'resistgate-gate-reminder-reddit.com' });
-      expect(env.createdTabs.at(-1)).toEqual({ url: 'https://www.reddit.com/r/programming', active: true });
-      expect(env.storageData.gateReminders['reddit.com']).toBeUndefined();
-
-      // A second firing has nothing left to open.
-      const tabCount = env.createdTabs.length;
-      await env.triggerAlarm({ name: 'resistgate-gate-reminder-reddit.com' });
-      expect(env.createdTabs).toHaveLength(tabCount);
-    });
-
-    it('refuses reminders for unblocked sites and non-web URLs', async () => {
-      await blockSites(['reddit.com']);
-
-      const unblocked = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'https://example.com/' });
-      expect(unblocked.success).toBe(false);
-
-      const lookalike = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'https://notreddit.com/' });
-      expect(lookalike.success).toBe(false);
-
-      const script = await env.sendMessage({ action: 'scheduleGateReminder', originalUrl: 'javascript:alert(1)' });
-      expect(script.success).toBe(false);
-
-      expect(await env.chrome.alarms.getAll()).not.toContainEqual(
-        expect.objectContaining({ name: expect.stringContaining('resistgate-gate-reminder-') })
-      );
-    });
   });
 });

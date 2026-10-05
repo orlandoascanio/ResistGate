@@ -425,10 +425,6 @@ function showUndoToast(text, onUndo) {
     }, 5000);
 }
 
-function isPopupProUser(settings) {
-    return settings?.subscription?.tier === 'pro';
-}
-
 function formatPopupCountdown(remainingMs) {
     const totalSecs = Math.max(0, Math.ceil(remainingMs / 1000));
     const h = Math.floor(totalSecs / 3600);
@@ -602,13 +598,6 @@ function renderCommitmentPopupStatus(settings) {
         popupCommitmentTimer = null;
     }
 
-    // Non-Pro users see neither the banner nor the button
-    if (!isPopupProUser(settings)) {
-        statusEl.classList.add('hidden');
-        activateBtn.classList.add('hidden');
-        return;
-    }
-
     chrome.runtime.sendMessage({ action: 'getCommitmentModeStatus' }, function (response) {
         if (response && response.success && response.status?.active && response.status.expiresAt) {
             // Active — show countdown banner, hide activate button
@@ -631,7 +620,7 @@ function renderCommitmentPopupStatus(settings) {
             tickCountdown();
             popupCommitmentTimer = setInterval(tickCountdown, 1000);
         } else {
-            // Pro user, commitment mode inactive — show activate button
+            // Commitment mode inactive — show activate button
             statusEl.classList.add('hidden');
             activateBtn.classList.remove('hidden');
         }

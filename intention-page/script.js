@@ -261,13 +261,7 @@ function getChallengeText() {
   return CHALLENGE_TEXT.hard;
 }
 
-// Pro only. Free settings can still carry a phrase from a lapsed subscription, so the
-// tier is checked here rather than trusting the stored flag.
 function getCustomChallengePhrase(settings = currentSettings) {
-  if (settings?.subscription?.tier !== 'pro') {
-    return '';
-  }
-
   const custom = settings?.proFeatures?.customChallengePhrase;
   if (custom?.enabled !== true || typeof custom.text !== 'string') {
     return '';
@@ -400,8 +394,7 @@ function isIntentionPageEnabled(settings = currentSettings) {
 }
 
 function isProBehavioralFrictionActive(settings = currentSettings) {
-  return settings?.subscription?.tier === 'pro'
-    && settings?.proFeatures?.behavioralFriction?.enabled === true
+  return settings?.proFeatures?.behavioralFriction?.enabled === true
     && settings?.proFeatures?.behavioralFriction?.requireTaskIntent !== false;
 }
 

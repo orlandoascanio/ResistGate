@@ -50,15 +50,13 @@ describe('Friction page flow logic', () => {
     expect(hooks.formatTime(125)).toBe('02:05');
   });
 
-  it('detects earn-access activation by plan + friction settings', () => {
+  it('detects earn-access activation from friction settings', () => {
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
-      proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
+      proFeatures: { behavioralFriction: { enabled: false, earnAccessEnabled: true } }
     });
     expect(hooks.isEarnAccessRuleActive()).toBe(false);
 
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
     });
     expect(hooks.isEarnAccessRuleActive()).toBe(true);
@@ -66,13 +64,11 @@ describe('Friction page flow logic', () => {
 
   it('clamps earn-access minimum seconds to safe bounds', () => {
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: { behavioralFriction: { earnAccessMinChallengeSeconds: 10 } }
     });
     expect(hooks.getEarnAccessMinChallengeSeconds()).toBe(30);
 
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: { behavioralFriction: { earnAccessMinChallengeSeconds: 1500 } }
     });
     expect(hooks.getEarnAccessMinChallengeSeconds()).toBe(900);
@@ -106,7 +102,6 @@ describe('Friction page flow logic', () => {
 
   it('uses a pro custom phrase as the whole challenge, whatever the level', () => {
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       challengeTypes: { typing: { level: 'hard' } },
       proFeatures: {
         customChallengePhrase: { enabled: true, text: 'I promised myself deep work until noon.' }
@@ -119,23 +114,8 @@ describe('Friction page flow logic', () => {
     expect(hooks.getChallengeLevelCopy('custom').unitLabel).toBe('Phrase');
   });
 
-  it('ignores a custom phrase left behind by a lapsed pro subscription', () => {
-    hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
-      challengeTypes: { typing: { level: 'hard' } },
-      proFeatures: {
-        customChallengePhrase: { enabled: true, text: 'let me in' }
-      }
-    });
-
-    expect(hooks.getCustomChallengePhrase()).toBe('');
-    expect(hooks.getEffectiveChallengeLevel()).toBe('hard');
-    expect(hooks.buildTypingChallengeSegments()).toHaveLength(5);
-  });
-
   it('falls back to the level bank when the custom phrase is off or empty', () => {
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       challengeTypes: { typing: { level: 'easy' } },
       proFeatures: {
         customChallengePhrase: { enabled: false, text: 'I promised myself deep work until noon.' }
@@ -144,7 +124,6 @@ describe('Friction page flow logic', () => {
     expect(hooks.getEffectiveChallengeLevel()).toBe('easy');
 
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       challengeTypes: { typing: { level: 'easy' } },
       proFeatures: { customChallengePhrase: { enabled: true, text: '   ' } }
     });
@@ -203,7 +182,6 @@ describe('Friction page flow logic', () => {
 
   it('returns expected earn-access bonus tiers', () => {
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
     });
 
@@ -225,7 +203,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: { behavioralFriction: { enabled: false } }
     });
 
@@ -249,7 +226,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         behavioralFriction: {
           enabled: true,
@@ -280,7 +256,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         behavioralFriction: {
           enabled: true,
@@ -311,7 +286,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         behavioralFriction: {
           enabled: true,
@@ -362,7 +336,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: false }
       },
@@ -410,7 +383,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: false }
       },
@@ -463,7 +435,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: true }
       },
@@ -525,7 +496,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: {
         intentionPage: { enabled: false, showBreathingExercise: true }
       },
@@ -582,7 +552,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: true }
       },
@@ -642,7 +611,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: false }
       },
@@ -687,7 +655,6 @@ describe('Friction page flow logic', () => {
 
     const localHooks = context.__RESISTGATE_FRICTION_TEST_HOOKS__;
     localHooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: false }
       },

@@ -1,0 +1,24 @@
+# Internal files kept in the private repository but left out of the public
+# open-source export (`git archive`). See changelog 2.0.0.
+.agent export-ignore
+.agents export-ignore
+.claude export-ignore
+.codex export-ignore
+.opencode export-ignore
+.pi export-ignore
+.impeccable.md export-ignore
+._* export-ignore
+AGENTS.md export-ignore
+Architecture.md export-ignore
+CleanShot*.png export-ignore
+Featureds.2.md export-ignore
+Features.md export-ignore
+Overview.md export-ignore
+ROADMAP.md export-ignore
+TODOS.md export-ignore
+docs export-ignore
+install.sh export-ignore
+overview export-ignore
+skills export-ignore
+skills-lock.json export-ignore
+.gitattributes export-ignore

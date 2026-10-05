@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.0.0] - 2026-10-04
+
+ResistGate is now free and open source. There is no paid tier, and the extension no longer makes network requests.
+
+### Changed
+- **Every Pro feature is free.** Strict Mode, Commitment Mode, override cooldowns, behavioral friction, earn-access,
+  accountability presets, the custom challenge prompt and phrase, the Progress dashboard, and the Weekly Review work
+  for everyone. Settings saved under the old Pro tier carry over unchanged.
+- **Override cooldown now applies to every install.** Each manual override in a 6-hour window adds 10 seconds to the
+  next wait (up to 90), and more than 3 locks manual override for 30 minutes. The typing challenge still works during
+  a lock. Users who were on the Free tier will notice this for the first time; there is no setting to turn it off.
+- **Local analytics are recorded for everyone**, so Progress and Weekly Review start filling in from the update onward.
+- Install and update keep opening the pages on orlandoascanio.com from 1.5.0. A new minor or major version still opens
+  the release notes; patch releases, downgrades, and same-version reloads stay quiet. The local What's New page stays removed.
+- The options sidebar links to the source code in place of the plan comparison.
+
+### Removed
+- **Billing.** Paddle checkout, the pricing page hand-off, entitlement sync, the 6-hour sync alarm, the install
+  credential, and the `activateProFromWebsite` / `getActivationState` external messages. The welcome site can still
+  read onboarding status and open the local setup page. It cannot change settings.
+- **Telemetry.** PostHog funnel events and Sentry crash reporting (including the bundled `vendor/` SDK and the
+  `@sentry/browser` dependency). The extension-page CSP no longer allows any `connect-src`.
+- **Leftover data.** On update, the `installation` storage key (device ID, install credential, verified entitlement,
+  PostHog dedupe flags) is deleted, along with the legacy entitlement sync alarm and `settings.subscription`.
+- The paywall modal, plan comparison modal, plan pill, Pro badges, and "Recheck access" control.
+
+### Tests
+- Billing mock and purchase handshake removed. Tests prove the extension makes no network requests across a full
+  session, refuses the removed billing actions, and deletes billing and telemetry state left by earlier versions.
+  232 tests; `background.js` at 92.6% lines, 82.5% branches.
+
+---
+
 ## [1.5.0] - 2026-09-18
 
 A settings page that saves itself, tells you what's wrong before it matters, and lets you take your setup with you. Plus a Weekly Review that tells you what to change, not just how you did, and a friction page that is easier to get through honestly and easier to walk away from.

@@ -7,8 +7,6 @@
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/design-system.css" />
   <link rel="stylesheet" href="options.css" />
-  <script src="../vendor/sentry.min.js"></script>
-  <script src="../vendor/sentry-init.js"></script>
 </head>
 <body>
   <div class="options-shell">
@@ -28,25 +26,22 @@
         <button id="tab-analytics" class="tab-btn" data-tab="analytics" data-pro-screen="analytics" role="tab" aria-selected="false" aria-controls="panel-analytics">
           <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></span>
           <span class="tab-label">Progress</span>
-          <span class="tab-pro-label">Pro</span>
         </button>
         <button id="tab-report" class="tab-btn" data-tab="report" data-pro-screen="report" role="tab" aria-selected="false" aria-controls="panel-report">
           <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
           <span class="tab-label">Weekly Review</span>
-          <span class="tab-pro-label">Pro</span>
         </button>
         <button id="tab-pro" class="tab-btn" data-tab="pro" data-pro-screen="pro" role="tab" aria-selected="false" aria-controls="panel-pro">
           <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
           <span class="tab-label">Stronger Locks</span>
-          <span class="tab-pro-label">Pro</span>
         </button>
       </nav>
 
       <section class="sidebar-plan-card" aria-labelledby="sidebar-plan-title">
-        <span id="sidebar-plan-label">Free plan</span>
-        <h2 id="sidebar-plan-title">Core blocking is free</h2>
-        <p id="sidebar-plan-copy">Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.</p>
-        <button id="compare-plans-btn" class="btn btn-secondary">Compare plans</button>
+        <span id="sidebar-plan-label">Open source</span>
+        <h2 id="sidebar-plan-title">Every feature is free</h2>
+        <p id="sidebar-plan-copy">No account, no paid tier, no tracking. Everything stays on this device.</p>
+        <button id="view-source-btn" class="btn btn-secondary">View source on GitHub</button>
       </section>
 
       <nav class="sidebar-links" aria-label="Support ResistGate">
@@ -62,7 +57,6 @@
         <div class="header-meta">
           <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
           <button id="whats-new-btn" class="btn btn-secondary btn-sm">What's New</button>
-          <span id="plan-pill" class="plan-pill">Free</span>
         </div>
       </div>
       <p>Block the sites you want, and decide how hard it should be to get past them. Changes save automatically.</p>
@@ -79,7 +73,7 @@
       <div id="today-strip" class="today-strip" hidden>
         <span class="today-strip-label">Today</span>
         <span id="today-strip-text" class="today-strip-text"></span>
-        <button id="today-strip-link" type="button" class="today-strip-link" data-pro-screen="analytics">See your trends</button>
+        <button id="today-strip-link" type="button" class="today-strip-link" data-pro-screen="analytics">Open Progress</button>
       </div>
 
       <div class="general-settings-grid">
@@ -351,14 +345,6 @@
       <section class="panel pro-panel">
         <div class="pro-panel-head">
           <h2>Stronger Locks</h2>
-          <button id="open-pricing-btn" class="btn btn-primary">Upgrade to Pro</button>
-        </div>
-        <div id="subscription-status" class="subscription-status">
-          Unlock stronger locks. After checkout, this browser activates automatically.
-        </div>
-        <div id="entitlement-row" class="entitlement-row hidden">
-          <span id="entitlement-detail" class="entitlement-detail"></span>
-          <button id="refresh-entitlement-btn" class="btn btn-secondary btn-sm">Recheck access</button>
         </div>
         <p class="helper">Add extra friction between you and a blocked site — so you only visit when it's genuinely worth it.</p>
 
@@ -490,141 +476,6 @@
       </section>
     </section>
     </main>
-  </div>
-
-  <div id="paywall-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paywall-title">
-    <div class="modal-card checkout-card">
-      <header class="checkout-header">
-        <p class="checkout-eyebrow">ResistGate Pro</p>
-        <h2 id="paywall-title">Make the gate harder to walk through</h2>
-        <p>Pick a plan and checkout opens in a new tab. Pay, and this browser unlocks on its own — no codes, no account, no copy-paste.</p>
-      </header>
-
-      <fieldset class="plan-picker">
-        <legend class="sr-only">Choose a plan</legend>
-
-        <label class="plan-option">
-          <input type="radio" name="checkout-plan" value="monthly">
-          <span class="plan-option-body">
-            <span class="plan-option-top">
-              <span class="plan-option-name">Monthly</span>
-              <span class="plan-option-price"><strong>$3.99</strong><span class="plan-option-cycle">/mo</span></span>
-            </span>
-            <span class="plan-option-note">Try it for a month. Cancel any time.</span>
-          </span>
-        </label>
-
-        <label class="plan-option">
-          <input type="radio" name="checkout-plan" value="yearly" checked>
-          <span class="plan-option-body">
-            <span class="plan-option-top">
-              <span class="plan-option-name">Yearly <span class="plan-option-badge">Best value</span></span>
-              <span class="plan-option-price"><strong>$29.99</strong><span class="plan-option-cycle">/yr</span></span>
-            </span>
-            <span class="plan-option-note">Works out to $2.50 a month.</span>
-          </span>
-        </label>
-
-        <label class="plan-option">
-          <input type="radio" name="checkout-plan" value="lifetime">
-          <span class="plan-option-body">
-            <span class="plan-option-top">
-              <span class="plan-option-name">Lifetime</span>
-              <span class="plan-option-price"><strong>$49.99</strong><span class="plan-option-cycle">once</span></span>
-            </span>
-            <span class="plan-option-note">Founding member. Pay once, keep it.</span>
-          </span>
-        </label>
-      </fieldset>
-
-      <ul class="price-points">
-        <li>Commitment Mode — total lockout, no override</li>
-        <li>Strict Mode, override cooldowns, and earn-access rules</li>
-        <li>Behavioral Friction before you open a site</li>
-        <li>Progress dashboard and Weekly Review</li>
-      </ul>
-
-      <p id="checkout-status" class="checkout-status hidden" role="status" aria-live="polite"></p>
-
-      <div class="modal-actions">
-        <button id="view-pricing-btn" class="btn btn-primary">Continue to checkout</button>
-        <button id="close-paywall-btn" class="btn btn-secondary">Not now</button>
-      </div>
-
-      <p class="checkout-fineprint">Secure checkout is handled by Paddle on orlandoascanio.com. ResistGate never sees your card.</p>
-    </div>
-  </div>
-
-  <div id="plan-comparison-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="plan-comparison-title">
-    <div class="modal-card plan-comparison-card">
-      <header class="plan-comparison-header">
-        <h2 id="plan-comparison-title">Compare Free and Pro</h2>
-        <p>Core blocking stays free. Pro adds stronger locks and progress tools.</p>
-      </header>
-
-      <table class="plan-comparison-table">
-        <thead>
-          <tr>
-            <th scope="col">Feature</th>
-            <th scope="col">Free</th>
-            <th scope="col">Pro</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">Unlimited blocked sites</th>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Schedules, typing challenges, and temporary access</th>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Intention pauses and work timer</th>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Progress dashboard and Focus Score</th>
-            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Weekly Review</th>
-            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Strict Mode and override cooldowns</th>
-            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Commitment Mode</th>
-            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-          <tr>
-            <th scope="row">Behavioral Friction and custom challenge prompt</th>
-            <td><span class="comparison-no"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span></td>
-            <td><span class="comparison-check"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></span></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p class="plan-comparison-pricing">
-        <strong>Free:</strong> $0, no account required.
-        <span aria-hidden="true">·</span>
-        <strong>Pro:</strong> $3.99/month, $29.99/year, or $49.99 lifetime.
-      </p>
-
-      <div class="modal-actions">
-        <button id="view-comparison-pricing-btn" class="btn btn-primary">Choose a plan</button>
-        <button id="close-comparison-btn" class="btn btn-secondary">Keep Free</button>
-      </div>
-    </div>
   </div>
 
   <div id="site-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="site-editor-title">

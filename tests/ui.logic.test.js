@@ -106,10 +106,8 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('Block the sites you want, and decide how hard it should be to get past them.');
     expect(optionsHtml).not.toContain('Set up your blocker and choose how much friction you want before distracting sites open.');
     expect(optionsHtml).not.toContain('Plan guide');
-    expect(optionsHtml).toContain('Core blocking is free');
-    expect(optionsHtml).toContain('Core blocking, schedules, challenges, temporary access, intention pauses, and the work timer are free.');
-    expect(optionsHtml).toContain('id="compare-plans-btn"');
-    expect(optionsHtml).toContain('Compare plans');
+    expect(optionsHtml).toContain('No account, no paid tier, no tracking.');
+    expect(optionsHtml).toContain('View source on GitHub');
     expect(optionsJs).toContain("return 'https://www.orlandoascanio.com/resistgate/updated';");
     expect(optionsJs).not.toContain('updated?from=');
     expect(optionsJs).not.toContain("chrome.runtime.getURL('whats-new/whats-new.html')");
@@ -132,7 +130,7 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('id="tab-pro" class="tab-btn" data-tab="pro"');
     expect(optionsHtml).toContain('<span class="tab-label">Stronger Locks</span>');
     expect(optionsHtml).toContain('Help improve ResistGate');
-    expect(optionsHtml).toContain('Pick a plan and checkout opens in a new tab.');
+    expect(optionsHtml).toContain('Every feature is free');
     expect(frictionHtml).toContain('You blocked this for a reason.');
     expect(intentionHtml).toContain('Pause before you enter.');
     expect(intentionHtml).toContain('Read your reminder first.');
@@ -141,54 +139,38 @@ describe('UI copy and state logic', () => {
     expect(intentionHtml).not.toContain('Today’s budget');
   });
 
-  it('lets the user pick a plan inside the extension before checkout opens', () => {
+  it('ships no paywall, checkout, or plan comparison', () => {
     const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
     const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
 
-    for (const plan of ['monthly', 'yearly', 'lifetime']) {
-      expect(optionsHtml).toContain(`name="checkout-plan" value="${plan}"`);
+    for (const marker of ['paywall-modal', 'plan-comparison-modal', 'checkout-plan', 'tab-pro-label', 'plan-pill']) {
+      expect(optionsHtml).not.toContain(marker);
     }
-    expect(optionsHtml).toContain('name="checkout-plan" value="yearly" checked');
-    expect(optionsHtml).toContain('id="checkout-status"');
-    expect(optionsJs).toContain("chrome.runtime.sendMessage({ action: 'openPricingPage', plan }");
-    expect(optionsJs).toContain('startCheckout(getSelectedPlan())');
+    for (const action of ['openPricingPage', 'refreshEntitlement', 'getBillingState']) {
+      expect(optionsJs).not.toContain(action);
+    }
+    expect(optionsHtml).toContain('id="view-source-btn"');
   });
 
-  it('offers a manual recheck when website activation does not land', () => {
-    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
-    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
-
-    expect(optionsHtml).toContain('id="refresh-entitlement-btn"');
-    expect(optionsJs).toContain("action: 'refreshEntitlement'");
-    expect(optionsJs).toContain("action: 'getBillingState'");
-  });
-
-  it('allows the extension to reach the ResistGate API from extension pages', () => {
+  it('gives extension pages no network access and limits website messaging to setup', () => {
     const manifest = JSON.parse(fs.readFileSync(path.resolve(repoRoot, 'manifest.json'), 'utf8'));
-    const connectSrc = manifest.content_security_policy.extension_pages;
 
-    expect(connectSrc).toContain('https://www.orlandoascanio.com');
+    expect(manifest.content_security_policy.extension_pages).toBe("script-src 'self'; object-src 'self'");
     expect(manifest.externally_connectable.matches).toEqual([
       'https://www.orlandoascanio.com/*',
       'https://orlandoascanio.com/*'
     ]);
-  });
 
-  it('opens a real Free versus Pro comparison from the sidebar', () => {
-    const optionsHtml = fs.readFileSync(path.resolve(repoRoot, 'options/options.html'), 'utf8');
-    const optionsJs = fs.readFileSync(path.resolve(repoRoot, 'options/options.js'), 'utf8');
-
-    expect(optionsJs).toContain('showPlanComparison()');
-    expect(optionsJs).not.toContain("showPaywall('sidebar-compare-plans')");
-    expect(optionsHtml).toContain('id="plan-comparison-modal"');
-    expect(optionsHtml).toContain('Compare Free and Pro');
-    expect(optionsHtml).toContain('Unlimited blocked sites');
-    expect(optionsHtml).toContain('Progress dashboard and Focus Score');
-    expect(optionsHtml).toContain('Strict Mode and override cooldowns');
-    expect(optionsHtml).toContain('$0, no account required.');
-    expect(optionsHtml).toContain('$3.99/month, $29.99/year, or $49.99 lifetime.');
-    expect(optionsHtml).toContain('id="view-comparison-pricing-btn"');
-    expect(optionsHtml).toContain('id="close-comparison-btn"');
+    for (const page of [
+      'options/options.html',
+      'popup/popup.html',
+      'welcome/welcome.html',
+      'friction-page/index.html',
+      'intention-page/index.html',
+      'commitment-page/index.html'
+    ]) {
+      expect(fs.readFileSync(path.resolve(repoRoot, page), 'utf8')).not.toContain('sentry');
+    }
   });
 
   it('labels Intention pause as available and keeps it out of paywall gating', () => {
@@ -215,7 +197,6 @@ describe('UI copy and state logic', () => {
     expect(optionsHtml).toContain('How this works');
     expect(optionsHtml).not.toContain('data-pro-feature="intentionPage"');
     expect(optionsHtml).not.toContain('Intention Page — personal goals &amp; breathing exercises');
-    expect(optionsHtml).toContain('Behavioral Friction before you open a site');
   });
 
   it('registers the distinct intention page as an extension resource', () => {
@@ -470,7 +451,7 @@ describe('Options settings helpers', () => {
     expect(parsed.siteCount).toBe(2);
   });
 
-  it('imports keep this browser\'s tier and lock state, whatever the file says', async () => {
+  it('imports drop the old paid tier and keep this browser\'s lock state', async () => {
     const hooks = await loadHooks();
     const current = {
       subscription: { tier: 'free' },
@@ -482,7 +463,7 @@ describe('Options settings helpers', () => {
       proFeatures: { commitmentMode: { active: true, expiresAt: 9999999999999 }, strictModeDisableRequestedAt: 5 }
     });
 
-    expect(merged.subscription).toEqual({ tier: 'free' });
+    expect(merged).not.toHaveProperty('subscription');
     expect(merged.proFeatures.commitmentMode).toEqual({ active: false, durationHours: 2 });
     expect(merged.proFeatures.strictModeDisableRequestedAt).toBeNull();
     expect(merged.blocklist).toEqual([{ urlPattern: 'x.com' }]);
@@ -529,10 +510,6 @@ describe('Options settings helpers', () => {
     expect(hooks.formatScheduleDays([1, 2, 3, 4, 5])).toBe('Mon-Fri');
     expect(hooks.formatScheduleDays([0, 6])).toBe('Weekends');
     expect(hooks.formatTimeLabel('22:05')).toBe('10:05 PM');
-    expect(hooks.isProGatedTab('analytics')).toBe(true);
-    expect(hooks.isProGatedTab('report')).toBe(true);
-    expect(hooks.isProGatedTab('pro')).toBe(true);
-    expect(hooks.isProGatedTab('general')).toBe(false);
   });
 
   it('formats popup blocked-count text cleanly', async () => {

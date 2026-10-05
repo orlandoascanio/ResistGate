@@ -95,7 +95,6 @@ describe('Intention page pause layer', () => {
     const { context, elements } = await loadIntentionPage();
     const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: { intentionPage: { enabled: true, showBreathingExercise: false } },
       blocklist: [{ id: '1', urlPattern: 'reddit.com', personalGoal: 'Use Reddit for research, not procrastination.' }]
     });
@@ -115,7 +114,6 @@ describe('Intention page pause layer', () => {
     const { context, elements, classSets } = await loadIntentionPage();
     const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: { intentionPage: { enabled: true, showBreathingExercise: true } },
       blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
     });
@@ -133,11 +131,10 @@ describe('Intention page pause layer', () => {
     hooks.stopBreathingCountdown();
   });
 
-  it('requires the Pro behavioral friction prompt when enabled', async () => {
+  it('requires the behavioral friction prompt when enabled', async () => {
     const { context, elements, classSets } = await loadIntentionPage();
     const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'pro' },
       proFeatures: {
         intentionPage: { enabled: true, showBreathingExercise: false },
         behavioralFriction: { enabled: true, requireTaskIntent: true }
@@ -169,7 +166,6 @@ describe('Intention page pause layer', () => {
     });
     const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
     hooks.__setCurrentSettingsForTest({
-      subscription: { tier: 'free' },
       proFeatures: { intentionPage: { enabled: true, showBreathingExercise: false } },
       blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
     });
@@ -187,25 +183,21 @@ describe('Intention page pause layer', () => {
     expect(stored.resistgateIntentionPrecheck).toContain('"reason":""');
   });
 
-  it('types the pro custom phrase instead of the built-in challenge line', async () => {
+  it('types the custom phrase instead of the built-in challenge line', async () => {
     const { context } = await loadIntentionPage();
     const hooks = context.__RESISTGATE_INTENTION_TEST_HOOKS__;
     const customChallengePhrase = { enabled: true, text: 'I promised myself deep work until noon.' };
 
     hooks.__setCurrentSettingsForTest({
       challengeTypes: { typing: { level: 'easy' } },
-      subscription: { tier: 'pro' },
       proFeatures: { intentionPage: { enabled: true }, customChallengePhrase }
     });
     expect(hooks.getChallengeText()).toBe('I promised myself deep work until noon.');
 
-    // A lapsed subscription must not keep the user's phrase in place of the built-in line.
     hooks.__setCurrentSettingsForTest({
       challengeTypes: { typing: { level: 'easy' } },
-      subscription: { tier: 'free' },
-      proFeatures: { intentionPage: { enabled: true }, customChallengePhrase }
+      proFeatures: { intentionPage: { enabled: true }, customChallengePhrase: { enabled: false, text: '' } }
     });
-    expect(hooks.getCustomChallengePhrase()).toBe('');
     expect(hooks.getChallengeText()).toBe('I am choosing this visit intentionally.');
   });
 
@@ -225,7 +217,6 @@ describe('Intention page pause layer', () => {
     hooks.__setCurrentSettingsForTest({
       defaultAccessDuration: 7,
       challengeTypes: { typing: { level: 'easy' } },
-      subscription: { tier: 'free' },
       proFeatures: { intentionPage: { enabled: true, showBreathingExercise: false } },
       blocklist: [{ id: '1', urlPattern: 'reddit.com' }]
     });

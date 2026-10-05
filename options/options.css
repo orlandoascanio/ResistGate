@@ -138,26 +138,6 @@ body {
   padding: 6px 12px;
 }
 
-/* ── Plan pill ──────────────────────────────────────────────────── */
-.plan-pill {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--primary);
-  border: 1.5px solid var(--line-2);
-  background: var(--lavender-2);
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-feature-settings: 'tnum' 1;
-}
-
-.plan-pill.pro {
-  color: var(--ok);
-  border-color: var(--ok-border);
-  background: var(--ok-bg);
-}
-
 /* ── Tier guide ─────────────────────────────────────────────────── */
 .tier-guide {
   display: grid;
@@ -288,16 +268,6 @@ body {
 }
 
 .tab-btn:hover {
-  background: var(--card);
-  color: var(--text-2);
-}
-
-.tab-btn.locked {
-  color: var(--muted);
-  opacity: 0.72;
-}
-
-.tab-btn.locked:hover {
   background: var(--card);
   color: var(--text-2);
 }
@@ -497,16 +467,6 @@ label {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
-}
-
-/* ── Subscription status ────────────────────────────────────────── */
-.subscription-status {
-  margin-top: 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 12px;
-  background: var(--bg-subtle);
-  color: var(--text-3);
-  padding: 12px 14px;
 }
 
 .commitment-status {
@@ -2033,292 +1993,6 @@ details[open] .advanced-tuning .tuning-body,
   text-decoration: underline;
 }
 
-/* ── Checkout plan picker ───────────────────────────────────────── */
-
-.checkout-card {
-  max-width: 520px;
-}
-
-.checkout-header {
-  margin-bottom: var(--space-lg);
-}
-
-.checkout-eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary);
-  margin-bottom: 6px;
-}
-
-.checkout-header p:last-child {
-  margin-bottom: 0;
-}
-
-.plan-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 0;
-  margin: 0 0 var(--space-lg);
-}
-
-.plan-option {
-  display: block;
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--card);
-  padding: 12px 14px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.plan-option:hover {
-  border-color: var(--line-2);
-  background: var(--bg-subtle);
-}
-
-.plan-option input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.plan-option:has(input:checked) {
-  border-color: var(--primary);
-  background: var(--lavender-2);
-  box-shadow: inset 0 0 0 1px var(--primary);
-}
-
-.plan-option:has(input:focus-visible) {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.plan-option-body {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.plan-option-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.plan-option-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.plan-option-price {
-  white-space: nowrap;
-}
-
-.plan-option-price strong {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.plan-option-cycle {
-  font-size: 11px;
-  color: var(--muted);
-  margin-left: 2px;
-}
-
-.plan-option-badge {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--primary);
-  background: var(--lavender);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.plan-option-note {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.checkout-status {
-  margin: 0 0 var(--space-md);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-2);
-  font-size: 13px;
-  padding: 10px 12px;
-}
-
-.checkout-status.is-success {
-  border-color: var(--ok-border);
-  background: var(--ok-bg);
-  color: var(--ok);
-}
-
-.checkout-status.is-error {
-  border-color: var(--err);
-  background: color-mix(in srgb, var(--err) 10%, var(--card));
-  color: var(--err);
-}
-
-.checkout-fineprint {
-  margin: var(--space-md) 0 0;
-  font-size: 11px;
-  color: var(--text-3);
-  text-align: center;
-}
-
-.modal-card .checkout-fineprint {
-  margin-bottom: 0;
-}
-
-/* ── Entitlement status row ─────────────────────────────────────── */
-
-.entitlement-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-
-.entitlement-detail {
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-/* ── Free vs Pro comparison ────────────────────────────────────── */
-
-.plan-comparison-card {
-  max-width: 720px;
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 28px;
-}
-
-.plan-comparison-header {
-  margin-bottom: 20px;
-}
-
-.plan-comparison-header h2 {
-  margin: 0 0 5px;
-  font-size: 26px;
-}
-
-.plan-comparison-header p {
-  margin: 0;
-  font-size: 15px;
-}
-
-.plan-comparison-table {
-  width: 100%;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-collapse: separate;
-  border-spacing: 0;
-  border-radius: 12px;
-  table-layout: fixed;
-}
-
-.plan-comparison-table th,
-.plan-comparison-table td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--line);
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.plan-comparison-table tr:last-child th,
-.plan-comparison-table tr:last-child td {
-  border-bottom: 0;
-}
-
-.plan-comparison-table th:first-child {
-  width: 58%;
-  text-align: left;
-}
-
-.plan-comparison-table thead th {
-  background: var(--bg-alt);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.plan-comparison-table tbody th {
-  color: var(--text);
-  font-weight: 650;
-}
-
-.plan-comparison-table th:not(:first-child),
-.plan-comparison-table td {
-  border-left: 1px solid var(--line);
-  text-align: center;
-}
-
-.plan-comparison-table th:last-child {
-  color: var(--primary);
-}
-
-.comparison-check {
-  color: var(--ok);
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.comparison-no {
-  color: var(--muted);
-}
-
-.plan-comparison-pricing {
-  margin: 16px 0 0 !important;
-  color: var(--text-2) !important;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.plan-comparison-pricing strong {
-  color: var(--text);
-}
-
-@media (max-width: 620px) {
-  .plan-comparison-card {
-    padding: 20px;
-  }
-
-  .plan-comparison-table th,
-  .plan-comparison-table td {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
-
-  .plan-comparison-table th:first-child {
-    width: 54%;
-  }
-
-  .plan-comparison-pricing span {
-    display: none;
-  }
-}
-
 /* ── Temptation Bundle config ────────────────────────────────────── */
 .bundle-badge {
   flex-shrink: 0;
@@ -2563,16 +2237,6 @@ body {
   box-shadow: none;
 }
 
-.options-sidebar .tab-btn.locked {
-  color: var(--muted);
-  opacity: 1;
-}
-
-.options-sidebar .tab-btn.locked:hover {
-  background: var(--bg-alt);
-  color: var(--text);
-}
-
 .tab-icon {
   display: grid;
   width: 30px;
@@ -2588,14 +2252,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tab-pro-label {
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
 }
 
 .sidebar-plan-card {
@@ -2641,16 +2297,6 @@ body {
   color: var(--text);
   font-size: 13px;
   font-weight: 800;
-}
-
-.sidebar-plan-card.is-pro {
-  border-color: var(--ok-border);
-  background: var(--ok-bg);
-}
-
-.sidebar-plan-card.is-pro > span,
-.sidebar-plan-card.is-pro h2 {
-  color: var(--ok);
 }
 
 .container {
@@ -2701,13 +2347,6 @@ body {
   padding: 0 15px;
   border-radius: 9px;
   font-size: 14px;
-}
-
-.header-meta .plan-pill {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
 }
 
 .section-header {

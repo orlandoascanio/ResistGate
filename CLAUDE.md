@@ -24,7 +24,7 @@ npx vitest run tests/ui.logic.test.js
 Run a single test by name:
 
 ```bash
-npx vitest run --reporter=verbose -t "opens pricing with the ResistGate product slug"
+npx vitest run --reporter=verbose -t "makes no network requests across a full session"
 ```
 
 No build step. The extension is plain HTML/CSS/JS loaded directly into Chrome with "Load unpacked". After editing any extension file, reload the extension card in `chrome://extensions`.
@@ -35,7 +35,7 @@ ResistGate is a Manifest V3 Chrome extension with no bundler. Every script runs 
 
 ### Core Flow
 
-1. `background.js` is the source of truth. It owns `chrome.storage.local`, storage sanitizers, `declarativeNetRequest` session rules, alarms, Pro gating, analytics/report aggregation, external activation, and message handling.
+1. `background.js` is the source of truth. It owns `chrome.storage.local`, storage sanitizers, `declarativeNetRequest` session rules, alarms, local analytics/report aggregation, and message handling.
 2. UI pages send `{ action: '...' }` with `chrome.runtime.sendMessage()` and receive `{ success: true, ...payload }` or `{ success: false, error }`.
 3. Blocking rules redirect blocked main-frame requests to one of three pages:
    - `commitment-page/index.html` when Commitment Mode is active.
@@ -52,9 +52,8 @@ All storage is local-only. Do not introduce `chrome.storage.sync` without a deli
 |---|---|
 | `settings` | Full sanitized settings object |
 | `temporaryAccess` | Active temporary access grants |
-| `analytics` | Pro local analytics events, capped at 3,000 |
+| `analytics` | Local analytics events for Progress and Weekly Review, capped at 3,000 |
 | `overrideState` | Override cooldown timestamps and lock window |
-| `installation` | Opaque device ID, first-seen timestamp, PostHog event dedupe flags, Paddle install credential, verified entitlement |
 | `dailyBlockCount` | Toolbar badge count for the current day |
 | `resistanceCounters` | Per-domain daily counters |
 | `workTimer` | Current-day focus timer state |
@@ -63,7 +62,11 @@ All storage is local-only. Do not introduce `chrome.storage.sync` without a deli
 | `gateReminders` | Pending "remind me in 10 min" destinations, keyed by blocked domain |
 | `welcomeShown` | Declared but currently unused |
 
-Storage reads/writes in the service worker go through `getFromStorage()` and `setInStorage()`.
+Storage reads/writes in the service worker go through `getFromStorage()`, `setInStorage()`, and `removeFromStorage()`.
+
+`installation` is a legacy key from the paid tier (device ID, install credential, entitlement). It is deleted on every
+startup along with the old `resistgate-entitlement-sync` alarm, so upgraded installs keep no billing or telemetry state.
+`settings.subscription` is likewise dropped by `sanitizeSettings()`.
 
 ### Rule Updates
 
@@ -77,111 +80,64 @@ This serializes DNR mutations and prevents overlapping rule refreshes.
 
 ### Message Actions
 
-| Action | Pro-gated | Description |
-|---|---:|---|
-| `grantTemporaryAccess` | No | Grant timed bypass for a domain |
-| `recordBlockedVisit` | No | Increment badge/resistance counters and optionally local analytics |
-| `getResistanceCount` | No | Return today's count for a domain |
-| `recordGateOutcome` | No | Record a resisted exit from a gate page; `reversesAccess` turns the last grant for that domain into a resisted visit ("Actually, never mind") |
-| `getGateOutcomeSummary` | No | Return `{ total, resisted }` over today's last five gate outcomes |
-| `scheduleGateReminder` | No | Validate a blocked http(s) destination, record a resisted exit, and reopen it in a new tab after 10 minutes |
-| `getTodaySummary` | No | Return today's blocked-attempt total and top three domains for the options page Today strip |
-| `recordAnalyticsEvent` | Partially | Track allowlisted PostHog events and selected Pro local events |
-| `getSettings` | No | Return sanitized settings |
-| `getManualOverrideStatus` | No | Return manual override delay/lock state |
-| `updateSettings` | No | Sanitize, enforce locks/tier boundaries, save, refresh rules |
-| `getAnalyticsDashboard` | Yes | Return 7-day analytics dashboard |
-| `getWeeklyReport` | Yes | Return weekly Focus Score report, hour-of-day urge histogram, per-site hold rates, and one applyable recommendation |
-| `activateCommitmentMode` | Yes | Start 1-24h lockout |
-| `deactivateCommitmentMode` | Always refuses | Commitment cannot end early |
-| `getWorkTimerState` | No | Return work timer state |
-| `startWorkTimer` | No | Start work timer |
-| `stopWorkTimer` | No | Stop timer and accumulate minutes |
-| `getCommitmentModeStatus` | No | Return lockout status/countdown |
-| `openPricingPage` | No | Validate plan, create a server checkout session, open pricing with only the opaque checkout ID |
-| `openFeedbackPage` | No | Open website feedback page |
-| `openReviewPage` | No | Open the Chrome Web Store review page for this extension |
-| `trackPosthogEvent` | No | Track an allowlisted PostHog event once per installation |
-| `getBillingState` | No | Return verified tier, plan, and last-checked time for the options page |
-| `refreshEntitlement` | No | Force a server entitlement sync (manual "Recheck access") |
-
-External message actions, accepted only from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`:
-
 | Action | Description |
 |---|---|
-| `activateProFromWebsite` | Requires a signed `activationToken`. Exchanges it plus the local install credential with the server and grants Pro only when the server returns `pro: true`. |
-| `getActivationState` | Returns `{ installed: true, pro }` so the pricing page can confirm the extension is reachable. |
+| `grantTemporaryAccess` | Grant timed bypass for a domain |
+| `getActiveTemporaryAccess` | List active access windows for blocked domains |
+| `revokeTemporaryAccess` | Re-block a domain immediately |
+| `recordBlockedVisit` | Increment badge/resistance counters and log a local analytics event |
+| `getResistanceCount` | Return today's count for a domain |
+| `recordGateOutcome` | Record a resisted exit from a gate page; `reversesAccess` turns the last grant for that domain into a resisted visit ("Actually, never mind") |
+| `getGateOutcomeSummary` | Return `{ total, resisted }` over today's last five gate outcomes |
+| `scheduleGateReminder` | Validate a blocked http(s) destination, record a resisted exit, and reopen it in a new tab after 10 minutes |
+| `getTodaySummary` | Return today's blocked-attempt total and top three domains for the options page Today strip |
+| `recordAnalyticsEvent` | Log selected local analytics events |
+| `getSettings` | Return sanitized settings |
+| `getManualOverrideStatus` | Return manual override delay/lock state |
+| `updateSettings` | Sanitize, enforce Strict/Commitment locks, save, refresh rules |
+| `getAnalyticsDashboard` | Return 7-day analytics dashboard |
+| `getWeeklyReport` | Return weekly Focus Score report, hour-of-day urge histogram, per-site hold rates, and one applyable recommendation |
+| `activateCommitmentMode` | Start 1-24h lockout |
+| `deactivateCommitmentMode` | Always refuses: Commitment cannot end early |
+| `getWorkTimerState` | Return work timer state |
+| `startWorkTimer` | Start work timer |
+| `stopWorkTimer` | Stop timer and accumulate minutes |
+| `getCommitmentModeStatus` | Return lockout status/countdown |
+| `getWelcomeState` | Return sanitized settings plus the domains that currently have a blocking rule |
+| `saveWelcomeSetup` | Add one welcome-flow site and set the challenge level |
+| `saveWelcomeReminder` | Save a per-site reminder from the welcome flow |
+| `openFeedbackPage` | Open website feedback page |
+| `openReviewPage` | Open the Chrome Web Store review page for this extension |
 
-### Billing and Activation
+External messages are accepted only from `https://www.orlandoascanio.com` or `https://orlandoascanio.com`, and only for the welcome bridge: `getOnboardingState` and `openOnboarding`. They cannot change settings. Billing actions (`activateProFromWebsite`, `getActivationState`) are gone.
 
-Pro is never granted locally. `background.js` creates a server checkout session, hands the website only an opaque
-checkout ID, and flips the tier only after `/api/entitlement/activate-install` verifies a short-lived signed token
-against a 256-bit install credential stored in `installation.installCredential`. Startup (throttled to hourly) and a
-six-hour `resistgate-entitlement-sync` alarm reconcile with the server via `/api/entitlement/install-status`.
+### Features
 
-Sync outcomes:
+Every feature is free. There is no tier, entitlement, or paywall (removed in 2.0.0). Settings for the stronger locks
+still live under `settings.proFeatures` so that existing installs load unchanged; the name is historical.
 
-- a verified inactive grant revokes Pro;
-- a `401`/`403` drops the entitlement and falls to Free, but **keeps** `installCredential` — it is the only handle this
-  browser has back to its own purchase, and destroying it would make an erroneous rejection unrecoverable;
-- a transient failure preserves the last verified state, but only for `ENTITLEMENT_GRACE_PERIOD_MS` (72 hours). Past
-  that, the next failed sync withdraws Pro and marks `installation.entitlement.stale`, which the options page surfaces
-  as "reconnect". This bounds the fail-open window: without it, a lapsed subscription would keep Pro forever as long as
-  the client never reached the server again.
-
-Expiry and rejection both withdraw access without withdrawing the ability to recover — one successful sync restores Pro
-with no user action and no second payment.
-
-The full server contract lives in `docs/paddle-activation-api-contract.md`, and is implemented by the website
-(a separate repository, `Profesional-Portfolio`). Payments run through Paddle as merchant of record; PayPal was removed
-on 2026-07-12. Change the contract doc before changing either side.
-
-### Tier Behavior
-
-Free:
-
-- domain blocking;
-- schedule blocking;
-- graduated typing challenges;
-- temporary access;
-- manual override with 10-15 second delay;
-- popup and options settings;
-- daily badge and resistance counters;
-- work timer;
-- per-site time/work access conditions;
+- Domain blocking, schedules, graduated typing challenges, temporary access, manual override (10-15s base delay).
+- Daily badge, per-site resistance counters, work timer, per-site time/work access conditions.
 - Intention Page with per-site reminders and optional breathing.
-
-Pro:
-
-- Strict Mode and disable cooldown;
-- Commitment Mode;
-- override cooldown/lockouts;
-- behavioral friction precheck;
-- earn-access minimum challenge time and bonus minutes;
-- accountability presets;
-- analytics dashboard;
-- weekly report and Focus Score, including the urge-timing histogram, per-site hold rates, and the
-  "Do this next" recommendation. The recommendation only ever *widens* an existing schedule window —
-  a schedule narrows blocking to its hours, so recommending that a user enable one would quietly
-  reduce their protection. See `buildWeeklyRecommendation()` in `background.js`;
-- custom challenge prompt;
-- custom challenge phrase (`proFeatures.customChallengePhrase`) — replaces the built-in challenge text
-  banks with the user's own line, typed once regardless of challenge level, on both the friction page and
-  the Intention Page. Read through `getCustomChallengePhrase()` in each page, which re-checks the tier:
-  storage can still hold a phrase from a lapsed subscription.
-
-Note: current code and tests treat per-site access condition setup as free.
+- Strict Mode and its disable cooldown; Commitment Mode; override cooldown/lockouts (on by default).
+- Behavioral friction precheck, earn-access minimum challenge time and bonus minutes, accountability presets.
+- Custom challenge prompt and custom challenge phrase (`proFeatures.customChallengePhrase`), which replaces the built-in
+  challenge text with the user's own line on both the friction page and the Intention Page.
+- Progress dashboard, Weekly Review, and Focus Score, including the urge-timing histogram, per-site hold rates, and the
+  "Do this next" recommendation. The recommendation only ever *widens* an existing schedule window — a schedule
+  narrows blocking to its hours, so recommending that a user enable one would quietly reduce their protection.
+  See `buildWeeklyRecommendation()` in `background.js`.
 
 ### Page Scripts
 
 | Script | Role |
 |---|---|
 | `popup/popup.js` | Quick add/remove, block current tab, work timer, commitment status, feedback, outcome tap prompt |
-| `options/options.js` | Full settings UI (autosaves; no Save button), blocklist with bulk add/filter, per-site reminders/access conditions, settings export/import, Pro paywall, analytics/report tabs |
+| `options/options.js` | Full settings UI (autosaves; no Save button), blocklist with bulk add/filter, per-site reminders/access conditions, settings export/import, Stronger Locks, analytics/report tabs |
 | `intention-page/script.js` | Standalone pause layer, optional reason/task intent, breathing pause, short challenge |
-| `friction-page/script.js` | Full challenge with live mismatch highlighting, access-window picker (shorter window = lighter challenge), manual override with cancel, Pro precheck, access-condition progress, exits on every step |
+| `friction-page/script.js` | Full challenge with live mismatch highlighting, access-window picker (shorter window = lighter challenge), manual override with cancel, behavioral precheck, access-condition progress, exits on every step |
 | `commitment-page/script.js` | Commitment Mode countdown page |
-| `welcome/welcome.js` | Onboarding lifecycle page |
+| `welcome/welcome.js` | Interactive setup flow. Install still opens the website; the site can open this page |
 
 ## Testing
 
@@ -196,19 +152,14 @@ Tests run in Node.js through Vitest and `tests/helpers/vm-env.js`. Scripts expos
 | `intention-page/script.js` | `__RESISTGATE_INTENTION_TEST_HOOKS__` |
 | `commitment-page/script.js` | `__RESISTGATE_COMMITMENT_TEST_HOOKS__` |
 
-Current verified state on 2026-09-18:
+Current verified state on 2026-10-04:
 
-- `npm test`: 5 files, 238 tests passing.
+- `npm test`: 7 files, 232 tests passing.
 - `npm run test:coverage`: passing.
-- `background.js`: 89.84% lines/statements, 79.64% branches, 97.56% functions.
+- `background.js`: 92.62% lines/statements, 82.51% branches, 99% functions.
 
-`tests/helpers/vm-env.js` exposes `createBillingApiMock()` and `purchaseProInTest()`. Any test that needs a Pro user must
-run the real purchase handshake through the mock server — there is no local shortcut to Pro, by design.
-
-`createBillingApiMock()` models the three endpoints in `docs/paddle-activation-api-contract.md`. It is hand-written, so
-it can only prove the extension is self-consistent — it cannot prove the server agrees. It once diverged badly: the mock
-served endpoints the real website had never implemented, and the whole suite stayed green while checkout was dead in
-production. When you change the mock, check the route handlers in the website repo, not just these tests.
+The background suites load `background.js` with a recording `fetch` that throws. Any new network call fails the
+"makes no network requests" test, which is deliberate: if one is ever needed, it is a product decision, not a detail.
 
 Coverage thresholds:
 
@@ -227,7 +178,7 @@ For bug fixes, add a regression test that reproduces the failing condition befor
 - camelCase variables/functions; SCREAMING_SNAKE_CASE module constants; kebab-case folders/files/DOM IDs.
 - Extension scripts remain plain globals; do not add top-level imports to runtime scripts.
 - Background message handlers should return structured errors instead of swallowing failures.
-- New settings must be added to `DEFAULT_SETTINGS`, sanitized, and guarded if Pro-only.
+- New settings must be added to `DEFAULT_SETTINGS` and sanitized.
 
 ## Release Checklist
 
@@ -242,10 +193,9 @@ For bug fixes, add a regression test that reproduces the failing condition befor
 
 ## Security Notes
 
-- External activation must stay restricted to trusted website origins.
-- Internal messages must never elevate a user to Pro.
 - All blocking decisions stay local.
-- Document any new network call. Current telemetry surfaces are bundled Sentry diagnostics and allowlisted PostHog lifecycle/funnel events.
+- The extension makes no network requests and the extension-page CSP allows no `connect-src`. Adding a network call
+  is a product decision: document it in the README's Privacy section and the changelog.
 - Never log tokens, emails, checkout identifiers, or other sensitive fields.
 
 ## Options Page Autosave
@@ -255,12 +205,12 @@ pending or invalid, `handleSettingsStorageChange()` refreshes only non-form part
 and `setInputValue()` never writes to the focused field. New inputs in `#panel-general` / `#panel-pro` are wired
 automatically by `initAutosave()`; add an id to `NON_SETTINGS_INPUT_IDS` if an input must not trigger a save.
 
-Settings export/import (`buildSettingsExport()` / `mergeImportedSettings()`) never carries `subscription` or live
-lock state (active Commitment Mode, pending Strict Mode disable). `updateSettings` also pins the tier server-side.
+Settings export/import (`buildSettingsExport()` / `mergeImportedSettings()`) drops a leftover `subscription`
+and never carries live lock state (active Commitment Mode, pending Strict Mode disable).
 
 ## Known Issues To Respect
 
-- `pendingOutcomeTap` is partially implemented, but popup responses are not currently persisted because the message payload shape is wrong. See `docs/Implementation.md`.
+- `pendingOutcomeTap` is partially implemented, but popup responses are not currently persisted because the message payload shape is wrong.
 - `WELCOME_SHOWN_KEY` is unused.
 - UI line coverage is much lower than background coverage; add focused tests when touching UI behavior.
 

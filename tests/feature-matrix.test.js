@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createBillingApiMock, createChromeMock, loadScriptInVm, purchaseProInTest } from './helpers/vm-env.js';
+import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -7,22 +7,15 @@ function clone(value) {
 
 describe('Feature Matrix Coverage', () => {
   let env;
-  let api;
   let hooks;
 
   beforeEach(async () => {
     env = createChromeMock();
-    api = createBillingApiMock();
-    const context = await loadScriptInVm('background.js', { chrome: env.chrome, fetch: api.fetch });
+    const context = await loadScriptInVm('background.js', { chrome: env.chrome });
     hooks = context.__RESISTGATE_TEST_HOOKS__;
   });
 
-  async function activateProForTest() {
-    const { activation } = await purchaseProInTest(env, api);
-    expect(activation.success).toBe(true);
-  }
-
-  describe('Free: Domain Blocking', () => {
+  describe('Domain Blocking', () => {
     it('normalizes domains from raw user input', () => {
       expect(hooks.normalizeDomain('HTTPS://YouTube.COM/')).toBe('youtube.com');
       expect(hooks.normalizeDomain('*.reddit.com')).toBe('reddit.com');
@@ -59,7 +52,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Free: Graduated Challenge Levels', () => {
+  describe('Graduated Challenge Levels', () => {
     it('defaults typing challenges to hard mode for existing users', () => {
       const settings = hooks.sanitizeSettings({});
       expect(settings.challengeTypes.typing.level).toBe('hard');
@@ -85,7 +78,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Free: Schedule Blocking', () => {
+  describe('Schedule Blocking', () => {
     it('allows traffic when schedule is disabled', () => {
       expect(hooks.isWithinSimpleSchedule({ enabled: false }, Date.now())).toBe(true);
     });
@@ -103,7 +96,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Free: Temporary Access', () => {
+  describe('Temporary Access', () => {
     it('grants temporary access for blocked domains', async () => {
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
@@ -142,10 +135,9 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Strict Mode Lock', () => {
+  describe('Strict Mode Lock', () => {
     it('returns pending cooldown when trying to disable strict mode first time', () => {
       const current = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' },
         proFeatures: { strictModeEnabled: true, strictModeDisableDelaySeconds: 30 }
       });
       const next = clone(current);
@@ -159,7 +151,6 @@ describe('Feature Matrix Coverage', () => {
     it('disables strict mode after cooldown expires', () => {
       const now = Date.now();
       const current = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' },
         proFeatures: {
           strictModeEnabled: true,
           strictModeDisableDelaySeconds: 30,
@@ -176,7 +167,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('blocks config updates during active strict schedule window', async () => {
-      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.proFeatures.strictModeEnabled = true;
       settings.freeExperience.schedule = {
@@ -195,16 +185,14 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Override Cooldown', () => {
+  describe('Override Cooldown', () => {
     it('starts with base manual override delay', async () => {
-      await activateProForTest();
       const status = await env.sendMessage({ action: 'getManualOverrideStatus' });
       expect(status.success).toBe(true);
       expect(status.status.requiredDelaySeconds).toBe(12);
     });
 
     it('increases required delay after successful overrides', async () => {
-      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.delayStepSeconds = 15;
@@ -223,7 +211,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('locks manual override after threshold is exceeded', async () => {
-      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x1', urlPattern: 'reddit.com', createdAt: Date.now() }];
       settings.proFeatures.overrideCooldown.thresholdCount = 2;
@@ -255,23 +242,20 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Earn Access', () => {
-    it('detects earn-access only for pro users with friction enabled', () => {
-      const freeSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'free' },
-        proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
+  describe('Earn Access', () => {
+    it('detects earn-access only when behavioral friction is enabled', () => {
+      const frictionOff = hooks.sanitizeSettings({
+        proFeatures: { behavioralFriction: { enabled: false, earnAccessEnabled: true } }
       });
-      expect(hooks.isEarnAccessActive(freeSettings)).toBe(false);
+      expect(hooks.isEarnAccessActive(frictionOff)).toBe(false);
 
-      const proSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' },
+      const frictionOn = hooks.sanitizeSettings({
         proFeatures: { behavioralFriction: { enabled: true, earnAccessEnabled: true } }
       });
-      expect(hooks.isEarnAccessActive(proSettings)).toBe(true);
+      expect(hooks.isEarnAccessActive(frictionOn)).toBe(true);
     });
 
     it('rejects manual override when earn-access is active', async () => {
-      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -290,7 +274,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('requires minimum challenge duration when earn-access is active', async () => {
-      await activateProForTest();
       const settings = (await env.sendMessage({ action: 'getSettings' })).settings;
       settings.blocklist = [{ id: 'x2', urlPattern: 'youtube.com', createdAt: Date.now() }];
       settings.proFeatures.behavioralFriction.enabled = true;
@@ -318,9 +301,8 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Analytics Dashboard', () => {
+  describe('Analytics Dashboard', () => {
     it('computes blocked attempts, overrides, and strict session minutes', async () => {
-      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -347,7 +329,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns top blocked domains sorted and limited to 5', async () => {
-      await activateProForTest();
       const now = Date.now();
       const domains = ['a.com', 'b.com', 'b.com', 'c.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'];
       env.storageData.analytics = {
@@ -364,15 +345,13 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('always returns a 7-day override trend series', async () => {
-      await activateProForTest();
       const res = await env.sendMessage({ action: 'getAnalyticsDashboard' });
       expect(res.dashboard.overrideFrequencyTrend).toHaveLength(7);
     });
   });
 
-  describe('Pro: Focus Score and Weekly Report', () => {
+  describe('Focus Score and Weekly Report', () => {
     it('uses score formula 100 - overrides*5 - manualDisable*10', async () => {
-      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -388,7 +367,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('clamps score to 0 at lower bound', async () => {
-      await activateProForTest();
       const now = Date.now();
       const events = [];
       for (let i = 0; i < 40; i++) {
@@ -404,7 +382,6 @@ describe('Feature Matrix Coverage', () => {
     });
 
     it('returns weekly trend delta and a feedback line', async () => {
-      await activateProForTest();
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
       env.storageData.analytics = {
@@ -421,108 +398,18 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Access Gating', () => {
-    it('hasProAccess returns false for free tier', () => {
-      const freeSettings = hooks.sanitizeSettings({ subscription: { tier: 'free' } });
-      expect(hooks.hasProAccess(freeSettings)).toBe(false);
-    });
-
-    it('hasProAccess returns true for pro tier', () => {
-      const proSettings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' }
-      });
-      expect(hooks.hasProAccess(proSettings)).toBe(true);
-    });
-
-    it('hasProAccess returns false for null/undefined input', () => {
-      expect(hooks.hasProAccess(null)).toBe(false);
-      expect(hooks.hasProAccess(undefined)).toBe(false);
-    });
-
-    it('getAnalyticsDashboard returns proRequired for free users', async () => {
-      const res = await env.sendMessage({ action: 'getAnalyticsDashboard' });
-      expect(res.success).toBe(false);
-      expect(res.proRequired).toBe(true);
-    });
-
-    it('getWeeklyReport returns proRequired for free users', async () => {
-      const res = await env.sendMessage({ action: 'getWeeklyReport' });
-      expect(res.success).toBe(false);
-      expect(res.proRequired).toBe(true);
-    });
-
-    it('recordBlockedVisit is a no-op for free users and writes no analytics events', async () => {
-      await env.sendMessage({
-        action: 'recordBlockedVisit',
-        domain: 'youtube.com',
-        urlPattern: 'youtube.com'
-      });
-      const analytics = env.storageData.analytics;
-      const events = analytics?.events ?? [];
-      expect(events.filter((e) => e.type === 'blocked_visit')).toHaveLength(0);
-    });
-
-    it('recordAnalyticsEvent is a no-op for free users', async () => {
-      await env.sendMessage({
-        action: 'recordAnalyticsEvent',
-        event: { type: 'access_granted', domain: 'youtube.com', method: 'challenge', durationMinutes: 5 }
-      });
-      const analytics = env.storageData.analytics;
-      const events = analytics?.events ?? [];
-      expect(events).toHaveLength(0);
-    });
-
-    it('sanitizeSettings strips unknown subscription fields for free tier', () => {
+  describe('Legacy subscription data', () => {
+    it('sanitizeSettings drops the subscription left by the paid tier', () => {
       const sanitized = hooks.sanitizeSettings({
-        subscription: {
-          tier: 'free',
-          billingCycle: 'monthly',
-          upgradedAt: Date.now(),
-          installToken: 'sometoken',
-          licenseKey: 'somekey',
-          expiresAt: Date.now() + 100_000
-        }
+        subscription: { tier: 'pro', billingCycle: 'yearly', licenseKey: 'somekey' },
+        proFeatures: { strictModeEnabled: true }
       });
-      expect(sanitized.subscription.tier).toBe('free');
-      expect(sanitized.subscription).not.toHaveProperty('billingCycle');
-      expect(sanitized.subscription).not.toHaveProperty('upgradedAt');
-      expect(sanitized.subscription).not.toHaveProperty('installToken');
-      expect(sanitized.subscription).not.toHaveProperty('licenseKey');
-      expect(sanitized.subscription).not.toHaveProperty('expiresAt');
-    });
-
-    it('sanitizeSettings preserves pro tier without extra fields', () => {
-      const sanitized = hooks.sanitizeSettings({
-        subscription: {
-          tier: 'pro',
-          billingCycle: 'yearly',
-          installToken: 'sometoken',
-          licenseKey: 'somekey'
-        }
-      });
-      expect(sanitized.subscription.tier).toBe('pro');
-      expect(sanitized.subscription).not.toHaveProperty('billingCycle');
-      expect(sanitized.subscription).not.toHaveProperty('installToken');
-      expect(sanitized.subscription).not.toHaveProperty('licenseKey');
+      expect(sanitized).not.toHaveProperty('subscription');
+      expect(sanitized.proFeatures.strictModeEnabled).toBe(true);
     });
   });
 
-  describe('Pro: hasProAccess', () => {
-    it('returns false when tier is free', () => {
-      expect(hooks.hasProAccess({ subscription: { tier: 'free' } })).toBe(false);
-    });
-
-    it('returns true when tier is pro', () => {
-      expect(hooks.hasProAccess({ subscription: { tier: 'pro' } })).toBe(true);
-    });
-
-    it('returns false when subscription is missing', () => {
-      expect(hooks.hasProAccess({})).toBe(false);
-      expect(hooks.hasProAccess(null)).toBe(false);
-    });
-  });
-
-  describe('Free: Block Expiry', () => {
+  describe('Block Expiry', () => {
     it('removeExpiredBlocks filters out entries whose unblockAt has passed', () => {
       const now = Date.now();
       const blocklist = [
@@ -607,7 +494,7 @@ describe('Feature Matrix Coverage', () => {
     it('onInstalled does not open lifecycle pages for browser or shared module updates', async () => {
       await env.triggerInstalled({ reason: 'chrome_update' });
       await env.triggerInstalled({ reason: 'shared_module_update' });
-      expect(env.createdTabs.every((t) => !String(t.url).includes('orlandoascanio.com/resistgate'))).toBe(true);
+      expect(env.createdTabs).toEqual([]);
     });
 
     it('onStartup triggers initialization', async () => {
@@ -668,7 +555,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Commitment Mode', () => {
+  describe('Commitment Mode', () => {
     it('sanitizeCommitmentMode returns defaults for null input', () => {
       const result = hooks.sanitizeCommitmentMode(null);
       expect(result.active).toBe(false);
@@ -707,15 +594,14 @@ describe('Feature Matrix Coverage', () => {
       expect(result.expiresAt).toBe(now + 60000);
     });
 
-    it('isCommitmentModeActive returns false for free users', () => {
-      const settings = hooks.sanitizeSettings({ subscription: { tier: 'free' } });
+    it('isCommitmentModeActive returns false when no commitment was started', () => {
+      const settings = hooks.sanitizeSettings({});
       expect(hooks.isCommitmentModeActive(settings, Date.now())).toBe(false);
     });
 
     it('isCommitmentModeActive returns true during active commitment', () => {
       const now = Date.now();
       const settings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' },
         proFeatures: {
           commitmentMode: {
             active: true,
@@ -731,7 +617,6 @@ describe('Feature Matrix Coverage', () => {
     it('isCommitmentModeActive returns false when expired', () => {
       const now = Date.now();
       const settings = hooks.sanitizeSettings({
-        subscription: { tier: 'pro' },
         proFeatures: {
           commitmentMode: {
             active: true,
@@ -753,7 +638,7 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Free: Intention Page', () => {
+  describe('Intention Page', () => {
     it('sanitizeIntentionPage returns defaults for null input', () => {
       const result = hooks.sanitizeIntentionPage(null);
       expect(result.enabled).toBe(false);
@@ -830,7 +715,6 @@ describe('Feature Matrix Coverage', () => {
       const now = Date.now();
       const settings = hooks.sanitizeSettings({
         enabled: true,
-        subscription: { tier: 'pro' },
         proFeatures: {
           intentionPage: { enabled: true },
           commitmentMode: {
@@ -853,7 +737,7 @@ describe('Feature Matrix Coverage', () => {
       expect(rules[0].action.redirect.url).not.toContain('intention-page/index.html');
     });
 
-    it('free users can save per-site personal goals without unlocking Pro features', async () => {
+    it('saves per-site personal goals alongside behavioral friction settings', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.blocklist = [{ id: 'x1', urlPattern: 'instagram.com', personalGoal: 'Stop reels' }];
       settingsObj.proFeatures.behavioralFriction.enabled = true;
@@ -864,12 +748,11 @@ describe('Feature Matrix Coverage', () => {
 
       const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
       expect(saved.blocklist[0].personalGoal).toBe('Stop reels');
-      expect(saved.proFeatures.behavioralFriction.enabled).toBe(false);
-      expect(saved.proFeatures.behavioralFriction.timedWaitEnabled).toBe(false);
+      expect(saved.proFeatures.behavioralFriction.enabled).toBe(true);
+      expect(saved.proFeatures.behavioralFriction.timedWaitEnabled).toBe(true);
     });
 
-    it('pro users can still save behavioral precheck settings', async () => {
-      await activateProForTest();
+    it('saves behavioral precheck settings', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.proFeatures.behavioralFriction.enabled = true;
       settingsObj.proFeatures.behavioralFriction.requireTaskIntent = true;
@@ -884,8 +767,7 @@ describe('Feature Matrix Coverage', () => {
       expect(saved.proFeatures.behavioralFriction.customChallengePrompt).toBe('Why this task?');
     });
 
-    it('pro users can save a custom challenge phrase', async () => {
-      await activateProForTest();
+    it('saves a custom challenge phrase', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.proFeatures.customChallengePhrase = {
         enabled: true,
@@ -902,7 +784,7 @@ describe('Feature Matrix Coverage', () => {
       });
     });
 
-    it('free users cannot save a custom challenge phrase', async () => {
+    it('saves a custom challenge phrase for every install', async () => {
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.proFeatures.customChallengePhrase = { enabled: true, text: 'let me in' };
 
@@ -910,11 +792,10 @@ describe('Feature Matrix Coverage', () => {
       expect(res.success).toBe(true);
 
       const saved = (await env.sendMessage({ action: 'getSettings' })).settings;
-      expect(saved.proFeatures.customChallengePhrase).toEqual({ enabled: false, text: '' });
+      expect(saved.proFeatures.customChallengePhrase).toEqual({ enabled: true, text: 'let me in' });
     });
 
     it('keeps the custom challenge phrase locked while Strict Mode holds the window', async () => {
-      await activateProForTest();
       const settingsObj = (await env.sendMessage({ action: 'getSettings' })).settings;
       settingsObj.proFeatures.customChallengePhrase = {
         enabled: true,
@@ -1021,14 +902,14 @@ describe('Feature Matrix Coverage', () => {
     });
   });
 
-  describe('Pro: Commitment Mode Alarm', () => {
+  describe('Commitment Mode Alarm', () => {
     it('commitment alarm triggers rules update', async () => {
       await env.triggerAlarm({ name: 'resistgate-commitment-expire' });
       // No error thrown means handler ran successfully
     });
   });
 
-  describe('Free: Temptation Bundling', () => {
+  describe('Temptation Bundling', () => {
     describe('sanitizeTemptationBundle', () => {
       it('returns safe defaults for null input', () => {
         const result = hooks.sanitizeTemptationBundle(null);
