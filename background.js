@@ -830,7 +830,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
 let welcomeWriteQueue = Promise.resolve();
 
 async function getWelcomeState() {
-  await queueRulesUpdate('welcome-state');
+  await queueRulesUpdate('welcome-state', { propagateError: true });
   const settings = await getSettings();
   const rules = await chrome.declarativeNetRequest.getSessionRules();
   const activeDomains = settings.blocklist
@@ -845,7 +845,7 @@ function validateWelcomeDomain(value) {
     /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
     throw new Error('Enter a website such as reddit.com or paste its https:// address.');
   }
-  return domain.replace(/^www\./, '');
+  return domain.startsWith('www.') && domain.split('.').length > 2 ? domain.slice(4) : domain;
 }
 
 async function saveWelcomeChange(request) {
@@ -859,7 +859,7 @@ async function saveWelcomeChange(request) {
   }
   if (request.action === 'saveWelcomeReminder') {
     const domain = validateWelcomeDomain(request.domain);
-    const entry = settings.blocklist.find((site) => site.urlPattern.replace(/^www\./, '') === domain);
+    const entry = settings.blocklist.find((site) => (site.urlPattern === domain || site.urlPattern === `www.${domain}`));
     if (!entry) throw new Error('This site is no longer in your blocklist. Add it again first.');
     if (typeof request.personalGoal !== 'string' || request.personalGoal.length > 200) {
       throw new Error('Keep your reminder to 200 characters or fewer.');
@@ -871,9 +871,9 @@ async function saveWelcomeChange(request) {
     if (!Object.hasOwn(levels, request.level)) throw new Error('Choose Easy, Moderate, or Hard.');
     if (request.domain) {
       const domain = validateWelcomeDomain(request.domain);
-      const exists = settings.blocklist.some((site) => site.urlPattern.replace(/^www\./, '') === domain);
+      const exists = settings.blocklist.some((site) => (site.urlPattern === domain || site.urlPattern === `www.${domain}`));
       if (!exists) settings.blocklist.push({ id: `${Date.now()}-${domain}`, urlPattern: domain, createdAt: Date.now() });
-      savedDomain = settings.blocklist.find((site) => site.urlPattern.replace(/^www\./, '') === domain).urlPattern;
+      savedDomain = settings.blocklist.find((site) => (site.urlPattern === domain || site.urlPattern === `www.${domain}`)).urlPattern;
     } else if (!settings.blocklist.length) {
       throw new Error('Choose or enter your first website.');
     }
