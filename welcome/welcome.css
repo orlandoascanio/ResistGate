@@ -424,3 +424,55 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Setup uses the existing card, typography and purple action styles. */
+[hidden] { display: none !important; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.hero { margin-bottom: 16px; }
+.hero h1 { font-size: clamp(26px, 4vw, 34px); }
+.brand-mark { margin-bottom: 8px; }
+.status-message { margin: 12px 0; font-size: 14px; text-align: left; }
+.status-message[data-error="true"] { color: var(--text); border-left: 3px solid var(--primary); padding-left: 12px; }
+.setup-flow h2, .trust-card h2, .reminder-section h2 { font-size: 20px; margin: 0 0 12px; }
+.step-body { min-width: 0; width: 100%; }
+label { display: block; font-size: 13px; font-weight: 600; margin: 8px 0; }
+input[type="text"], textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px; background: var(--card-solid); color: var(--text); }
+textarea { resize: vertical; }
+.quick-sites, .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.quick-sites button { padding: 8px 12px; min-height: 40px; border: 1px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--text-soft); cursor: pointer; }
+.quick-sites button[aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.difficulty-options legend { font-size: 14px; font-weight: 700; }
+.difficulty-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.difficulty-grid label { padding: 10px; border: 1px solid var(--line-strong); border-radius: 8px; cursor: pointer; }
+.difficulty-grid label:has(:checked) { background: var(--primary-soft); border-color: var(--primary); }
+.difficulty-grid input { margin: 0 5px 0 0; accent-color: var(--primary); }
+.difficulty-grid span { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.welcome-actions { margin-top: 18px; }
+button:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+input:focus-visible, textarea:focus-visible, summary:focus-visible, button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+summary { cursor: pointer; font-weight: 600; }
+.pin-help { margin-top: 8px; font-size: 13px; }
+.pin-path { padding: 12px 0; }
+.preview-panel > summary { padding: 16px 20px; }
+.preview-content { text-align: left; border-top: 1px solid var(--line); }
+.preview-content strong { display: inline; font-size: inherit; }
+.preview-content blockquote { margin: 16px 0; border-left: 3px solid var(--primary); padding: 8px 14px; background: var(--primary-soft); }
+.preview-content h2 { font-size: 22px; }
+.preview-content .btn { margin-top: 12px; }
+.reminder-section { padding: 18px 0; border-top: 1px solid var(--line); margin-top: 22px; }
+.reminder-section p, .privacy-note { font-size: 13px; color: var(--muted); }
+.privacy-note { text-align: center; }
+.text-button { background: transparent; color: var(--text-soft); cursor: pointer; min-height: 44px; text-decoration: underline; display: block; margin: 0 auto; }
+.trust-card p + p { margin-top: 8px; }
+#saved-summary { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .difficulty-grid { grid-template-columns: 1fr; }
+  .difficulty-grid label { margin: 0; }
+  .welcome-card { padding: 20px; }
+  .setup-flow { padding: 0; }
+  .steps-list li { padding: 12px; gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .btn:hover { transform: none; }
+}
