@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
-  <title>Welcome to ResistGate</title>
+  <title>Set up ResistGate</title>
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="welcome.css" />
   <script defer src="../vendor/sentry.min.js"></script>
@@ -13,76 +13,120 @@
 </head>
 <body>
   <main class="welcome-shell" aria-labelledby="welcome-title">
-    <section class="welcome-card" aria-describedby="welcome-summary">
+    <section class="welcome-card">
       <header class="hero">
         <div class="brand-mark" aria-hidden="true">RG</div>
-        <p class="eyebrow">Intentional friction for distracting sites</p>
-        <h1 id="welcome-title">Welcome to ResistGate</h1>
-        <p id="welcome-summary" class="hero-copy">
-          Stop opening distracting websites on autopilot. Add the sites you want to resist,
-          then earn temporary access only when you actually mean it.
-        </p>
+        <h1 id="welcome-title">ResistGate is installed.</h1>
+        <p class="hero-copy">Add a distracting site to start interrupting automatic visits. You can adjust the challenge and access time in Settings.</p>
       </header>
 
-      <div class="preview-panel" aria-label="Example blocked site challenge">
-        <div class="preview-toolbar" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
+      <p id="welcome-status" class="status-message" role="status" aria-live="polite">Loading your setup…</p>
+      <button id="retry-btn" class="btn btn-secondary" type="button" hidden>Retry connection</button>
+      <section id="saved-setup" class="trust-card" aria-labelledby="saved-title" hidden>
+        <div>
+          <h2 id="saved-title" tabindex="-1">Your setup</h2>
+          <p id="saved-summary"></p>
+          <p id="access-summary"></p>
+          <div class="inline-actions">
+            <button id="test-site-btn" class="btn btn-primary" type="button" hidden>Test it</button>
+            <button id="saved-options-btn" class="btn btn-secondary" type="button">Open settings</button>
+          </div>
         </div>
-        <div class="preview-content">
-          <p class="preview-label">Blocked</p>
-          <strong>reddit.com</strong>
-          <p>Type your reason before continuing.</p>
-        </div>
-      </div>
-
-      <section class="setup-flow" aria-labelledby="setup-title">
-        <div class="section-heading">
-          <p class="section-kicker">Start here</p>
-          <h2 id="setup-title">Set up your first resistance loop</h2>
-        </div>
-
-        <ol class="steps-list">
-          <li>
-            <span class="step-number" aria-hidden="true">1</span>
-            <div>
-              <h3>Choose your distractions</h3>
-              <p>Add sites like YouTube, Reddit, X, Instagram, or anything you open by reflex.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-number" aria-hidden="true">2</span>
-            <div>
-              <h3>Hit the friction gate</h3>
-              <p>When you visit a blocked site, ResistGate interrupts the habit before it wins.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-number" aria-hidden="true">3</span>
-            <div>
-              <h3>Unlock with intention</h3>
-              <p>Complete the challenge only when the visit has a real reason.</p>
-            </div>
-          </li>
-        </ol>
       </section>
 
-      <aside class="trust-card" aria-label="Privacy note">
-        <span class="trust-icon" aria-hidden="true">✓</span>
-        <p><strong>No account required.</strong> Your focus rules stay inside the extension.</p>
-      </aside>
+      <form id="setup-form" class="setup-flow" aria-labelledby="setup-title">
+        <h2 id="setup-title">Set up your first distraction</h2>
+        <fieldset id="setup-fields" disabled>
+          <ol class="steps-list">
+            <li>
+              <span class="step-number" aria-hidden="true">1</span>
+              <div>
+                <h3>Pin the toolbar icon</h3>
+                <p>Click Chrome’s puzzle icon, then the pin beside ResistGate. You can do this later.</p>
+                <details class="pin-help">
+                  <summary>Show me where</summary>
+                  <p class="pin-path">Chrome toolbar → Extensions (puzzle) → ResistGate → Pin</p>
+                </details>
+              </div>
+            </li>
+            <li id="setup">
+              <span class="step-number" aria-hidden="true">2</span>
+              <div class="step-body">
+                <h3 id="site-step-title">Add your first site</h3>
+                <div class="quick-sites" role="group" aria-label="Website suggestions">
+                  <button type="button" data-domain="youtube.com" aria-pressed="false">YouTube</button>
+                  <button type="button" data-domain="reddit.com" aria-pressed="false">Reddit</button>
+                  <button type="button" data-domain="instagram.com" aria-pressed="false">Instagram</button>
+                </div>
+                <label for="site-input">Website</label>
+                <input id="site-input" name="domain" type="text" placeholder="e.g., reddit.com" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="site-help" />
+                <p id="site-help">Enter a domain or paste a website address. Nothing is selected for you.</p>
+              </div>
+            </li>
+            <li id="difficulty">
+              <span class="step-number" aria-hidden="true">3</span>
+              <div class="step-body">
+                <fieldset class="difficulty-options">
+                  <legend>Choose your challenge</legend>
+                  <p id="difficulty-help">Your current difficulty will appear here.</p>
+                  <div class="difficulty-grid">
+                    <label><input type="radio" name="level" value="easy" /><strong>Easy</strong><span id="easy-description">Short line</span></label>
+                    <label><input type="radio" name="level" value="moderate" /><strong>Moderate</strong><span id="moderate-description">Medium line</span></label>
+                    <label><input type="radio" name="level" value="hard" /><strong>Hard</strong><span id="hard-description">Longer line</span></label>
+                  </div>
+                </fieldset>
+                <p>Applies to all your blocked sites. Only changes when you save.</p>
+              </div>
+            </li>
+          </ol>
+          <div class="welcome-actions">
+            <button id="save-setup-btn" class="btn btn-primary" type="submit">Add site and save</button>
+            <button id="open-options-btn" class="btn btn-secondary" type="button">Open settings</button>
+          </div>
+        </fieldset>
+      </form>
 
-      <div class="welcome-actions" aria-label="Welcome actions">
-        <button id="open-options-btn" class="btn btn-primary" type="button">
-          Set up my blocklist
-        </button>
-        <button id="close-welcome-btn" class="btn btn-secondary" type="button">
-          I’ll do it later
-        </button>
-      </div>
+      <section id="reminder-section" class="reminder-section" aria-labelledby="reminder-title" hidden>
+        <h2 id="reminder-title">What would you rather be doing?</h2>
+        <p id="reminder-help">An optional reminder, shown when you pause before this site.</p>
+        <form id="reminder-form">
+          <label for="reminder-input" id="reminder-label">Your reminder</label>
+          <textarea id="reminder-input" maxlength="200" rows="2" placeholder="e.g., Finish my assignment before browsing." aria-describedby="reminder-help"></textarea>
+          <button id="save-reminder-btn" class="btn btn-secondary" type="submit">Save reminder</button>
+        </form>
+        <p id="reminder-status" role="status" aria-live="polite"></p>
+      </section>
 
-      <p id="welcome-status" class="status-message" role="status" aria-live="polite"></p>
+      <details id="preview" class="preview-panel">
+        <summary>Preview the pause</summary>
+        <div class="preview-content">
+          <p class="preview-label">Demo · First-install experience · No settings changed</p>
+          <section id="demo-pause">
+            <h2 tabindex="-1" id="demo-pause-title">Pause before you enter.</h2>
+            <p><strong>reddit.com</strong></p>
+            <blockquote>You blocked this for a reason.</blockquote>
+            <p>Read your reminder first. If this visit is worth it, you’ll earn it.</p>
+            <button id="demo-continue-btn" class="btn btn-primary" type="button">Continue to challenge</button>
+          </section>
+          <section id="demo-challenge" hidden>
+            <h2 tabindex="-1" id="demo-challenge-title">Earn this visit.</h2>
+            <p>A short Easy challenge. Higher levels use longer text in the intention page.</p>
+            <blockquote id="demo-phrase">I am choosing this visit intentionally.</blockquote>
+            <label for="demo-input">Type this line exactly. No paste.</label>
+            <textarea id="demo-input" rows="2" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="demo-progress"></textarea>
+            <p id="demo-progress" role="status" aria-live="polite">0 characters typed.</p>
+            <button id="demo-finish-btn" class="btn btn-primary" type="button" disabled>Finish preview</button>
+          </section>
+          <section id="demo-success" hidden>
+            <h2 tabindex="-1" id="demo-success-title">That’s the pause.</h2>
+            <p id="demo-access-copy">In a real visit, completing the challenge grants temporary access. Blocking resumes when that access ends, while your blocking rules apply.</p>
+            <p>This was a demo. No site was opened or unblocked.</p>
+          </section>
+          <button id="demo-reset-btn" class="btn btn-secondary" type="button" hidden>Back to the pause</button>
+        </div>
+      </details>
+      <p class="privacy-note">No account required. Sites and reminders are saved in this extension.</p>
+      <button id="close-welcome-btn" class="text-button" type="button">I’ll finish later</button>
     </section>
   </main>
 </body>
