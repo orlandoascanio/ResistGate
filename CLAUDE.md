@@ -78,6 +78,13 @@ queueRulesUpdate(reason)
 
 This serializes DNR mutations and prevents overlapping rule refreshes.
 
+### Website Pages
+
+Install, update, uninstall, and feedback open pages on `https://www.orlandoascanio.com/resistgate/…`, defined in
+`RESISTGATE_WEBSITE_URLS` in `background.js`. Never open a bundled extension page for these moments, and always
+use the `www` host without `/en/` (the other forms redirect). The full list is in the README under
+"Pages on orlandoascanio.com"; keep it in sync when a URL changes.
+
 ### Message Actions
 
 | Action | Description |
@@ -137,7 +144,7 @@ still live under `settings.proFeatures` so that existing installs load unchanged
 | `intention-page/script.js` | Standalone pause layer, optional reason/task intent, breathing pause, short challenge |
 | `friction-page/script.js` | Full challenge with live mismatch highlighting, access-window picker (shorter window = lighter challenge), manual override with cancel, behavioral precheck, access-condition progress, exits on every step |
 | `commitment-page/script.js` | Commitment Mode countdown page |
-| `welcome/welcome.js` | Interactive setup flow. Install still opens the website; the site can open this page |
+| `welcome/welcome.js` | Setup form. Never opens on install: the website's install page opens it with `openOnboarding` |
 
 ## Testing
 

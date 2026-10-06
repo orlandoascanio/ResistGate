@@ -387,7 +387,7 @@ h1 {
   font-size: var(--text-body);
 }
 
-.challenge-stats span {
+.challenge-stats > span {
   display: grid;
   gap: var(--space-1);
 }

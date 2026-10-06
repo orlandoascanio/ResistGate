@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createChromeMock, loadScriptInVm } from './helpers/vm-env.js';
 
@@ -117,5 +119,51 @@ describe('Welcome page flow', () => {
     expect(page.element('demo-success').hidden).toBe(false);
     expect(page.requests).toEqual([]);
     expect((await page.env.sendMessage({ action: 'getSettings' })).settings.blocklist).toEqual([]);
+  });
+
+  it('previews the challenge screenshot for the gate the user will actually hit', async () => {
+    const page = await setupPage();
+    await page.hooks.loadWelcomeState();
+    expect(page.element('level-preview-img').src).toBe('images/challenge-hard.webp');
+    expect(page.element('level-preview-title').textContent).toBe('Hard: five paragraphs');
+
+    const { settings } = await page.env.sendMessage({ action: 'getSettings' });
+    settings.proFeatures.intentionPage.enabled = true;
+    await page.env.sendMessage({ action: 'updateSettings', settings });
+    await page.hooks.loadWelcomeState();
+    expect(page.element('level-preview-title').textContent).toBe('Hard: the longest line');
+    expect(page.element('level-preview-img').dataset.src).toBe('images/intention-challenge-hard.webp');
+    expect(page.hooks.getLevelPreview('custom', false)).toBeNull();
+  });
+
+  it('walks through the gate a new install actually gets', async () => {
+    const page = await setupPage();
+    const intention = page.hooks.getTourSteps(true, 'hard').map((step) => step.src);
+    expect(intention).toEqual(['images/intention-pause.webp', 'images/intention-challenge-hard.webp', 'images/intention-success.webp']);
+    const gate = page.hooks.getTourSteps(false, 'easy').map((step) => step.src);
+    expect(gate).toEqual(['images/friction-prepare.webp', 'images/challenge-easy.webp', 'images/friction-success.webp']);
+  });
+});
+
+describe('Welcome page screenshots', () => {
+  const welcomeDir = path.resolve(import.meta.dirname, '..', 'welcome');
+
+  it('ships every image the page and the level preview reference', async () => {
+    const html = fs.readFileSync(path.join(welcomeDir, 'welcome.html'), 'utf8');
+    const page = await setupPage();
+    const previews = [
+      ...Object.values(page.hooks.LEVEL_PREVIEWS).flatMap((levels) => Object.values(levels).map((entry) => entry.src)),
+      ...[true, false].flatMap((intention) => page.hooks.getTourSteps(intention, 'moderate').map((step) => step.src))
+    ];
+    const referenced = [...html.matchAll(/(?:src|data-src)="([^"]+\.(?:webp|png))"/g)].map((match) => match[1]);
+    const missing = [...new Set([...referenced, ...previews])].filter((src) => !fs.existsSync(path.join(welcomeDir, src)));
+    expect(referenced.length).toBeGreaterThan(5);
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps the screenshots small enough to bundle', () => {
+    const imagesDir = path.join(welcomeDir, 'images');
+    const total = fs.readdirSync(imagesDir).reduce((sum, file) => sum + fs.statSync(path.join(imagesDir, file)).size, 0);
+    expect(total).toBeLessThan(600 * 1024);
   });
 });

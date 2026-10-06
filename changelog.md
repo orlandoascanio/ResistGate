@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **The install page on the website now shows the real product.** `orlandoascanio.com/resistgate/installed` (in
+  the website repo) uses screenshots of the actual pause, challenge, timed access, toolbar popup, Weekly Review, and
+  Commitment Mode. Its tour and level preview match the gate and challenge level the user will actually hit: the
+  Intention Page for new installs, or the typing gate if they turned it off.
+- **The local setup form shows the same screenshots.** `welcome/welcome.html` (opened from that page's **Add your
+  first site** button) bundles them as WebP in `welcome/images/` (about 360KB). Picking Easy, Moderate, or Hard swaps
+  in a screenshot of that exact challenge, and after saving, the test button names the site it opens.
+- The "Pin the toolbar icon" step moved below setup. It now has an illustration of Chrome's extensions menu and a
+  screenshot of the popup.
+
+- Install, update, and feedback now open the final `www.orlandoascanio.com` URLs directly. Install and update
+  went to the apex domain (a 307 redirect), and feedback went through `/en/` (a 308 redirect). All website URLs live
+  in `RESISTGATE_WEBSITE_URLS`, and the README lists every page the extension opens on the website.
+
+### Fixed
+- **Intention Page progress counter wrapped onto three lines.** `.challenge-stats span` also matched the number spans
+  inside the counter, so "0 / 55" stacked vertically. The rule now targets only the direct children.
+
 ## [2.0.0] - 2026-10-04
 
 ResistGate is now free and open source. There is no paid tier, and the extension no longer makes network requests.

@@ -154,7 +154,7 @@ describe('ResistGate background integration', () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.url).toContain('https://www.orlandoascanio.com/en/resistgate/feedback');
+    expect(response.url).toContain('https://www.orlandoascanio.com/resistgate/feedback?source=');
     expect(response.url).toContain('source=extension_popup');
     expect(env.createdTabs.at(-1).url).toBe(response.url);
   });

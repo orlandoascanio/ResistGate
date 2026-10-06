@@ -10,21 +10,118 @@
   <script defer src="welcome.js"></script>
 </head>
 <body>
-  <main class="welcome-shell" aria-labelledby="welcome-title">
-    <section class="welcome-card">
-      <header class="hero">
-        <div class="brand-mark" aria-hidden="true">RG</div>
-        <h1 id="welcome-title">ResistGate is installed.</h1>
-        <p class="hero-copy">Add a distracting site to start interrupting automatic visits. You can adjust the challenge and access time in Settings.</p>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand"><img src="../icons/48x48.png" width="24" height="24" alt="" /> ResistGate</span>
+      <nav class="topbar-nav" aria-label="On this page">
+        <a href="#how">How it works</a>
+        <a href="#setup">Set up</a>
+        <a href="#explore">After setup</a>
+      </nav>
+      <button id="close-welcome-btn" class="text-button" type="button">I’ll finish later</button>
+    </div>
+  </header>
+
+  <main aria-labelledby="welcome-title">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="kicker">Installed. Setup takes about a minute.</p>
+        <h1 id="welcome-title">Put a gate in front of the sites you open on autopilot.</h1>
+        <p class="lede">Open a blocked site and ResistGate stops the page before it loads. To get in, you type a line of text. That pause is usually enough to remember why you blocked it.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#setup">Set up my first site</a>
+          <a class="btn btn-secondary" href="#how">See how it works</a>
+        </div>
+        <ul class="facts" aria-label="Privacy">
+          <li>No account</li>
+          <li>Nothing leaves this browser</li>
+          <li>Every feature is free</li>
+        </ul>
+      </div>
+      <figure class="hero-stage">
+        <div class="shot hero-main">
+          <img src="images/intention-pause.webp" width="1200" height="738" alt="The ResistGate pause page for youtube.com, showing your reminder before the challenge." />
+        </div>
+        <div class="shot hero-popup">
+          <img src="images/popup.webp" width="640" height="1007" alt="The ResistGate toolbar popup, with a field to block a site and the list of blocked sites." />
+        </div>
+      </figure>
+    </section>
+
+    <section id="how" class="section" aria-labelledby="how-title">
+      <header class="section-head">
+        <h2 id="how-title">What happens when you open a blocked site</h2>
+        <p>The same three screens every time. Walking away at any point counts as a win.</p>
+      </header>
+      <div class="tour">
+        <div class="tour-steps" role="tablist" aria-label="The gate, step by step">
+          <button type="button" role="tab" id="tour-tab-pause" aria-selected="true" aria-controls="tour-stage" data-src="images/intention-pause.webp" data-width="1200" data-height="738" data-alt="The pause page for youtube.com, showing the reminder Finish the chem lab write-up first and an optional list of reasons.">
+            <strong>You get a pause, not the page</strong>
+            <span>Your reminder for that site shows first, with how many times you’ve already walked away today.</span>
+          </button>
+          <button type="button" role="tab" id="tour-tab-type" aria-selected="false" aria-controls="tour-stage" tabindex="-1" data-src="images/intention-challenge-hard.webp" data-width="1040" data-height="994" data-alt="The challenge: type one line exactly to earn the visit, with progress and accuracy below.">
+            <strong>You type to earn it</strong>
+            <span>Copy one line exactly. Pasting is blocked, and harder levels use a longer line.</span>
+          </button>
+          <button type="button" role="tab" id="tour-tab-access" aria-selected="false" aria-controls="tour-stage" tabindex="-1" data-src="images/intention-success.webp" data-width="1040" data-height="494" data-alt="Access granted: the visit is open for 10 minutes.">
+            <strong>The visit has a timer</strong>
+            <span>You get a set number of minutes. When they run out, the site is blocked again.</span>
+          </button>
+        </div>
+        <figure id="tour-stage" class="shot tour-stage" role="tabpanel" aria-labelledby="tour-tab-pause">
+          <img id="tour-img" src="images/intention-pause.webp" width="1200" height="738" decoding="async" alt="The pause page for youtube.com, showing the reminder Finish the chem lab write-up first and an optional list of reasons." />
+        </figure>
+      </div>
+
+      <details id="preview" class="try-panel">
+        <summary>
+          <span class="try-title">Try the challenge here</span>
+          <span class="try-note">A safe demo. Nothing is blocked or saved.</span>
+        </summary>
+        <div class="try-body">
+          <section id="demo-pause" class="demo-step">
+            <p class="demo-site">reddit.com</p>
+            <h3 tabindex="-1" id="demo-pause-title">Pause before you enter.</h3>
+            <blockquote>You blocked this for a reason.</blockquote>
+            <p>Read your reminder first. If this visit is worth it, you’ll earn it.</p>
+            <button id="demo-continue-btn" class="btn btn-primary" type="button">Continue to challenge</button>
+          </section>
+          <section id="demo-challenge" class="demo-step" hidden>
+            <h3 tabindex="-1" id="demo-challenge-title">Earn this visit.</h3>
+            <p>This is the Easy line. Moderate and Hard ask for more.</p>
+            <blockquote id="demo-phrase">I am choosing this visit intentionally.</blockquote>
+            <label for="demo-input">Type this line exactly. No paste.</label>
+            <textarea id="demo-input" rows="2" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="demo-progress"></textarea>
+            <p id="demo-progress" class="demo-progress" role="status" aria-live="polite">0 characters typed.</p>
+            <button id="demo-finish-btn" class="btn btn-primary" type="button" disabled>Finish preview</button>
+          </section>
+          <section id="demo-success" class="demo-step" hidden>
+            <h3 tabindex="-1" id="demo-success-title">That’s the gate.</h3>
+            <p id="demo-access-copy">On a real visit, finishing the challenge opens the site for a set time. When that time ends, the site is blocked again.</p>
+            <p>This was a demo. No site was opened or unblocked.</p>
+          </section>
+          <button id="demo-reset-btn" class="btn btn-secondary" type="button" hidden>Start the demo again</button>
+        </div>
+      </details>
+    </section>
+
+    <section id="setup" class="section setup" aria-labelledby="setup-title">
+      <header class="section-head">
+        <h2 id="setup-title">Set up your first distraction</h2>
+        <p>One site is enough to start. You can add the rest from the toolbar icon later.</p>
       </header>
 
       <p id="welcome-status" class="status-message" role="status" aria-live="polite">Loading your setup…</p>
       <button id="retry-btn" class="btn btn-secondary" type="button" hidden>Retry connection</button>
-      <section id="saved-setup" class="trust-card" aria-labelledby="saved-title" hidden>
-        <div>
-          <h2 id="saved-title" tabindex="-1">Your setup</h2>
+
+      <section id="saved-setup" class="saved-card" aria-labelledby="saved-title" hidden>
+        <span class="saved-mark" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="18" height="18"><path d="M5 10.5l3.2 3.2L15 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </span>
+        <div class="saved-body">
+          <h3 id="saved-title" tabindex="-1">Your setup</h3>
           <p id="saved-summary"></p>
-          <p id="access-summary"></p>
+          <p id="access-summary" class="muted"></p>
           <div class="inline-actions">
             <button id="test-site-btn" class="btn btn-primary" type="button" hidden>Test it</button>
             <button id="saved-options-btn" class="btn btn-secondary" type="button">Open settings</button>
@@ -32,100 +129,129 @@
         </div>
       </section>
 
-      <form id="setup-form" class="setup-flow" aria-labelledby="setup-title">
-        <h2 id="setup-title">Set up your first distraction</h2>
-        <fieldset id="setup-fields" disabled>
-          <ol class="steps-list">
-            <li>
-              <span class="step-number" aria-hidden="true">1</span>
-              <div>
-                <h3>Pin the toolbar icon</h3>
-                <p>Click Chrome’s puzzle icon, then the pin beside ResistGate. You can do this later.</p>
-                <details class="pin-help">
-                  <summary>Show me where</summary>
-                  <p class="pin-path">Chrome toolbar → Extensions (puzzle) → ResistGate → Pin</p>
-                </details>
+      <div class="setup-grid">
+        <form id="setup-form" class="setup-form" aria-labelledby="setup-title">
+          <fieldset id="setup-fields" disabled>
+            <div class="field-block">
+              <h3 id="site-step-title">Add your first site</h3>
+              <div class="quick-sites" role="group" aria-label="Website suggestions">
+                <button type="button" data-domain="youtube.com" aria-pressed="false">YouTube</button>
+                <button type="button" data-domain="reddit.com" aria-pressed="false">Reddit</button>
+                <button type="button" data-domain="instagram.com" aria-pressed="false">Instagram</button>
+                <button type="button" data-domain="x.com" aria-pressed="false">X</button>
+                <button type="button" data-domain="tiktok.com" aria-pressed="false">TikTok</button>
               </div>
-            </li>
-            <li id="setup">
-              <span class="step-number" aria-hidden="true">2</span>
-              <div class="step-body">
-                <h3 id="site-step-title">Add your first site</h3>
-                <div class="quick-sites" role="group" aria-label="Website suggestions">
-                  <button type="button" data-domain="youtube.com" aria-pressed="false">YouTube</button>
-                  <button type="button" data-domain="reddit.com" aria-pressed="false">Reddit</button>
-                  <button type="button" data-domain="instagram.com" aria-pressed="false">Instagram</button>
+              <label for="site-input">Website</label>
+              <input id="site-input" name="domain" type="text" placeholder="e.g., reddit.com" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="site-help" />
+              <p id="site-help" class="hint">Enter a domain or paste a website address. Nothing is selected for you.</p>
+            </div>
+
+            <div id="difficulty" class="field-block">
+              <fieldset class="difficulty-options" aria-describedby="difficulty-help">
+                <legend>Choose your challenge</legend>
+                <p id="difficulty-help" class="hint">Your current difficulty will appear here.</p>
+                <div class="difficulty-grid">
+                  <label><input type="radio" name="level" value="easy" /><strong>Easy</strong><span id="easy-description">Short line</span></label>
+                  <label><input type="radio" name="level" value="moderate" /><strong>Moderate</strong><span id="moderate-description">Medium line</span></label>
+                  <label><input type="radio" name="level" value="hard" /><strong>Hard</strong><span id="hard-description">Longer line</span></label>
                 </div>
-                <label for="site-input">Website</label>
-                <input id="site-input" name="domain" type="text" placeholder="e.g., reddit.com" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="site-help" />
-                <p id="site-help">Enter a domain or paste a website address. Nothing is selected for you.</p>
-              </div>
-            </li>
-            <li id="difficulty">
-              <span class="step-number" aria-hidden="true">3</span>
-              <div class="step-body">
-                <fieldset class="difficulty-options">
-                  <legend>Choose your challenge</legend>
-                  <p id="difficulty-help">Your current difficulty will appear here.</p>
-                  <div class="difficulty-grid">
-                    <label><input type="radio" name="level" value="easy" /><strong>Easy</strong><span id="easy-description">Short line</span></label>
-                    <label><input type="radio" name="level" value="moderate" /><strong>Moderate</strong><span id="moderate-description">Medium line</span></label>
-                    <label><input type="radio" name="level" value="hard" /><strong>Hard</strong><span id="hard-description">Longer line</span></label>
-                  </div>
-                </fieldset>
-                <p>Applies to all your blocked sites. Only changes when you save.</p>
-              </div>
-            </li>
-          </ol>
-          <div class="welcome-actions">
-            <button id="save-setup-btn" class="btn btn-primary" type="submit">Add site and save</button>
-            <button id="open-options-btn" class="btn btn-secondary" type="button">Open settings</button>
+              </fieldset>
+              <p class="hint">Applies to every blocked site. Nothing changes until you save.</p>
+            </div>
+
+            <div class="form-actions">
+              <button id="save-setup-btn" class="btn btn-primary" type="submit">Add site and save</button>
+            </div>
+          </fieldset>
+        </form>
+
+        <figure id="level-preview" class="level-preview">
+          <div class="shot">
+            <img id="level-preview-img" src="images/challenge-hard.webp" width="1040" height="950" alt="" />
           </div>
-        </fieldset>
-      </form>
+          <figcaption aria-live="polite">
+            <strong id="level-preview-title">What you’ll type</strong>
+            <span id="level-preview-caption">Pick a level to see the exact challenge.</span>
+          </figcaption>
+        </figure>
+      </div>
 
       <section id="reminder-section" class="reminder-section" aria-labelledby="reminder-title" hidden>
-        <h2 id="reminder-title">What would you rather be doing?</h2>
-        <p id="reminder-help">An optional reminder, shown when you pause before this site.</p>
-        <form id="reminder-form">
-          <label for="reminder-input" id="reminder-label">Your reminder</label>
-          <textarea id="reminder-input" maxlength="200" rows="2" placeholder="e.g., Finish my assignment before browsing." aria-describedby="reminder-help"></textarea>
-          <button id="save-reminder-btn" class="btn btn-secondary" type="submit">Save reminder</button>
-        </form>
-        <p id="reminder-status" role="status" aria-live="polite"></p>
+        <div class="reminder-copy">
+          <h3 id="reminder-title">What would you rather be doing?</h3>
+          <p id="reminder-help" class="hint">An optional reminder, shown when you pause before this site.</p>
+          <form id="reminder-form">
+            <label for="reminder-input" id="reminder-label">Your reminder</label>
+            <textarea id="reminder-input" maxlength="200" rows="2" placeholder="e.g., Finish my assignment before browsing." aria-describedby="reminder-help"></textarea>
+            <button id="save-reminder-btn" class="btn btn-secondary" type="submit">Save reminder</button>
+          </form>
+          <p id="reminder-status" class="hint" role="status" aria-live="polite"></p>
+        </div>
+        <figure class="shot reminder-shot">
+          <img src="images/intention-pause.webp" width="1200" height="738" loading="lazy" decoding="async" alt="The Intention Page for youtube.com showing the reminder Finish the chem lab write-up first and a list of reasons to pick from." />
+        </figure>
       </section>
 
-      <details id="preview" class="preview-panel">
-        <summary>Preview the pause</summary>
-        <div class="preview-content">
-          <p class="preview-label">Demo · First-install experience · No settings changed</p>
-          <section id="demo-pause">
-            <h2 tabindex="-1" id="demo-pause-title">Pause before you enter.</h2>
-            <p><strong>reddit.com</strong></p>
-            <blockquote>You blocked this for a reason.</blockquote>
-            <p>Read your reminder first. If this visit is worth it, you’ll earn it.</p>
-            <button id="demo-continue-btn" class="btn btn-primary" type="button">Continue to challenge</button>
-          </section>
-          <section id="demo-challenge" hidden>
-            <h2 tabindex="-1" id="demo-challenge-title">Earn this visit.</h2>
-            <p>A short Easy challenge. Higher levels use longer text in the intention page.</p>
-            <blockquote id="demo-phrase">I am choosing this visit intentionally.</blockquote>
-            <label for="demo-input">Type this line exactly. No paste.</label>
-            <textarea id="demo-input" rows="2" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="demo-progress"></textarea>
-            <p id="demo-progress" role="status" aria-live="polite">0 characters typed.</p>
-            <button id="demo-finish-btn" class="btn btn-primary" type="button" disabled>Finish preview</button>
-          </section>
-          <section id="demo-success" hidden>
-            <h2 tabindex="-1" id="demo-success-title">That’s the pause.</h2>
-            <p id="demo-access-copy">In a real visit, completing the challenge grants temporary access. Blocking resumes when that access ends, while your blocking rules apply.</p>
-            <p>This was a demo. No site was opened or unblocked.</p>
-          </section>
-          <button id="demo-reset-btn" class="btn btn-secondary" type="button" hidden>Back to the pause</button>
+      <section class="pin-card" aria-labelledby="pin-title">
+        <div>
+          <h3 id="pin-title">Pin the toolbar icon</h3>
+          <p class="hint">Click Chrome’s puzzle icon, then the pin next to ResistGate. The icon opens a quick panel: block the tab you’re on in one click, add a site, or start Commitment Mode.</p>
         </div>
-      </details>
-      <p class="privacy-note">No account required. Sites and reminders are saved in this extension.</p>
-      <button id="close-welcome-btn" class="text-button" type="button">I’ll finish later</button>
+        <div class="pin-visuals">
+          <div class="pin-illustration" aria-hidden="true">
+            <div class="pin-bar">
+              <span class="pin-url"></span>
+              <span class="pin-icon pin-puzzle">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 3.5a2 2 0 0 1 4 0V5h3.5a1.5 1.5 0 0 1 1.5 1.5V10h-1.5a2 2 0 0 0 0 4H19v3.5a1.5 1.5 0 0 1-1.5 1.5H14v-1.5a2 2 0 0 0-4 0V19H6.5A1.5 1.5 0 0 1 5 17.5V14h1.5a2 2 0 0 0 0-4H5V6.5A1.5 1.5 0 0 1 6.5 5H10z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+              </span>
+            </div>
+            <div class="pin-menu">
+              <p>Extensions</p>
+              <div class="pin-row">
+                <img src="../icons/32x32.png" width="16" height="16" alt="" />
+                <span>ResistGate</span>
+                <span class="pin-icon pin-pin">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3zM12 14v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </span>
+              </div>
+            </div>
+          </div>
+          <figure class="shot pin-popup">
+            <img src="images/popup.webp" width="640" height="1007" loading="lazy" decoding="async" alt="The ResistGate toolbar popup, with a field to block a site, a Block this tab’s site button, and the list of blocked sites." />
+          </figure>
+        </div>
+      </section>
+    </section>
+
+    <section id="explore" class="section" aria-labelledby="explore-title">
+      <header class="section-head">
+        <h2 id="explore-title">When you want more</h2>
+        <p>None of this is needed on day one. It’s all in Settings when you’re ready.</p>
+      </header>
+      <div class="explore-grid">
+        <article class="explore-card">
+          <figure class="shot shot-crop crop-weekly">
+            <img src="images/weekly.webp" width="1200" height="1015" loading="lazy" decoding="async" alt="The Weekly Review: a discipline score of 75 out of 100, a suggestion to extend the schedule to 9am–12am, and a chart of blocked attempts by hour." />
+          </figure>
+          <h3>Weekly Review</h3>
+          <p>See when the urges hit, which sites hold, and one change worth making next week.</p>
+        </article>
+        <article class="explore-card">
+          <figure class="shot shot-crop crop-commitment">
+            <img src="images/commitment.webp" width="720" height="806" loading="lazy" decoding="async" alt="Commitment Mode Active: youtube.com is locked with a countdown of 1 hour 17 minutes." />
+          </figure>
+          <h3>Commitment Mode</h3>
+          <p>Lock every blocked site for 1 to 24 hours. No challenge, no override, no way to end it early.</p>
+        </article>
+      </div>
+      <div class="explore-actions">
+        <button id="open-options-btn" class="btn btn-secondary" type="button">Open settings</button>
+      </div>
     </section>
   </main>
+
+  <footer class="page-footer">
+    <p class="privacy-note">No account required. Your sites and reminders are saved in this browser and never sent anywhere.</p>
+  </footer>
 </body>
 </html>

@@ -48,10 +48,39 @@ Everything ResistGate knows about you stays in `chrome.storage.local` on your ma
 `chrome.storage.sync`, has no analytics or crash reporting, and has no server. The extension pages' content
 security policy allows no network connections (`script-src 'self'; object-src 'self'`).
 
-ResistGate opens a few web pages as ordinary browser tabs: a welcome page on orlandoascanio.com after install,
-release notes there after an update, an optional survey on uninstall, and the feedback form, review page, and
-GitHub repository when you click those buttons. These are page visits, not background requests: nothing about
-your blocklist or habits is sent anywhere.
+ResistGate opens a few web pages as ordinary browser tabs (see [Pages on orlandoascanio.com](#pages-on-orlandoascaniocom)).
+These are page visits, not background requests: nothing about your blocklist or habits is sent anywhere.
+
+## Pages on orlandoascanio.com
+
+Install, update, uninstall, and feedback pages live on the website, not inside the extension. The extension
+only opens these URLs. To change what people see at those moments, edit the website (`Profesional-Portfolio`),
+not this repository.
+
+| Moment | Page | Opened by |
+|---|---|---|
+| First install | `https://www.orlandoascanio.com/resistgate/installed` | `chrome.runtime.onInstalled` (`install`) |
+| Update to a new minor or major version | `https://www.orlandoascanio.com/resistgate/updated?from=X&to=Y` | `chrome.runtime.onInstalled` (`update`). Patch releases, downgrades, and same-version reloads open nothing. |
+| Uninstall | `https://www.orlandoascanio.com/resistgate/uninstall` | `chrome.runtime.setUninstallURL` |
+| Feedback button (popup, options) | `https://www.orlandoascanio.com/resistgate/feedback?source=…` | `openFeedbackPage` message |
+| What's New button (options) | `https://www.orlandoascanio.com/resistgate/updated` | `getWhatsNewUrl()` in `options/options.js` |
+
+The URLs are defined once, in `RESISTGATE_WEBSITE_URLS` at the top of `background.js` (the What's New link is
+in `options/options.js`). Always use the `www` host and no `/en/` prefix: both of the other forms answer with a
+redirect. A test fails if install, update, or uninstall ever points anywhere else.
+
+Do not add a page bundled in the extension for any of these moments. The only pages the extension ships are
+the ones that need extension APIs: the gate pages (friction, Intention, Commitment), the popup, the options page,
+and `welcome/welcome.html`.
+
+The install page shows real screenshots of the extension, stored in the website repo at
+`client/public/images/resistgate/onboarding/`. The setup form below uses the same captures from `welcome/images/`.
+When a gate page, the popup, Weekly Review, or Commitment Mode changes visibly, recapture them in both places.
+
+`welcome/welcome.html` is the setup form, not the welcome page. It never opens on install. The website's install
+page has an **Add your first site** button (**Continue setup** once a site is saved) that sends the
+`openOnboarding` message, and only then does the extension open this form in a new tab. It has to be an
+extension page because the website can read setup status (`getOnboardingState`) but cannot change settings.
 
 ## Install from source
 
@@ -85,8 +114,7 @@ options/           full settings, Progress, Weekly Review, Stronger Locks
 friction-page/     typing challenge and manual override
 intention-page/    pause screen with goal reminder and short challenge
 commitment-page/   Commitment Mode lockout page
-welcome/           first-run page
-whats-new/         release notes shown after an update
+welcome/           setup form, opened from the website's install page (not on install)
 shared/            design tokens and self-hosted fonts
 tests/             Vitest suite
 ```

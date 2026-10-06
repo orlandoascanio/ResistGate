@@ -23,9 +23,14 @@ const GATE_REMINDER_DELAY_MINUTES = 10;
 const MAX_GATE_OUTCOMES = 100;
 const GATE_STREAK_WINDOW = 5;
 const MAX_ANALYTICS_EVENTS = 3000;
-const RESISTGATE_LIFECYCLE_URLS = {
-  install: 'https://orlandoascanio.com/resistgate/installed',
-  update: 'https://orlandoascanio.com/resistgate/updated'
+// Install, update, uninstall, and feedback pages live on the website, never inside the extension.
+// Use the final www URLs: the apex domain and the /en/ prefix both answer with a redirect.
+// The README's "Pages on orlandoascanio.com" section lists these; keep the two in sync.
+const RESISTGATE_WEBSITE_URLS = {
+  install: 'https://www.orlandoascanio.com/resistgate/installed',
+  update: 'https://www.orlandoascanio.com/resistgate/updated',
+  uninstall: 'https://www.orlandoascanio.com/resistgate/uninstall',
+  feedback: 'https://www.orlandoascanio.com/resistgate/feedback'
 };
 // Left behind by the paid tier removed in 2.0. Cleared on startup.
 const LEGACY_ENTITLEMENT_SYNC_ALARM = 'resistgate-entitlement-sync';
@@ -178,12 +183,12 @@ chrome.runtime.onInstalled.addListener((details) => {
     }
   })();
   
-  // Set the survey/uninstall URL (Must be https)
-  chrome.runtime.setUninstallURL('https://www.orlandoascanio.com/resistgate/uninstall');
-  
-  // Show welcome page on first install, what's new page on update
+  // Uninstall survey (must be https)
+  chrome.runtime.setUninstallURL(RESISTGATE_WEBSITE_URLS.uninstall);
+
+  // Install and update open the website, not a page bundled in the extension
   if (details.reason === 'install' || details.reason === 'update') {
-    openLifecyclePage(details, RESISTGATE_LIFECYCLE_URLS);
+    openLifecyclePage(details, RESISTGATE_WEBSITE_URLS);
   }
 });
 
@@ -538,7 +543,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'openFeedbackPage': {
           const surface = typeof request.surface === 'string' ? request.surface : 'extension';
-          const url = `https://www.orlandoascanio.com/en/resistgate/feedback?source=${encodeURIComponent(surface)}`;
+          const url = `${RESISTGATE_WEBSITE_URLS.feedback}?source=${encodeURIComponent(surface)}`;
           await chrome.tabs.create({ url });
           sendResponse({ success: true, url });
           return;

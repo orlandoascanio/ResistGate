@@ -445,7 +445,7 @@ describe('Feature Matrix Coverage', () => {
   describe('Event Listeners', () => {
     it('onInstalled fires initializeExtension and opens the portfolio install page on first install', async () => {
       await env.triggerInstalled({ reason: 'install' });
-      expect(env.createdTabs).toEqual([{ url: 'https://orlandoascanio.com/resistgate/installed' }]);
+      expect(env.createdTabs).toEqual([{ url: 'https://www.orlandoascanio.com/resistgate/installed' }]);
     });
 
     it('onInstalled enables intention page by default only for new installs', async () => {
@@ -464,13 +464,13 @@ describe('Feature Matrix Coverage', () => {
       const tabsBefore = env.createdTabs.length;
       await env.triggerInstalled({ reason: 'update', previousVersion: '1.0.0' });
       expect(env.createdTabs.length).toBe(tabsBefore + 1);
-      expect(env.createdTabs[env.createdTabs.length - 1].url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.0.0');
+      expect(env.createdTabs[env.createdTabs.length - 1].url).toBe('https://www.orlandoascanio.com/resistgate/updated?from=1.0.0');
     });
 
     it('onInstalled passes the new version so the update page can check the jump', async () => {
       env.chrome.runtime.getManifest = () => ({ version: '1.5.0' });
       await env.triggerInstalled({ reason: 'update', previousVersion: '1.4.3' });
-      expect(env.createdTabs.at(-1).url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.4.3&to=1.5.0');
+      expect(env.createdTabs.at(-1).url).toBe('https://www.orlandoascanio.com/resistgate/updated?from=1.4.3&to=1.5.0');
     });
 
     it('onInstalled stays quiet for same-version reloads, downgrades, and patch releases', async () => {
@@ -488,7 +488,25 @@ describe('Feature Matrix Coverage', () => {
     it('onInstalled opens the update page for a new major version', async () => {
       env.chrome.runtime.getManifest = () => ({ version: '2.0.0' });
       await env.triggerInstalled({ reason: 'update', previousVersion: '1.9.4' });
-      expect(env.createdTabs.at(-1).url).toBe('https://orlandoascanio.com/resistgate/updated?from=1.9.4&to=2.0.0');
+      expect(env.createdTabs.at(-1).url).toBe('https://www.orlandoascanio.com/resistgate/updated?from=1.9.4&to=2.0.0');
+    });
+
+    it('lifecycle pages open on the website, never inside the extension', async () => {
+      const uninstallUrls = [];
+      env.chrome.runtime.setUninstallURL = (url) => { uninstallUrls.push(url); };
+      env.chrome.runtime.getManifest = () => ({ version: '2.1.0' });
+      await env.triggerInstalled({ reason: 'install' });
+      await env.triggerInstalled({ reason: 'update', previousVersion: '2.0.0' });
+
+      const opened = [...env.createdTabs.map((tab) => tab.url), ...uninstallUrls];
+      expect(uninstallUrls).toEqual([
+        'https://www.orlandoascanio.com/resistgate/uninstall',
+        'https://www.orlandoascanio.com/resistgate/uninstall'
+      ]);
+      expect(opened).toHaveLength(4);
+      for (const url of opened) {
+        expect(new URL(url).origin).toBe('https://www.orlandoascanio.com');
+      }
     });
 
     it('onInstalled does not open lifecycle pages for browser or shared module updates', async () => {
